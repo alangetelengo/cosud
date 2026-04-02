@@ -1,0 +1,115 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Structure extends Model
+{
+    protected $fillable = [
+        'parent_id',
+        'nom',
+        'code',
+        'type',
+        'adresse',
+        'telephone',
+        'email',
+        'actif',
+        'responsable_id',
+        'fonction_id',
+        'role_technique',
+    ];
+
+    protected function casts(): array
+    {
+        return ['actif' => 'boolean'];
+    }
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Structure::class, 'parent_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(Structure::class, 'parent_id');
+    }
+
+    public function responsable(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'responsable_id');
+    }
+
+    public function fonction(): BelongsTo
+    {
+        return $this->belongsTo(Fonction::class, 'fonction_id');
+    }
+
+    /**
+     * Titulaire actuel de la validation pour cette structure : affectation (user_structure)
+     * dont la fonction correspond à celle exigée par la structure, affectation active,
+     * et filtre optionnel sur le rôle applicatif (Spatie).
+     *
+     * Retombe sur responsable_id (ancien modèle) si aucune fonction n’est configurée.
+     */
+    public function titulaireValidationActuel(): ?User
+    {
+        if ($this->fonction_id) {
+            $users = User::query()
+                ->whereHas('structures', function ($q) {
+                    $q->where('structures.id', $this->id)
+                        ->where('user_structure.fonction_id', $this->fonction_id)
+                        ->whereNull('user_structure.date_fin');
+                })
+                ->orderBy('users.id')
+                ->get();
+
+            if ($this->role_technique) {
+                $users = $users->filter(fn (User $u) => $u->hasRole($this->role_technique));
+            }
+
+            $titulaire = $users->first();
+            if ($titulaire) {
+                return $titulaire;
+            }
+
+            // Fallback manuel : utile quand le pivot n'est pas encore aligné.
+            if ($this->responsable_id) {
+                return $this->responsable;
+            }
+
+            return null;
+        }
+
+        if ($this->responsable_id) {
+            return $this->responsable;
+        }
+
+        return null;
+    }
+
+    /** IDs de cette structure + toutes les structures descendantes (récursif). */
+    public function idsAvecDescendants(): array
+    {
+        $ids = [$this->id];
+        foreach ($this->children as $child) {
+            $ids = array_merge($ids, $child->idsAvecDescendants());
+        }
+        return $ids;
+    }
+
+    /** Structure DG (Direction Générale) - racine de l'arborescence. */
+    public static function dg(): ?self
+    {
+        return static::where('code', 'DG')->first();
+    }
+
+    public function users(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'user_structure')
+            ->withPivot('role', 'fonction_id', 'date_affectation', 'date_fin')
+            ->withTimestamps();
+    }
+}

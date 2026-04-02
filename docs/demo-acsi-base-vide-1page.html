@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Démo ACSI (1 page)</title>
+    <style>
+        :root {
+            color-scheme: light;
+        }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            line-height: 1.5;
+            margin: 0;
+            background: #f7f7f9;
+            color: #1f2937;
+        }
+        .container {
+            max-width: 900px;
+            margin: 24px auto;
+            background: #ffffff;
+            padding: 24px 28px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+        }
+        h1, h2 {
+            margin-top: 0;
+            color: #111827;
+        }
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.8rem;
+        }
+        h2 {
+            font-size: 1.2rem;
+            margin-top: 1.4rem;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 0.25rem;
+        }
+        ul, ol {
+            margin-top: 0.3rem;
+        }
+        code {
+            background: #f3f4f6;
+            padding: 0.15rem 0.35rem;
+            border-radius: 4px;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 0.92em;
+        }
+        pre {
+            background: #111827;
+            color: #f9fafb;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+        pre code {
+            background: transparent;
+            color: inherit;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <h1>Démo ACSI (1 page)</h1>
+
+        <h2>1) Initialisation rapide</h2>
+        <p>Depuis <code>C:\laragon\www\GED</code> :</p>
+        <pre><code>php artisan migrate:fresh --seed --no-interaction</code></pre>
+        <p>Objectif :</p>
+        <ul>
+            <li>base propre ;</li>
+            <li>organigramme + utilisateurs ACSI chargés ;</li>
+            <li>workflow global hiérarchique actif.</li>
+        </ul>
+
+        <h2>2) Principes métier à annoncer</h2>
+        <ul>
+            <li>Partage dossier : uniquement <strong>propriétaire</strong>, <strong>créateur</strong> ou <strong>administrateur</strong>.</li>
+            <li>Visibilité document : par accès au dossier (ou propriétaire/créateur du document).</li>
+            <li>Validation : workflow <strong>global hiérarchique</strong>.</li>
+            <li>Fin de validation pilotée par le type de document (<code>niveau_validation_final</code>) :
+                <ul>
+                    <li><code>chef_service</code></li>
+                    <li><code>directeur</code></li>
+                    <li><code>dg</code></li>
+                </ul>
+            </li>
+        </ul>
+
+        <h2>3) Scénario démo (5 minutes)</h2>
+        <ol>
+            <li><strong>Créer un dossier</strong> de travail.</li>
+            <li><strong>Partager le dossier</strong> aux agents concernés (lecture/écriture selon besoin).</li>
+            <li><strong>Déposer un document</strong> dans ce dossier.</li>
+            <li>Cliquer <strong>Envoyer en validation</strong> vers le supérieur direct.</li>
+            <li>Montrer la progression hiérarchique, puis l’arrêt selon le type :
+                <ul>
+                    <li>type A : arrêt chef de service ;</li>
+                    <li>type B : arrêt directeur ;</li>
+                    <li>type C : arrêt DG.</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h2>4) Vérification technique express</h2>
+        <pre><code>php artisan tinker --execute="echo 'global_hierarchique_active='.\\App\\Models\\WorkflowEtape::where('code','validation_responsable')->where('validation_hierarchique',true)->where('actif',true)->count().PHP_EOL;"
+php artisan tinker --execute="echo 'acsi_service_active='.\\App\\Models\\WorkflowEtape::where('code','like','acsi_service_%')->where('actif',true)->count().PHP_EOL;"</code></pre>
+        <p>Résultat attendu :</p>
+        <ul>
+            <li><code>global_hierarchique_active = 1</code></li>
+            <li><code>acsi_service_active = 0</code></li>
+        </ul>
+
+        <h2>5) Message de conclusion</h2>
+        <p>La GED applique un cadre simple et robuste :</p>
+        <ul>
+            <li>accès contrôlé par dossier ;</li>
+            <li>validation hiérarchique globale ;</li>
+            <li>profondeur de validation configurable par type de document.</li>
+        </ul>
+    </main>
+</body>
+</html>
