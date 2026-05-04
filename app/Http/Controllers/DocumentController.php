@@ -7,8 +7,8 @@ use App\Models\DocumentValidation;
 use App\Models\Dossier;
 use App\Models\HistoriqueDocument;
 use App\Models\JournalAudit;
-use App\Models\Structure;
 use App\Models\StatutDocument;
+use App\Models\Structure;
 use App\Models\TypeDocument;
 use App\Models\User;
 use App\Models\VersionDocument;
@@ -16,13 +16,19 @@ use App\Models\WorkflowEtape;
 use App\Notifications\DocumentValidationDemandeNotification;
 use App\Notifications\DocumentValidationResultNotification;
 use App\Services\MetadonneeExtracteur;
+use App\Services\ValidationDossierLecturePartageService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 
 class DocumentController extends Controller
 {
+    public function __construct(
+        private readonly ValidationDossierLecturePartageService $validationDossierLecturePartage,
+    ) {}
+
     public function index(Request $request)
     {
         $this->authorize('viewAny', Document::class);
@@ -484,6 +490,16 @@ class DocumentController extends Controller
             'destinataire_id' => $destinataire->id,
         ]);
 
+        $idsPartageLecture = array_values(array_unique(array_filter([
+            $workflowValidateurId,
+            (int) $destinataire->id,
+        ], fn ($id) => $id !== null && (int) $id > 0)));
+        $this->validationDossierLecturePartage->syncPourUtilisateurs(
+            $document->fresh(['dossier']),
+            $idsPartageLecture,
+            (int) auth()->id()
+        );
+
         return redirect()->back()->with('success', 'Document envoyé en validation à '.$destinataire->name.'.');
     }
 
@@ -689,6 +705,7 @@ class DocumentController extends Controller
             if (! $candidate->actif) {
                 $skipped[] = $candidate->nom.' (inactive)';
                 $candidate = $candidate->etapeSuivante;
+
                 continue;
             }
 
@@ -697,6 +714,7 @@ class DocumentController extends Controller
                 if ($chain === []) {
                     $skipped[] = $candidate->nom.' (hiérarchie non résolue)';
                     $candidate = $candidate->etapeSuivante;
+
                     continue;
                 }
 
@@ -710,6 +728,7 @@ class DocumentController extends Controller
                 if ($index === null) {
                     $skipped[] = $candidate->nom.' (destinataire hors chaîne hiérarchique)';
                     $candidate = $candidate->etapeSuivante;
+
                     continue;
                 }
                 $chain = array_values(array_slice($chain, $index));
@@ -737,6 +756,7 @@ class DocumentController extends Controller
                 if (! $this->userHasFonctionActive($destinataire, (int) $candidate->fonction_requise_id)) {
                     $skipped[] = $candidate->nom.' (fonction requise non satisfaite)';
                     $candidate = $candidate->etapeSuivante;
+
                     continue;
                 }
 
@@ -753,6 +773,7 @@ class DocumentController extends Controller
                 if ((int) $candidate->validateur_id !== $destId) {
                     $skipped[] = $candidate->nom.' (validateur spécifique différent)';
                     $candidate = $candidate->etapeSuivante;
+
                     continue;
                 }
 
@@ -769,6 +790,7 @@ class DocumentController extends Controller
                 if (! $destinataire->hasRole($candidate->role_requis)) {
                     $skipped[] = $candidate->nom.' (rôle requis non satisfait)';
                     $candidate = $candidate->etapeSuivante;
+
                     continue;
                 }
 
@@ -798,7 +820,7 @@ class DocumentController extends Controller
      *   workflow_validateur_id: ?int,
      *   workflow_validation_chain: ?array<int>,
      *   workflow_etape_index: int,
-     *   notify_users: \Illuminate\Support\Collection<int, User>,
+     *   notify_users: Collection<int, User>,
      *   skipped: list<string>
      * }|null
      */
@@ -814,6 +836,7 @@ class DocumentController extends Controller
             if (! $candidate->actif) {
                 $skipped[] = $candidate->nom.' (inactive)';
                 $candidate = $candidate->etapeSuivante;
+
                 continue;
             }
 
@@ -834,10 +857,12 @@ class DocumentController extends Controller
                 if ($chain === []) {
                     $skipped[] = $candidate->nom.' (hiérarchie non résolue)';
                     $candidate = $candidate->etapeSuivante;
+
                     continue;
                 }
 
                 $dest = User::find($chain[0]);
+
                 return [
                     'final' => false,
                     'etape' => $candidate,
@@ -852,6 +877,7 @@ class DocumentController extends Controller
             if ($candidate->destinataire_libre) {
                 $skipped[] = $candidate->nom.' (destinataire libre sans sélection)';
                 $candidate = $candidate->etapeSuivante;
+
                 continue;
             }
 
@@ -860,6 +886,7 @@ class DocumentController extends Controller
                 if (! $u) {
                     $skipped[] = $candidate->nom.' (validateur indisponible)';
                     $candidate = $candidate->etapeSuivante;
+
                     continue;
                 }
 
@@ -885,6 +912,7 @@ class DocumentController extends Controller
                 if ($users->isEmpty()) {
                     $skipped[] = $candidate->nom.' (fonction non disponible)';
                     $candidate = $candidate->etapeSuivante;
+
                     continue;
                 }
 
@@ -904,6 +932,7 @@ class DocumentController extends Controller
                 if ($users->isEmpty()) {
                     $skipped[] = $candidate->nom.' (rôle non disponible)';
                     $candidate = $candidate->etapeSuivante;
+
                     continue;
                 }
 
@@ -962,6 +991,7 @@ class DocumentController extends Controller
                     'workflow_etape_index' => 0,
                     'modificateur_id' => auth()->id(),
                 ]);
+                $this->validationDossierLecturePartage->revoquerPourDocument($document->fresh(['dossier']));
                 HistoriqueDocument::enregistrer($document, 'workflow_approbation', null, 'Validé par '.auth()->user()->name.' (dernier visa)');
                 JournalAudit::log('document.workflow_approbation', 'documents', ['document_id' => $document->id]);
 
@@ -980,6 +1010,11 @@ class DocumentController extends Controller
                 'workflow_etape_index' => $prochaineIndex,
                 'modificateur_id' => auth()->id(),
             ]);
+            $this->validationDossierLecturePartage->syncPourUtilisateurs(
+                $document->fresh(['dossier']),
+                [(int) $prochainValidateurId],
+                (int) auth()->id()
+            );
             HistoriqueDocument::enregistrer($document, 'workflow_approbation', null, 'Visa de '.auth()->user()->name.' — passage à l\'étape suivante');
 
             $prochainValidateur = User::find($prochainValidateurId);
@@ -1003,6 +1038,7 @@ class DocumentController extends Controller
                 'workflow_etape_index' => 0,
                 'modificateur_id' => auth()->id(),
             ]);
+            $this->validationDossierLecturePartage->revoquerPourDocument($document->fresh(['dossier']));
             HistoriqueDocument::enregistrer($document, 'workflow_approbation', null, 'Approuvé par '.auth()->user()->name);
             JournalAudit::log('document.workflow_approbation', 'documents', ['document_id' => $document->id]);
 
@@ -1034,6 +1070,7 @@ class DocumentController extends Controller
                 'workflow_etape_index' => 0,
                 'modificateur_id' => auth()->id(),
             ]);
+            $this->validationDossierLecturePartage->revoquerPourDocument($document->fresh(['dossier']));
             HistoriqueDocument::enregistrer($document, 'workflow_approbation', null, 'Approuvé par '.auth()->user()->name.$commentaireSkip);
             JournalAudit::log('document.workflow_approbation', 'documents', ['document_id' => $document->id]);
 
@@ -1059,6 +1096,20 @@ class DocumentController extends Controller
             'workflow_etape_index' => (int) ($resolution['workflow_etape_index'] ?? 0),
             'modificateur_id' => auth()->id(),
         ]);
+        $idsEtapeSuivante = [];
+        if (! empty($resolution['workflow_validateur_id'])) {
+            $idsEtapeSuivante[] = (int) $resolution['workflow_validateur_id'];
+        }
+        foreach (($resolution['notify_users'] ?? collect()) as $u) {
+            if ($u) {
+                $idsEtapeSuivante[] = (int) $u->id;
+            }
+        }
+        $this->validationDossierLecturePartage->syncPourUtilisateurs(
+            $document->fresh(['dossier']),
+            array_values(array_unique(array_filter($idsEtapeSuivante))),
+            (int) auth()->id()
+        );
         HistoriqueDocument::enregistrer($document, 'workflow_approbation', null, 'Approuvé, passage à : '.$etapeSuivante->nom.$commentaireSkip);
 
         $validateurs = ($resolution['notify_users'] ?? collect())
@@ -1112,6 +1163,7 @@ class DocumentController extends Controller
             'workflow_etape_index' => 0,
             'modificateur_id' => auth()->id(),
         ]);
+        $this->validationDossierLecturePartage->revoquerPourDocument($document->fresh(['dossier']));
         HistoriqueDocument::enregistrer($document, 'workflow_rejet', null, 'Rejeté par '.auth()->user()->name.($request->commentaire ? ' : '.$request->commentaire : ''));
         JournalAudit::log('document.workflow_rejet', 'documents', ['document_id' => $document->id]);
 
@@ -1142,6 +1194,7 @@ class DocumentController extends Controller
             'statut' => 'archive',
             'modificateur_id' => auth()->id(),
         ]);
+        $this->validationDossierLecturePartage->revoquerPourDocument($document->fresh(['dossier']));
         HistoriqueDocument::enregistrer($document, 'archivage', null, 'Document archivé');
         JournalAudit::log('document.archivage', 'documents', ['document_id' => $document->id]);
         Log::channel('eged')->info('Document archivé', ['document_id' => $document->id, 'user_id' => auth()->id()]);
@@ -1183,7 +1236,7 @@ class DocumentController extends Controller
     /**
      * Dossiers visibles (filtre liste) : arbre personnel en premier, puis plan structure, tri par chemin dans chaque groupe.
      *
-     * @return array{0: \Illuminate\Support\Collection<int, Dossier>, 1: \Illuminate\Support\Collection<int, Dossier>}
+     * @return array{0: Collection<int, Dossier>, 1: Collection<int, Dossier>}
      */
     private function dossiersVisiblesGroupesPersoPuisPlan(User $user): array
     {
@@ -1200,7 +1253,7 @@ class DocumentController extends Controller
     /**
      * Dossiers où l’utilisateur peut déposer : même ordre (personnel puis plan).
      *
-     * @return array{0: \Illuminate\Support\Collection<int, Dossier>, 1: \Illuminate\Support\Collection<int, Dossier>}
+     * @return array{0: Collection<int, Dossier>, 1: Collection<int, Dossier>}
      */
     private function dossiersDepotGroupesPersoPuisPlan(User $user): array
     {
@@ -1215,9 +1268,9 @@ class DocumentController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, Dossier>  $dossiers
+     * @param  Collection<int, Dossier>  $dossiers
      * @param  list<int>  $idsPerso
-     * @return array{0: \Illuminate\Support\Collection<int, Dossier>, 1: \Illuminate\Support\Collection<int, Dossier>}
+     * @return array{0: Collection<int, Dossier>, 1: Collection<int, Dossier>}
      */
     private function partitionnerDossiersPersoPuisPlan($dossiers, array $idsPerso): array
     {

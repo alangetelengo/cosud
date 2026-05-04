@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 class Dossier extends Model
 {
@@ -105,6 +107,7 @@ class Dossier extends Model
             }
             $current = $current->parent;
         }
+
         return null;
     }
 
@@ -214,13 +217,33 @@ class Dossier extends Model
         });
     }
 
-    public function partages(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function partages(): HasMany
     {
         return $this->hasMany(DossierPartage::class);
     }
 
+    /**
+     * Peut ajouter du contenu (documents, sous-dossiers) : accès total, propriétaire, créateur,
+     * ou partage avec droits d’écriture non expiré.
+     */
+    public function utilisateurADroitEcritureContenu(User $user): bool
+    {
+        if ($user->aAccesTotal()) {
+            return true;
+        }
+        if ((int) $this->proprietaire_id === (int) $user->id || (int) $this->createur_id === (int) $user->id) {
+            return true;
+        }
+
+        return $this->partages()
+            ->where('user_id', $user->id)
+            ->where('droits_ecriture', true)
+            ->where(fn ($q) => $q->whereNull('date_expiration')->orWhere('date_expiration', '>', now()))
+            ->exists();
+    }
+
     /** Vérifie si l'utilisateur peut déposer un document dans ce dossier. */
-    public function peuxDeposer(\App\Models\User $user): bool
+    public function peuxDeposer(User $user): bool
     {
         if ($user->aAccesTotal()) {
             return true;
@@ -235,6 +258,9 @@ class Dossier extends Model
             ->exists()) {
             return true;
         }
+        if (in_array((int) $this->id, static::idsPourArbresPersonnelsAutresQue($user->id), true)) {
+            return false;
+        }
         $structureIdDepot = $this->structure_id ?? $this->structure_id_depot;
         if (! $structureIdDepot) {
             return false;
@@ -248,11 +274,12 @@ class Dossier extends Model
         }
         $createurIsAdmin = $this->createur && $this->createur->aAccesTotal();
         $proprioIsAdmin = $this->proprietaire && $this->proprietaire->aAccesTotal();
+
         return $createurIsAdmin || $proprioIsAdmin;
     }
 
     /** Dossier lié à l’utilisateur : propriétaire, créateur, partage, ou sous-arbre « Mes dossiers ». */
-    public function estLieA(\App\Models\User $user): bool
+    public function estLieA(User $user): bool
     {
         if ($this->proprietaire_id === $user->id || $this->createur_id === $user->id) {
             return true;
@@ -269,7 +296,7 @@ class Dossier extends Model
     }
 
     /** Dernière date d'activité (documents). */
-    public function getDerniereActiviteAttribute(): ?\Carbon\Carbon
+    public function getDerniereActiviteAttribute(): ?Carbon
     {
         return $this->documents()->max('created_at');
     }
@@ -282,11 +309,12 @@ class Dossier extends Model
             array_unshift($parents, $current->nom);
             $current = $current->parent;
         }
+
         return implode(' / ', $parents);
     }
 
     /** Ancêtres du dossier (de la racine au parent direct), pour le fil d'Ariane. */
-    public function cheminAncetres(): \Illuminate\Support\Collection
+    public function cheminAncetres(): Collection
     {
         $ancetres = collect();
         $current = $this->parent;
@@ -294,11 +322,12 @@ class Dossier extends Model
             $ancetres->prepend($current);
             $current = $current->parent;
         }
+
         return $ancetres;
     }
 
     /** Scope : dossiers dans lesquels l'utilisateur peut déposer (restriction par direction + partages). */
-    public function scopeDepositableBy($query, \App\Models\User $user)
+    public function scopeDepositableBy($query, User $user)
     {
         if ($user->aAccesTotal()) {
             return $query;
@@ -331,7 +360,7 @@ class Dossier extends Model
     /**
      * Scope : dossiers visibles selon le rôle et les partages (aligné sur {@see visiblePar}).
      */
-    public function scopeVisibleBy($query, \App\Models\User $user)
+    public function scopeVisibleBy($query, User $user)
     {
         if ($user->aAccesTotal()) {
             return $query;
@@ -376,7 +405,7 @@ class Dossier extends Model
      *   est dans leur périmètre, sauf arbres personnels d’autres utilisateurs ;
      * — sinon : pas d’accès au seul fait du rattachement structure / créateur (hors partage).
      */
-    public function visiblePar(\App\Models\User $user): bool
+    public function visiblePar(User $user): bool
     {
         if ($user->aAccesTotal()) {
             return true;
@@ -416,6 +445,7 @@ class Dossier extends Model
             $niveau++;
             $current = $current->parent;
         }
+
         return $niveau;
     }
 

@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Dossier;
 use App\Models\DossierPartage;
-use App\Models\Document;
 use App\Models\Structure;
 use App\Models\TypeDossier;
 use App\Models\User;
@@ -13,6 +12,7 @@ use App\Notifications\DossierPartageRemovedNotification;
 use App\Notifications\DossierPartageUpdatedNotification;
 use App\Services\MesDossiersRacineService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -70,6 +70,7 @@ class DossierController extends Controller
                 ->filter(fn ($d) => $d->visiblePar($user))
                 ->sortBy('chemin_complet')
                 ->values();
+
             return view('dossiers.index', compact('dossiers', 'dossiersPartages', 'favoriIds', 'filtre', 'q'));
         } elseif ($filtre === 'favoris') {
             $dossiersFavoris = Dossier::whereIn('id', $favoriIds)
@@ -79,6 +80,7 @@ class DossierController extends Controller
                 ->filter(fn ($d) => $d->visiblePar($user))
                 ->sortBy('chemin_complet')
                 ->values();
+
             return view('dossiers.index', compact('dossiers', 'dossiersFavoris', 'favoriIds', 'filtre', 'q'));
         } elseif ($filtre === 'recents') {
             $dossiersRecents = Dossier::whereHas('documents', fn ($dq) => $dq->where('created_at', '>=', now()->subDays(30)))
@@ -89,6 +91,7 @@ class DossierController extends Controller
                 ->sortByDesc(fn ($d) => $d->documents()->max('created_at'))
                 ->take(50)
                 ->values();
+
             return view('dossiers.index', compact('dossiers', 'dossiersRecents', 'favoriIds', 'filtre', 'q'));
         }
 
@@ -120,7 +123,7 @@ class DossierController extends Controller
                 abort(403, 'Vous ne pouvez pas créer de dossier sous ce dossier parent.');
             }
         }
-        $typesDossier = TypeDossier::where('actif', true)->orderBy('libelle')->get();
+        $typesDossier = $this->typesDossierPourFormulaire($user);
 
         $peutCreerSousDossier = $user->aAccesTotal() || $user->can('dossiers.create-structure') || $racine !== null;
         $peutCreerRacine = $user->aAccesTotal() || $user->can('dossiers.create-racine-structure');
@@ -170,7 +173,7 @@ class DossierController extends Controller
 
     public function store(Request $request, MesDossiersRacineService $mesDossiersRacine)
     {
-    
+
         $this->authorize('create', Dossier::class);
         $user = auth()->user();
         $racine = $mesDossiersRacine->find($user);
@@ -301,7 +304,7 @@ class DossierController extends Controller
 
         $typeDossier = isset($data['type_dossier_id']) ? TypeDossier::find($data['type_dossier_id']) : null;
         $typeString = $typeDossier?->code;
-        $isProjectType = in_array(mb_strtolower((string) $typeString), ['projet', 'project'], true);
+        $isProjectType = (bool) ($typeDossier?->estProjet());
         if ($isProjectType && ! $user->aAccesTotal() && ! $user->hasRole('chef_service')) {
             return back()->withInput()->withErrors([
                 'type_dossier_id' => 'Seul un chef de service peut créer un dossier de type Projet.',
@@ -391,7 +394,7 @@ class DossierController extends Controller
         return $structure?->titulaireValidationActuel()?->id ?? $structure?->responsable_id ?? $fallbackUserId;
     }
 
-    private function listeParentsPourStructure(User $user, ?Dossier $racine): \Illuminate\Support\Collection
+    private function listeParentsPourStructure(User $user, ?Dossier $racine): Collection
     {
         $allowedIds = $this->structureIdsAutorisees($user);
         $idsArbrePersonnel = Dossier::idsPourArbrePersonnel((int) $user->id);
@@ -448,7 +451,7 @@ class DossierController extends Controller
         return $ids;
     }
 
-    private function listeParentsPourEdition(User $user, ?Dossier $racine, Dossier $dossier): \Illuminate\Support\Collection
+    private function listeParentsPourEdition(User $user, ?Dossier $racine, Dossier $dossier): Collection
     {
         $interdits = array_merge([(int) $dossier->id], $this->idsDescendantsDossier((int) $dossier->id));
         $isOwner = (int) $dossier->proprietaire_id === (int) $user->id;
@@ -469,7 +472,7 @@ class DossierController extends Controller
             ->values();
     }
 
-    private function listeParentsPourArbrePersonnel(Dossier $racine, Dossier $dossier): \Illuminate\Support\Collection
+    private function listeParentsPourArbrePersonnel(Dossier $racine, Dossier $dossier): Collection
     {
         $interdits = array_merge([(int) $dossier->id], $this->idsDescendantsDossier((int) $dossier->id));
 
@@ -493,8 +496,14 @@ class DossierController extends Controller
             return false;
         }
         $sid = $parent->structure_id ?? $parent->structure_id_depot;
+        if (! $sid || ! in_array($sid, $allowedIds, true)) {
+            return false;
+        }
+        if (in_array((int) $parent->id, Dossier::idsPourArbresPersonnelsAutresQue($user->id), true)) {
+            return $parent->utilisateurADroitEcritureContenu($user);
+        }
 
-        return $sid && in_array($sid, $allowedIds, true);
+        return true;
     }
 
     private function estDansArbrePersonnelUtilisateur(User $user, Dossier $dossier, ?Dossier $racine): bool
@@ -560,6 +569,7 @@ class DossierController extends Controller
             ->whereNotIn('id', $partageUserIds)
             ->orderBy('name')
             ->get(['id', 'name', 'email']);
+
         return view('dossiers.partages', compact('dossier', 'partages', 'utilisateurs'));
     }
 
@@ -949,12 +959,13 @@ class DossierController extends Controller
             ->each(fn ($c) => $this->filtrerEnfantsMesDossiers($c, $user)));
     }
 
-    private function filtrerArbreRecherche($dossiers, string $q): \Illuminate\Support\Collection
+    private function filtrerArbreRecherche($dossiers, string $q): Collection
     {
         $q = strtolower(trim($q));
         if ($q === '') {
             return $dossiers;
         }
+
         return $dossiers->filter(function ($d) use ($q) {
             return $this->noeudMatchRecherche($d, $q);
         })->each(function ($d) use ($q) {
@@ -991,6 +1002,7 @@ class DossierController extends Controller
             ->filter(fn ($doc) => ! $doc->en_corbeille && $doc->visiblePar($user));
         $dossier->setRelation('children', $dossier->children->filter(fn ($c) => $c->visiblePar($user) && $this->utilisateurPeutVoirNoeudConfidentiel($user, $c))
             ->each(fn ($c) => $this->filtrerEnfantsVisibles($c, $user)));
+
         return view('dossiers.show', compact('dossier'));
     }
 
@@ -999,7 +1011,7 @@ class DossierController extends Controller
         $this->authorize('update', $dossier);
         $user = auth()->user();
         $racine = $mesDossiersRacine->find($user);
-        $typesDossier = TypeDossier::where('actif', true)->orderBy('libelle')->get();
+        $typesDossier = $this->typesDossierPourFormulaire($user, $dossier);
 
         $peutChangerParent = $dossier->racine_utilisateur_id === null;
         $peutChoisirRacineOrg = false;
@@ -1057,6 +1069,11 @@ class DossierController extends Controller
         $typeDossier = isset($data['type_dossier_id']) ? TypeDossier::find($data['type_dossier_id']) : null;
         $typeString = $typeDossier?->code;
         $confidentiel = $this->estTypeConfidentiel($typeDossier);
+        if ($typeDossier && $typeDossier->estProjet() && ! $user->aAccesTotal() && ! $user->hasRole('chef_service')) {
+            return back()->withInput()->withErrors([
+                'type_dossier_id' => 'Seul un chef de service peut attribuer le type Projet.',
+            ]);
+        }
 
         $wantedParent = $dossier->racine_utilisateur_id !== null
             ? $dossier->parent_id
@@ -1240,5 +1257,30 @@ class DossierController extends Controller
     private function estTypeConfidentiel(?TypeDossier $type): bool
     {
         return $type !== null && strcasecmp((string) $type->code, 'confidentiel') === 0;
+    }
+
+    /**
+     * Types proposés dans les formulaires utilisateur : masque « Projet » si l’utilisateur n’est pas autorisé à en créer,
+     * sauf en édition si le dossier est déjà de ce type (pour conserver la sélection).
+     *
+     * @return Collection<int, TypeDossier>
+     */
+    private function typesDossierPourFormulaire(User $user, ?Dossier $dossierEdition = null): Collection
+    {
+        $types = TypeDossier::where('actif', true)->orderBy('libelle')->get();
+        if ($user->aAccesTotal() || $user->hasRole('chef_service')) {
+            return $types;
+        }
+
+        return $types->filter(function (TypeDossier $t) use ($dossierEdition) {
+            if (! $t->estProjet()) {
+                return true;
+            }
+            if ($dossierEdition === null) {
+                return false;
+            }
+
+            return (int) ($dossierEdition->type_dossier_id ?? 0) === (int) $t->id;
+        })->values();
     }
 }

@@ -27,4 +27,10 @@ class TypeDossier extends Model
     {
         return $this->hasMany(Dossier::class);
     }
+
+    /** Aligné sur {@see DossierController::store} (types « projet » / « project »). */
+    public function estProjet(): bool
+    {
+        return in_array(mb_strtolower((string) $this->code), ['projet', 'project'], true);
+    }
 }
