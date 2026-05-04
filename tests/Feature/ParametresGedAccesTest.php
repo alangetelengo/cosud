@@ -20,9 +20,9 @@ class ParametresGedAccesTest extends TestCase
         Cache::forget('ged_setting_bool:'.GedSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT);
     }
 
-    public function test_lecture_dossier_lors_partage_document_est_desactive_par_defaut_apres_migration(): void
+    public function test_lecture_dossier_lors_partage_document_est_active_par_defaut_apres_migration(): void
     {
-        $this->assertFalse(GedSetting::lectureDossierLorsPartageDocument());
+        $this->assertTrue(GedSetting::lectureDossierLorsPartageDocument());
     }
 
     public function test_admin_peut_consulter_et_modifier_la_page_ged_acces(): void
