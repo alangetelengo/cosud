@@ -6,6 +6,7 @@ use App\Models\Fonction;
 use App\Models\Structure;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 
 class UsersAvecDirectionsSeeder extends Seeder
@@ -86,7 +87,7 @@ class UsersAvecDirectionsSeeder extends Seeder
                 'name' => 'Chef Secrétariat',
                 'email' => 'chef.sec@acsi.cg',
                 'structure_code' => 'SEC-DIR',
-                'role' => 'utilisateur',
+                'role' => 'secretaire_direction',
                 'pivot_role' => 'Chef de service',
             ],
             [
@@ -113,7 +114,7 @@ class UsersAvecDirectionsSeeder extends Seeder
             [
                 'name' => 'Chef Service Finances',
                 'email' => 'chef.finances@acsi.cg',
-                'structure_code' => 'SVC-FIN',
+                'structure_code' => 'SVC-DAF-FIN',
                 'role' => 'utilisateur',
                 'pivot_role' => 'Chef de service',
             ],
@@ -162,7 +163,7 @@ class UsersAvecDirectionsSeeder extends Seeder
             [
                 'name' => 'Agent DAF',
                 'email' => 'agent.daf@acsi.cg',
-                'structure_code' => 'SVC-FIN',
+                'structure_code' => 'SVC-DAF-FIN',
                 'role' => 'utilisateur',
                 'pivot_role' => 'Agent',
             ],
@@ -247,7 +248,7 @@ class UsersAvecDirectionsSeeder extends Seeder
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<string, \App\Models\Fonction>  $fonctionsByCode
+     * @param  Collection<string, Fonction>  $fonctionsByCode
      */
     private function fonctionIdPourPivot(array $u, Structure $structure, $fonctionsByCode): ?int
     {

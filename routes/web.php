@@ -1,25 +1,29 @@
 <?php
 
 use App\Http\Controllers\AuditController;
+use App\Http\Controllers\CircuitCourrierController;
 use App\Http\Controllers\CorbeilleController;
+use App\Http\Controllers\CourrierController;
+use App\Http\Controllers\CourrierRegistreController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DossierController;
+use App\Http\Controllers\FonctionController;
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ParametresController;
+use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\PlanClassementController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\FonctionController;
-use App\Http\Controllers\StructureController;
-use App\Http\Controllers\WorkflowEtapeController;
 use App\Http\Controllers\RechercheController;
-use App\Http\Controllers\TypeDocumentController;
-use App\Http\Controllers\TypeMetadonneeController;
-use App\Http\Controllers\TypeDossierController;
-use App\Http\Controllers\HomeController;
-use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\StructureController;
+use App\Http\Controllers\TypeCourrierController;
+use App\Http\Controllers\TypeDocumentController;
+use App\Http\Controllers\TypeDossierController;
+use App\Http\Controllers\TypeMetadonneeController;
 use App\Http\Controllers\UserAffectationController;
 use App\Http\Controllers\UtilisateurController;
+use App\Http\Controllers\WorkflowEtapeController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->middleware(['auth', 'verified', '2fa'])->name('home');
@@ -72,6 +76,8 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::delete('/utilisateurs/{user}/affectations/{structure}', [UserAffectationController::class, 'destroy'])->name('utilisateurs.affectations.destroy');
     Route::resource('utilisateurs', UtilisateurController::class)->parameters(['utilisateurs' => 'user']);
     Route::get('/parametres', [ParametresController::class, 'index'])->name('parametres.index');
+    Route::get('/parametres/ged-acces', [ParametresController::class, 'gedAcces'])->name('parametres.ged-acces');
+    Route::put('/parametres/ged-acces', [ParametresController::class, 'updateGedAcces'])->name('parametres.ged-acces.update');
     Route::get('/parametres/audit', [AuditController::class, 'index'])->name('parametres.audit.index');
     Route::get('/parametres/roles', [RoleController::class, 'index'])->name('parametres.roles.index');
     Route::get('/parametres/roles/create', [RoleController::class, 'create'])->name('parametres.roles.create');
@@ -98,6 +104,18 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::put('/parametres/structures/{structure}', [StructureController::class, 'update'])->name('parametres.structures.update');
     Route::delete('/parametres/structures/{structure}', [StructureController::class, 'destroy'])->name('parametres.structures.destroy');
     Route::get('/parametres/workflow', [WorkflowEtapeController::class, 'index'])->name('parametres.workflow.index');
+    Route::get('/parametres/types-courriers', [TypeCourrierController::class, 'index'])->name('parametres.types-courriers.index');
+    Route::get('/parametres/types-courriers/create', [TypeCourrierController::class, 'create'])->name('parametres.types-courriers.create');
+    Route::post('/parametres/types-courriers', [TypeCourrierController::class, 'store'])->name('parametres.types-courriers.store');
+    Route::get('/parametres/types-courriers/{type_courrier}/edit', [TypeCourrierController::class, 'edit'])->name('parametres.types-courriers.edit');
+    Route::put('/parametres/types-courriers/{type_courrier}', [TypeCourrierController::class, 'update'])->name('parametres.types-courriers.update');
+    Route::delete('/parametres/types-courriers/{type_courrier}', [TypeCourrierController::class, 'destroy'])->name('parametres.types-courriers.destroy');
+    Route::get('/parametres/circuits-courriers', [CircuitCourrierController::class, 'index'])->name('parametres.circuits-courriers.index');
+    Route::get('/parametres/circuits-courriers/create', [CircuitCourrierController::class, 'create'])->name('parametres.circuits-courriers.create');
+    Route::post('/parametres/circuits-courriers', [CircuitCourrierController::class, 'store'])->name('parametres.circuits-courriers.store');
+    Route::get('/parametres/circuits-courriers/{circuit_courrier}/edit', [CircuitCourrierController::class, 'edit'])->name('parametres.circuits-courriers.edit');
+    Route::put('/parametres/circuits-courriers/{circuit_courrier}', [CircuitCourrierController::class, 'update'])->name('parametres.circuits-courriers.update');
+    Route::delete('/parametres/circuits-courriers/{circuit_courrier}', [CircuitCourrierController::class, 'destroy'])->name('parametres.circuits-courriers.destroy');
     Route::get('/parametres/workflow/create', [WorkflowEtapeController::class, 'create'])->name('parametres.workflow.create');
     Route::get('/parametres/workflow/create-circuit', [WorkflowEtapeController::class, 'createCircuit'])->name('parametres.workflow.create-circuit');
     Route::post('/parametres/workflow/store-circuit', [WorkflowEtapeController::class, 'storeCircuit'])->name('parametres.workflow.store-circuit');
@@ -122,7 +140,40 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::get('/parametres/plan-classement/{dossier}/edit', [PlanClassementController::class, 'edit'])->name('parametres.plan-classement.edit');
     Route::put('/parametres/plan-classement/{dossier}', [PlanClassementController::class, 'update'])->name('parametres.plan-classement.update');
 
-    Route::view('/courriers', 'courriers.placeholder')->name('courriers.index');
+    Route::get('/courriers-a-recevoir', [CourrierController::class, 'aRecevoir'])->name('courriers.a-recevoir');
+    Route::get('/registres/courriers/arrivee', [CourrierRegistreController::class, 'arrivee'])->name('courriers.registres.arrivee');
+    Route::get('/registres/courriers/depart', [CourrierRegistreController::class, 'depart'])->name('courriers.registres.depart');
+    Route::get('/registres/courriers/arrivee/imprimer', [CourrierRegistreController::class, 'printArrivee'])->name('courriers.registres.print-arrivee');
+    Route::get('/registres/courriers/depart/imprimer', [CourrierRegistreController::class, 'printDepart'])->name('courriers.registres.print-depart');
+    Route::get('/courriers', [CourrierController::class, 'index'])->name('courriers.index');
+    Route::get('/courriers/create', [CourrierController::class, 'create'])->name('courriers.create');
+    Route::post('/courriers', [CourrierController::class, 'store'])->name('courriers.store');
+    Route::get('/courriers/{courrier}', [CourrierController::class, 'show'])->name('courriers.show');
+    Route::get('/courriers/{courrier}/edit', [CourrierController::class, 'edit'])->name('courriers.edit');
+    Route::put('/courriers/{courrier}', [CourrierController::class, 'update'])->name('courriers.update');
+    Route::post('/courriers/{courrier}/parapheur', [CourrierController::class, 'mettreEnParapheur'])->name('courriers.parapheur');
+    Route::post('/courriers/{courrier}/orienter', [CourrierController::class, 'orienter'])->name('courriers.orienter');
+    Route::post('/courriers/{courrier}/ventiler', [CourrierController::class, 'ventiler'])->name('courriers.ventiler');
+    Route::post('/courriers/{courrier}/cloturer', [CourrierController::class, 'cloturer'])->name('courriers.cloturer');
+    Route::post('/courriers/{courrier}/signer', [CourrierController::class, 'signer'])->name('courriers.signer');
+    Route::post('/courriers/{courrier}/archiver', [CourrierController::class, 'archiverCourrier'])->name('courriers.archiver');
+    Route::post('/courriers/{courrier}/transmettre', [CourrierController::class, 'transmettre'])->name('courriers.transmettre');
+    Route::post('/courriers/{courrier}/transmettre-directeur', [CourrierController::class, 'transmettreAuDirecteur'])->name('courriers.transmettre-directeur');
+    Route::post('/courriers/{courrier}/rejeter-depart', [CourrierController::class, 'rejeterDepart'])->name('courriers.rejeter-depart');
+    Route::post('/courriers/{courrier}/annuler', [CourrierController::class, 'annulerDepart'])->name('courriers.annuler');
+    Route::post('/courriers/{courrier}/expedier-interne', [CourrierController::class, 'expedierVersSecretariat'])->name('courriers.expedier-interne');
+    Route::post('/courriers-depart/{courrier}/accepter-reception', [CourrierController::class, 'accepterReceptionInterne'])->name('courriers.accepter-reception');
+    Route::post('/courriers-depart/{courrier}/refuser-reception', [CourrierController::class, 'refuserReceptionInterne'])->name('courriers.refuser-reception');
+    Route::post('/courriers/{courrier}/creer-reponse', [CourrierController::class, 'creerReponse'])->name('courriers.creer-reponse');
+    Route::post('/courriers/{courrier}/circuit/avancer', [CircuitCourrierController::class, 'avancer'])->name('courriers.circuit.avancer');
+    Route::post('/courriers/{courrier}/circuit/instruire', [CircuitCourrierController::class, 'instruire'])->name('courriers.circuit.instruire');
+    Route::post('/courriers/{courrier}/circuit/relancer', [CircuitCourrierController::class, 'relancer'])->name('courriers.circuit.relancer');
+    Route::post('/courriers/{courrier}/circuit/soumettre-reponse', [CircuitCourrierController::class, 'soumettreReponse'])->name('courriers.circuit.soumettre-reponse');
+    Route::post('/courriers/{courrier}/circuit/valider-reponse', [CircuitCourrierController::class, 'validerReponse'])->name('courriers.circuit.valider-reponse');
+    Route::post('/courriers/{courrier}/circuit/rejeter-reponse', [CircuitCourrierController::class, 'rejeterReponse'])->name('courriers.circuit.rejeter-reponse');
+    Route::post('/courriers/{courrier}/circuit/envoyer-cheque', [CircuitCourrierController::class, 'envoyerCheque'])->name('courriers.circuit.envoyer-cheque');
+    Route::post('/courriers/{courrier}/circuit/signer-cheque', [CircuitCourrierController::class, 'signerCheque'])->name('courriers.circuit.signer-cheque');
+    Route::post('/courriers/{courrier}/circuit/deposer-preuve-paiement', [CircuitCourrierController::class, 'deposerPreuvePaiement'])->name('courriers.circuit.deposer-preuve-paiement');
 
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');

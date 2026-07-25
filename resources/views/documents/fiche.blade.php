@@ -61,6 +61,28 @@
                             <dt class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Date de dépôt</dt>
                             <dd class="text-slate-800 dark:text-slate-200">{{ $document->created_at?->format('d/m/Y à H:i') ?? '—' }}</dd>
                         </div>
+                        @if(isset($courriersLies) && $courriersLies->isNotEmpty())
+                        <div>
+                            <dt class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Courriers liés (traçabilité)</dt>
+                            <dd class="space-y-2">
+                                @foreach($courriersLies as $courrierLie)
+                                <div class="text-sm rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2 bg-slate-50/50 dark:bg-slate-900/30">
+                                    <a href="{{ route('courriers.show', $courrierLie) }}" class="text-emerald-600 font-medium no-underline">
+                                        {{ $courrierLie->sensCourrier->libelle }} n° {{ $courrierLie->numeroRegistreComplet() }}
+                                    </a>
+                                    <p class="text-xs text-slate-500 mt-0.5">
+                                        {{ ucfirst($courrierLie->origine) }} · {{ $courrierLie->statutCourrier->libelle }}
+                                        @if($courrierLie->estArrivee())
+                                        · <span class="text-emerald-600 font-semibold">Document entrant</span>
+                                        @else
+                                        · <span class="text-sky-600 font-semibold">Document sortant</span>
+                                        @endif
+                                    </p>
+                                </div>
+                                @endforeach
+                            </dd>
+                        </div>
+                        @endif
                         <div>
                             <dt class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Confidentiel</dt>
                             <dd class="text-slate-800 dark:text-slate-200">

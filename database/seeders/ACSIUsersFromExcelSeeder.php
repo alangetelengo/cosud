@@ -16,6 +16,7 @@ class ACSIUsersFromExcelSeeder extends Seeder
         $dataPath = database_path('seeders/data/acsi_agents.json');
         if (! file_exists($dataPath)) {
             $this->command?->warn("Fichier introuvable : {$dataPath}");
+
             return;
         }
 
@@ -30,7 +31,12 @@ class ACSIUsersFromExcelSeeder extends Seeder
             ->pluck('id', 'code');
 
         $structureIds = Structure::query()
-            ->whereIn('code', ['DG', 'DAF', 'DDSAIT', 'DING-SI', 'DINFRA', 'DSUPPORT', 'DCOM', 'SEC-DIR', 'SJUR', 'CCG', 'SVC-DDI-DEVINT', 'SVC-DDI-BDD', 'SVC-DDI-MAINT', 'SVC-DDI-VEILLE', 'SVC-FIN', 'ANT'])
+            ->whereIn('code', [
+                'DG', 'DAF', 'DDSAIT', 'DING-SI', 'DINFRA', 'DSUPPORT', 'DCOM', 'SEC-DIR', 'SJUR', 'CCG',
+                'SVC-DDI-DEVINT', 'SVC-DDI-BDD', 'SVC-DDI-MAINT', 'SVC-DDI-VEILLE',
+                'SVC-DAF-RH', 'SVC-DAF-APPRO', 'SVC-DAF-BUDGET', 'SVC-DAF-FIN', 'SVC-DAF-DOC',
+                'ANT',
+            ])
             ->pluck('id', 'code');
 
         $password = Hash::make('password');
@@ -49,7 +55,7 @@ class ACSIUsersFromExcelSeeder extends Seeder
             }
 
             // Email : garant de l'unicité via matricule.
-            $email = $matricule . '@acsi.cg';
+            $email = $matricule.'@acsi.cg';
 
             $structureCode = $this->structureCodeForAgent($libDirection, $libService);
             $structureId = $structureIds->get($structureCode);
@@ -67,7 +73,7 @@ class ACSIUsersFromExcelSeeder extends Seeder
             $user = User::query()->updateOrCreate(
                 ['email' => $email],
                 [
-                    'name' => trim(($prenom !== '' ? $prenom . ' ' : '') . $nom) ?: ($nom ?: $email),
+                    'name' => trim(($prenom !== '' ? $prenom.' ' : '').$nom) ?: ($nom ?: $email),
                     'password' => $password,
                     'structure_id' => $structureId,
                     'actif' => true,
@@ -121,13 +127,26 @@ class ACSIUsersFromExcelSeeder extends Seeder
             if (str_contains($s, 'CTLE') || str_contains($s, 'GESTION')) {
                 return 'CCG';
             }
+
             return 'DG';
         }
 
-        // FINANCE / ADMINFIN
-        if (str_contains($d, 'FINANCI') || str_contains($d, 'COMPTABLE')) {
-            if (str_contains($s, 'COMPTABIL')) {
-                return 'SVC-FIN';
+        // FINANCE / ADMINFIN (art. 38 DAF)
+        if (str_contains($d, 'FINANCI') || str_contains($d, 'COMPTABLE') || str_contains($d, 'ADMINISTRATIVE ET FINANCI')) {
+            if (str_contains($s, 'RESSOURCE') || str_contains($s, 'HUMAINE') || str_contains($s, 'PERSONNEL')) {
+                return 'SVC-DAF-RH';
+            }
+            if (str_contains($s, 'APPROVISION') || str_contains($s, 'PATRIMOINE')) {
+                return 'SVC-DAF-APPRO';
+            }
+            if (str_contains($s, 'BUDGET')) {
+                return 'SVC-DAF-BUDGET';
+            }
+            if (str_contains($s, 'DOCUMENT') || str_contains($s, 'ARCHIV')) {
+                return 'SVC-DAF-DOC';
+            }
+            if (str_contains($s, 'COMPTABIL') || str_contains($s, 'FINANCE')) {
+                return 'SVC-DAF-FIN';
             }
 
             return 'DAF';
@@ -233,4 +252,3 @@ class ACSIUsersFromExcelSeeder extends Seeder
         return ['utilisateur', null];
     }
 }
-

@@ -29,9 +29,11 @@
             <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Type de dossier</label>
             <select name="type_dossier_id" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                 <option value="">— Non défini —</option>
-                @foreach($typesDossier as $td)
-                <option value="{{ $td->id }}" {{ (string) old('type_dossier_id', $d?->type_dossier_id) === (string) $td->id ? 'selected' : '' }}>{{ $td->libelle }} ({{ $td->code }})</option>
-                @endforeach
+                @include('dossiers.partials.type-dossier-select-options', [
+                    'typesDossier' => $typesDossier,
+                    'selectedId' => old('type_dossier_id', $d?->type_dossier_id),
+                    'afficherCodeDansTitle' => true,
+                ])
             </select>
             @error('type_dossier_id')<p class="mt-1 text-sm text-red-500">{{ $message }}</p>@enderror
         </div>

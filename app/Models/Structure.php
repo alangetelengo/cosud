@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Structure extends Model
@@ -97,6 +99,7 @@ class Structure extends Model
         foreach ($this->children as $child) {
             $ids = array_merge($ids, $child->idsAvecDescendants());
         }
+
         return $ids;
     }
 
@@ -106,7 +109,64 @@ class Structure extends Model
         return static::where('code', 'DG')->first();
     }
 
-    public function users(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    /** Secrétariats de direction ACSI (destinataires courrier départ interne). */
+    public static function secretariatsDirections(): Builder
+    {
+        return static::query()
+            ->where('actif', true)
+            ->where(function ($q) {
+                $q->where('type', 'secretariat')
+                    ->orWhere('code', 'like', 'SEC-%')
+                    ->orWhereRaw("UPPER(nom) LIKE '%SECRET%'");
+            })
+            ->orderBy('nom');
+    }
+
+    public function estSecretariatDirection(): bool
+    {
+        if ($this->type === 'secretariat') {
+            return true;
+        }
+        if (str_starts_with((string) $this->code, 'SEC-')) {
+            return true;
+        }
+
+        return str_contains(mb_strtoupper((string) $this->nom, 'UTF-8'), 'SECRET');
+    }
+
+    public function estDirection(): bool
+    {
+        return $this->type === 'direction';
+    }
+
+    /**
+     * Direction de rattachement pour le circuit courrier départ (validation directeur).
+     * Secrétariat → direction parente ; direction → elle-même ; service → remonte l’arborescence.
+     */
+    public function directionGestionCourrier(): ?self
+    {
+        if ($this->estDirection()) {
+            return $this;
+        }
+
+        if ($this->estSecretariatDirection()) {
+            $parent = $this->parent;
+
+            return $parent?->estDirection() ? $parent : $parent?->directionGestionCourrier();
+        }
+
+        $courant = $this->parent;
+        while ($courant) {
+            if ($courant->estDirection()) {
+                return $courant;
+            }
+            $courant = $courant->parent;
+        }
+
+        return null;
+    }
+
+    public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'user_structure')
             ->withPivot('role', 'fonction_id', 'date_affectation', 'date_fin')

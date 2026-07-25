@@ -20,7 +20,7 @@ class ACSIUsersTestSeeder extends Seeder
                 'prenom' => 'aline',
                 'nom' => 'Test Aline',
                 'email' => 'aline@acsi.cg',
-                'structure_code' => 'SVC-FIN',
+                'structure_code' => 'SVC-DAF-FIN',
                 'roles' => ['utilisateur'],
                 'pivot_role' => 'Agent',
             ],
@@ -76,7 +76,7 @@ class ACSIUsersTestSeeder extends Seeder
                 'prenom' => 'hugo',
                 'nom' => 'Test Hugo',
                 'email' => 'hugo@acsi.cg',
-                'structure_code' => 'SVC-FIN',
+                'structure_code' => 'SVC-DAF-FIN',
                 'roles' => ['chef_service'],
                 'pivot_role' => 'Chef de service',
             ],
@@ -134,4 +134,3 @@ class ACSIUsersTestSeeder extends Seeder
         }
     }
 }
-

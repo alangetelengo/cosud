@@ -22,6 +22,7 @@ class ACSIFonctionsSeeder extends Seeder
             ['code' => 'chef_application', 'libelle' => "CHEF D'APPLICATION"],
             ['code' => 'directeur_central', 'libelle' => 'DIRECTEUR CENTRAL'],
             ['code' => 'directeur_departemental', 'libelle' => 'DIRECTEUR DEPARTEMENTAL'],
+            ['code' => 'agent_comptable', 'libelle' => 'AGENT COMPTABLE'],
         ];
 
         $byCode = [];
@@ -42,6 +43,7 @@ class ACSIFonctionsSeeder extends Seeder
         $dgId = $byCode['directeur_general']->id;
         $dirId = $byCode['directeur_direction']->id;
         $svcId = $byCode['chef_service']->id;
+        $agentComptableId = $byCode['agent_comptable']->id;
 
         Structure::where('code', 'DG')->update(['fonction_id' => $dgId, 'role_technique' => 'dg']);
 
@@ -49,8 +51,13 @@ class ACSIFonctionsSeeder extends Seeder
             ->where('type', 'direction')
             ->update(['fonction_id' => $dirId, 'role_technique' => null]);
 
+        // DAC : titulaire = agent comptable (pas directeur de direction).
+        Structure::where('code', 'DAC')->update([
+            'fonction_id' => $agentComptableId,
+            'role_technique' => 'agent_comptable',
+        ]);
+
         Structure::where('type', 'service')
             ->update(['fonction_id' => $svcId, 'role_technique' => null]);
     }
 }
-

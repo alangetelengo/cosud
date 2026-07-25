@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Document;
 use App\Models\Dossier;
 use App\Models\Structure;
+use App\Models\TypeDocument;
 use App\Models\User;
+use App\Services\CourrierRetardService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -42,7 +44,7 @@ class HomeController extends Controller
         $nbDocuments = Document::horsCorbeille()->count();
         $nbDossiers = Dossier::where('actif', true)->count();
         $nbUsers = User::where('actif', true)->count();
-        $nbTypes = \App\Models\TypeDocument::count();
+        $nbTypes = TypeDocument::count();
 
         // Documents par statut (via colonne statut)
         $nbEnAttente = Document::horsCorbeille()->where('statut', 'en_attente')->count();
@@ -88,10 +90,16 @@ class HomeController extends Controller
             ->limit(10)
             ->get();
 
+        $retardService = app(CourrierRetardService::class);
+        $courriersEnRetard = $retardService->courriersEnRetard();
+        $nbCourriersEnRetard = $courriersEnRetard->count();
+        $delaiRetardHeures = $retardService->delaiHeures();
+
         return view('home.dg', compact(
             'nbDocuments', 'nbDossiers', 'nbUsers', 'nbTypes',
             'nbEnAttente', 'nbValides', 'nbBrouillons', 'nbRejetes', 'nbArchives',
-            'statsParStructure', 'documentsRecents', 'documentsEnAttente'
+            'statsParStructure', 'documentsRecents', 'documentsEnAttente',
+            'courriersEnRetard', 'nbCourriersEnRetard', 'delaiRetardHeures'
         ));
     }
 

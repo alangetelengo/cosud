@@ -17,7 +17,7 @@ class PlanClassementSeeder extends Seeder
      */
     protected function planMode(): string
     {
-        return env('SEED_PLAN_CLASSEMENT', 'full');
+        return env('SEED_PLAN_CLASSEMENT', 'dg_only');
     }
 
     /**
@@ -54,15 +54,15 @@ class PlanClassementSeeder extends Seeder
 
     /** Mapping type dossier → code structure (direction responsable). */
     protected array $typeToStructure = [
-        // Aligné avec les codes générés par ACSIOrganigrammeSeeder (DIR-... / SVC-...).
-        'administratif' => 'DIR-2000',
-        'finance' => 'DIR-3000',
-        'projet' => 'DIR-P000',
-        'ingenierie_si' => 'DIR-4000',
-        'support' => 'DIR-L000',
-        'client' => 'DIR-K000',
-        'operation' => 'DIR-N000',
-        'archive' => 'DIR-3000',
+        // Aligné avec les codes actuellement produits par StructureSeeder (DG / DAF / DDSAIT / ...).
+        'administratif' => 'DAF',
+        'finance' => 'SVC-DAF-FIN',
+        'projet' => 'DDSAIT',
+        'ingenierie_si' => 'DING-SI',
+        'support' => 'DSUPPORT',
+        'client' => 'DAC',
+        'operation' => 'SVC-DAF-APPRO',
+        'archive' => 'SVC-DAF-DOC',
         'confidentiel' => 'DG',
     ];
 
@@ -392,8 +392,7 @@ class PlanClassementSeeder extends Seeder
         ?int $structureId = null,
         ?int $fallbackProprietaireId = null,
         ?int $ddsaitDirectionId = null
-    ): Dossier
-    {
+    ): Dossier {
         $typeCode = $data['type'] ?? null;
         $confidentiel = $typeCode === 'confidentiel';
         $notifySms = $confidentiel || ($data['notify_sms'] ?? false);

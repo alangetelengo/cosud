@@ -13,8 +13,28 @@
         .hero { background: radial-gradient(circle at 20% 80%, rgba(0,180,100,.35), transparent 45%), linear-gradient(135deg, #0a0f15, #111b24, #0a0f15); padding: 42px; position: relative; }
         .hero h1 { margin-top: 18px; font-size: 2.2rem; color: #f3f4f6; }
         .hero p { margin-top: 10px; color: #cbd5e1; line-height: 1.5; }
-        .logo-wrap { display: inline-block; background: #fff; padding: 12px 16px; border-radius: 16px; border: 2px solid rgba(212,168,75,.7); max-width: 100%; }
-        .logo-acsi { display: block; width: auto; max-width: min(220px, 100%); max-height: 120px; height: auto; object-fit: contain; }
+        .logo-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 132px;
+            height: 132px;
+            background: #fff;
+            padding: 12px;
+            border-radius: 50%;
+            border: 2px solid rgba(212,168,75,.7);
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .logo-acsi {
+            display: block;
+            width: 100%;
+            height: 100%;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 50%;
+        }
         .form { padding: 36px 30px; }
         .form h2 { font-size: 1.7rem; margin-bottom: 6px; }
         .muted { color: #64748b; margin-bottom: 18px; font-size: .95rem; }
@@ -35,7 +55,7 @@
     <div class="shell">
         <section class="hero">
             <div class="logo-wrap">
-                <img src="{{ asset('images/image-logo.jpg') }}" alt="ACSI" class="logo-acsi" width="220" height="120" decoding="async">
+                <img src="{{ asset('images/image-logo.jpg') }}" alt="ACSI" class="logo-acsi" width="108" height="108" decoding="async">
             </div>
             <h1>{{ config('app.name') }}</h1>
             <p>Gestion Électronique des Documents – Propulsé par l'ACSI</p>

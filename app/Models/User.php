@@ -186,6 +186,28 @@ class User extends Authenticatable
         return $this->hasRole('admin') || $this->hasRole('dg');
     }
 
+    /** Gestion courrier (secrétariat de direction) — hors signature DG. */
+    public function gereCourrierSecretariat(): bool
+    {
+        if ($this->aAccesTotal()) {
+            return true;
+        }
+
+        if ($this->hasRole('secretaire_direction')) {
+            return true;
+        }
+
+        $structure = $this->structurePourValidationHierarchique();
+
+        return $structure?->estSecretariatDirection() ?? false;
+    }
+
+    /** Directeur : signature / rejet courrier départ uniquement. */
+    public function peutSignerCourrierDepart(): bool
+    {
+        return $this->hasRole('directeur') && $this->can('courriers.signer');
+    }
+
     /** IDs des structures dont l'utilisateur est responsable (fonction métier alignée ou ancien responsable_id). */
     public function structureIdsGerees(): array
     {

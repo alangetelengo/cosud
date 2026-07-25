@@ -21,7 +21,12 @@ class TypeDocumentSeeder extends Seeder
             ['code' => 'CONTRAT_JURIDIQUE', 'libelle' => 'Contrat juridique', 'extension_defaut' => 'pdf', 'taille_max_ko' => 10240, 'duree_conservation_annees' => 10],
             ['code' => 'PROCES_VERBAL', 'libelle' => 'Procès-verbal', 'extension_defaut' => 'pdf', 'taille_max_ko' => 10240, 'duree_conservation_annees' => 0, 'niveau_validation_final' => 'directeur'],
             ['code' => 'RAPPORT', 'libelle' => 'Rapport', 'extension_defaut' => 'pdf', 'taille_max_ko' => 10240, 'duree_conservation_annees' => 5, 'niveau_validation_final' => 'directeur'],
-            ['code' => 'COURRIER', 'libelle' => 'Courrier', 'extension_defaut' => 'pdf', 'taille_max_ko' => 10240, 'duree_conservation_annees' => 3, 'niveau_validation_final' => 'chef_service'],
+            ['code' => 'COURRIER_IN', 'libelle' => 'Courrier entrant', 'extension_defaut' => 'pdf', 'taille_max_ko' => 10240, 'duree_conservation_annees' => 3, 'niveau_validation_final' => 'chef_service'],
+            ['code' => 'COURRIER_OUT', 'libelle' => 'Courrier sortant', 'extension_defaut' => 'pdf', 'taille_max_ko' => 10240, 'duree_conservation_annees' => 3, 'niveau_validation_final' => 'chef_service'],
+            ['code' => 'LETTRE', 'libelle' => 'Lettre', 'extension_defaut' => 'docx', 'taille_max_ko' => 10240, 'duree_conservation_annees' => 5, 'niveau_validation_final' => 'chef_service'],
+            ['code' => 'COMPTE_RENDU', 'libelle' => 'Compte-rendu de réunion', 'extension_defaut' => 'docx', 'taille_max_ko' => 10240, 'duree_conservation_annees' => 5, 'niveau_validation_final' => 'directeur'],
+            ['code' => 'NOTE_INTERNE', 'libelle' => 'Note interne', 'extension_defaut' => 'docx', 'taille_max_ko' => 5120, 'duree_conservation_annees' => 3, 'niveau_validation_final' => 'chef_service'],
+            ['code' => 'DEVIS', 'libelle' => 'Devis', 'extension_defaut' => 'pdf', 'taille_max_ko' => 10240, 'duree_conservation_annees' => 5, 'niveau_validation_final' => 'chef_service'],
             ['code' => 'DECISION', 'libelle' => 'Décision', 'extension_defaut' => 'pdf', 'taille_max_ko' => 10240, 'duree_conservation_annees' => 10, 'niveau_validation_final' => 'dg'],
 
             // Finance
