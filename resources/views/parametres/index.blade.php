@@ -125,6 +125,22 @@
                 </div>
                 <svg class="w-4 h-4 text-slate-300 group-hover:text-sky-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             </a>
+            <a href="{{ route('parametres.circuits-courriers.index') }}" class="group flex items-center gap-3 p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-amber-300 dark:hover:border-amber-700 hover:bg-amber-50/50 dark:hover:bg-amber-950/20 transition-all no-underline">
+                <span class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-lg flex-shrink-0">✉️</span>
+                <div class="min-w-0 flex-1">
+                    <span class="font-semibold text-slate-800 dark:text-slate-100 text-sm block group-hover:text-amber-700 dark:group-hover:text-amber-400">Circuits courriers</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">Parcours métier paramétrables</span>
+                </div>
+                <svg class="w-4 h-4 text-slate-300 group-hover:text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </a>
+            <a href="{{ route('parametres.types-courriers.index') }}" class="group flex items-center gap-3 p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-amber-300 dark:hover:border-amber-700 hover:bg-amber-50/50 dark:hover:bg-amber-950/20 transition-all no-underline">
+                <span class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-lg flex-shrink-0">📬</span>
+                <div class="min-w-0 flex-1">
+                    <span class="font-semibold text-slate-800 dark:text-slate-100 text-sm block group-hover:text-amber-700 dark:group-hover:text-amber-400">Types de courriers</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">Association type → circuit</span>
+                </div>
+                <svg class="w-4 h-4 text-slate-300 group-hover:text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </a>
             <a href="{{ route('parametres.types-metadonnees.index') }}" class="group flex items-center gap-3 p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-sky-300 dark:hover:border-sky-700 hover:bg-sky-50/50 dark:hover:bg-sky-950/20 transition-all no-underline">
                 <span class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-lg flex-shrink-0">🏷️</span>
                 <div class="min-w-0 flex-1">

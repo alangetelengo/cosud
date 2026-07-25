@@ -1,0 +1,115 @@
+<?php
+
+namespace App\Http\Requests;
+
+use App\Models\Courrier;
+use App\Models\Document;
+use App\Services\CourrierDoublonService;
+use App\Services\ParapheurDepartService;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
+
+class StoreCourrierRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return $this->user()->can('create', Courrier::class);
+    }
+
+    public function rules(): array
+    {
+        $sens = $this->input('sens');
+        $typesParapheur = config('ged.parapheur_depart.types_document', []);
+
+        return [
+            'sens' => ['required', 'in:arrivee,depart'],
+            'type_courrier_id' => ['nullable', 'exists:type_courriers,id'],
+            'priorite_courrier_id' => ['nullable', 'exists:priorite_courriers,id'],
+            'date_reception' => ['nullable', 'date'],
+            'date_courrier' => ['nullable', 'date'],
+            'numero_fulgurant' => ['nullable', 'string', 'max:100'],
+            'reference' => ['nullable', 'string', 'max:100'],
+            'expediteur_libelle' => ['nullable', 'string', 'max:255'],
+            'expediteur_email' => ['nullable', 'email', 'max:255'],
+            'expediteur_telephone' => ['nullable', 'string', 'max:40'],
+            'destinataire_libelle' => ['nullable', 'string', 'max:255'],
+            'est_expediteur_externe' => ['nullable', 'boolean'],
+            'structure_expediteur_id' => ['nullable', 'exists:structures,id'],
+            'structure_destinataire_id' => [
+                'nullable',
+                'exists:structures,id',
+            ],
+            'objet' => ['required', 'string', 'max:500'],
+            'fichier' => [
+                Rule::requiredIf($sens === 'arrivee'),
+                'nullable',
+                'file',
+                'max:10240',
+            ],
+            'document_ids' => ['nullable', 'array'],
+            'document_ids.*' => ['integer', 'exists:documents,id'],
+            'nouveau_type_document_id' => [
+                Rule::requiredIf($sens === 'depart' && $this->hasFile('nouveaux_fichiers')),
+                'nullable',
+                'integer',
+                Rule::exists('type_documents', 'id')->where(function ($q) use ($typesParapheur) {
+                    $q->whereIn('code', $typesParapheur)->where('actif', true);
+                }),
+            ],
+            'nouveaux_fichiers' => ['nullable', 'array'],
+            'nouveaux_fichiers.*' => ['file', 'max:10240'],
+        ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            if ($this->input('sens') === 'arrivee') {
+                $service = app(CourrierDoublonService::class);
+                $doublon = $service->trouverDoublonArrivee([
+                    'numero_fulgurant' => $this->input('numero_fulgurant'),
+                    'reference' => $this->input('reference'),
+                    'expediteur_libelle' => $this->input('expediteur_libelle'),
+                    'date_courrier' => $this->input('date_courrier'),
+                    'objet' => $this->input('objet'),
+                ]);
+
+                if ($doublon) {
+                    $champ = in_array($doublon['critere'], ['numero_fulgurant', 'reference'], true)
+                        ? $doublon['critere']
+                        : 'objet';
+                    $validator->errors()->add(
+                        $champ,
+                        $service->messagePour($doublon['courrier'], $doublon['critere'])
+                    );
+                }
+            }
+
+            if ($this->input('sens') !== 'depart') {
+                return;
+            }
+
+            $service = app(ParapheurDepartService::class);
+
+            foreach ($this->input('document_ids', []) as $documentId) {
+                $document = Document::find($documentId);
+                if (! $document || ! $service->estEligible($document, $this->user())) {
+                    $validator->errors()->add('document_ids', 'Un document sélectionné n\'appartient pas au parapheur départ ou n\'est pas disponible.');
+                }
+            }
+
+            if ($this->hasFile('nouveaux_fichiers') && ! $this->filled('nouveau_type_document_id')) {
+                $validator->errors()->add('nouveau_type_document_id', 'Le type de document est obligatoire pour un dépôt dans le parapheur.');
+            }
+        });
+    }
+
+    public function messages(): array
+    {
+        return [
+            'fichier.required' => 'Le scan est obligatoire pour un courrier arrivée externe.',
+            'nouveau_type_document_id.required' => 'Choisissez le type de pièce à déposer dans le parapheur.',
+        ];
+    }
+}

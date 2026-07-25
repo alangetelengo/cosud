@@ -64,9 +64,58 @@ class MesDossiersRacineService
         );
     }
 
+    /**
+     * Sous-dossier dédié au parapheur départ sous « Mes dossiers » (créé si absent).
+     * Assure aussi la racine personnelle si elle n’existe pas encore.
+     */
+    public function ensureSousDossierParapheurDepart(User $user): Dossier
+    {
+        $racine = $this->createDefaultRacinePourCommande($user);
+        $nom = (string) config('ged.parapheur_depart.dossier_nom', 'Courriers départ');
+
+        $existant = Dossier::query()
+            ->where('parent_id', $racine->id)
+            ->where('nom', $nom)
+            ->where('actif', true)
+            ->first();
+
+        if ($existant) {
+            return $existant;
+        }
+
+        $ordre = (int) (Dossier::where('parent_id', $racine->id)->max('ordre') ?? -1) + 1;
+
+        return Dossier::create([
+            'parent_id' => $racine->id,
+            'nom' => $nom,
+            'code' => $this->genererCodeUniqueSousDossier($user, 'PARAPH-DEP'),
+            'description' => 'Pièces de rédaction pour les courriers départ (parapheur).',
+            'confidentiel' => false,
+            'notify_sms' => false,
+            'actif' => true,
+            'ordre' => $ordre,
+            'structure_id' => $user->structure_id,
+            'createur_id' => $user->id,
+            'proprietaire_id' => $user->id,
+        ]);
+    }
+
     private function genererCodeUniqueRacine(User $user): string
     {
         $code = 'MES-'.$user->id;
+        $base = $code;
+        $i = 0;
+        while (Dossier::where('code', $code)->exists()) {
+            $i++;
+            $code = $base.'-'.$i;
+        }
+
+        return $code;
+    }
+
+    private function genererCodeUniqueSousDossier(User $user, string $prefix): string
+    {
+        $code = $prefix.'-'.$user->id;
         $base = $code;
         $i = 0;
         while (Dossier::where('code', $code)->exists()) {

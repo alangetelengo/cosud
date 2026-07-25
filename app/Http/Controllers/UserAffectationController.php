@@ -16,7 +16,7 @@ class UserAffectationController extends Controller
 
         return redirect()
             ->route('utilisateurs.edit', $user)
-            ->fragment('structures');
+            ->withFragment('structures');
     }
 
     public function store(Request $request, User $user)
@@ -34,7 +34,7 @@ class UserAffectationController extends Controller
         if ($user->structures()->where('structures.id', $validated['structure_id'])->exists()) {
             return redirect()
                 ->route('utilisateurs.edit', $user)
-                ->fragment('structures')
+                ->withFragment('structures')
                 ->withInput()
                 ->with('error', 'Cet utilisateur est déjà affecté à cette structure. Modifiez la ligne existante ou supprimez-la avant d’en ajouter une nouvelle.');
         }
@@ -54,7 +54,7 @@ class UserAffectationController extends Controller
 
         return redirect()
             ->route('utilisateurs.edit', $user)
-            ->fragment('structures')
+            ->withFragment('structures')
             ->with('success', 'Affectation ajoutée.');
     }
 
@@ -92,7 +92,7 @@ class UserAffectationController extends Controller
 
         return redirect()
             ->route('utilisateurs.edit', $user)
-            ->fragment('structures')
+            ->withFragment('structures')
             ->with('success', 'Affectation mise à jour.');
     }
 
@@ -118,7 +118,7 @@ class UserAffectationController extends Controller
 
         return redirect()
             ->route('utilisateurs.edit', $user)
-            ->fragment('structures')
+            ->withFragment('structures')
             ->with('success', 'Affectation retirée.');
     }
 }

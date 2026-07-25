@@ -27,6 +27,8 @@ class RoleAndPermissionSeeder extends Seeder
             /** Partager les dossiers du plan rattachés à une direction (titulaire de la structure + ce rôle). */
             'dossiers.share-direction',
             'utilisateurs.view', 'utilisateurs.create', 'utilisateurs.edit', 'utilisateurs.delete',
+            'courriers.view', 'courriers.create', 'courriers.edit', 'courriers.orienter', 'courriers.ventiler',
+            'courriers.signer', 'courriers.rejeter', 'courriers.transmettre', 'courriers.archiver', 'courriers.recevoir',
         ];
 
         foreach ($permissions as $perm) {
@@ -39,9 +41,18 @@ class RoleAndPermissionSeeder extends Seeder
         $dg = Role::firstOrCreate(['name' => 'dg', 'guard_name' => 'web']);
         $dg->syncPermissions(Permission::where('guard_name', 'web')->pluck('name'));
 
+        $permissionsSecretariatCourrier = [
+            'documents.view', 'documents.create', 'documents.edit',
+            'types-documents.view', 'dossiers.view', 'dossiers.create', 'dossiers.edit',
+            'courriers.view', 'courriers.create', 'courriers.edit', 'courriers.transmettre',
+            'courriers.archiver', 'courriers.recevoir',
+        ];
+
+        $secretaireDirection = Role::firstOrCreate(['name' => 'secretaire_direction', 'guard_name' => 'web']);
+        $secretaireDirection->syncPermissions($permissionsSecretariatCourrier);
+
         $directeur = Role::firstOrCreate(['name' => 'directeur', 'guard_name' => 'web']);
         $directeur->syncPermissions([
-            // Base "utilisateur" : sinon le directeur n'a pas les menus Documents / Dossiers.
             'documents.view',
             'documents.create',
             'documents.edit',
@@ -51,11 +62,10 @@ class RoleAndPermissionSeeder extends Seeder
             'dossiers.edit',
             'dossiers.delete',
             'dossiers.create-structure',
-
-            /** Aligné sur {@see User::aVisibiliteElargiePlanOrganisation} : un seul levier Spatie (pas de doublon hasRole). */
             'documents.view-hierarchique',
             'dossiers.share-direction',
             'dossiers.create-racine-structure',
+            'courriers.view', 'courriers.orienter', 'courriers.ventiler', 'courriers.signer', 'courriers.rejeter', 'courriers.archiver',
         ]);
 
         $user = Role::firstOrCreate(['name' => 'utilisateur', 'guard_name' => 'web']);
@@ -65,8 +75,6 @@ class RoleAndPermissionSeeder extends Seeder
             'dossiers.create-structure',
         ]);
 
-        // Rôles métier optionnels (utilisés via workflow_etapes.role_requis).
-        // On leur donne les mêmes permissions que "utilisateur" pour ne pas bloquer l'accès.
         $chefService = Role::firstOrCreate(['name' => 'chef_service', 'guard_name' => 'web']);
         $chefService->syncPermissions($user->permissions);
 
@@ -78,5 +86,30 @@ class RoleAndPermissionSeeder extends Seeder
 
         $chefCentre = Role::firstOrCreate(['name' => 'chef_centre', 'guard_name' => 'web']);
         $chefCentre->syncPermissions($user->permissions);
+
+        foreach ([
+            'particulier_dg',
+            'particulier_ac',
+            'responsable_dossiers_prestataires',
+            'responsable_suivi_depenses',
+            'agent_comptable',
+            'caissier',
+        ] as $roleCircuit) {
+            $role = Role::firstOrCreate(['name' => $roleCircuit, 'guard_name' => 'web']);
+            $role->syncPermissions($permissionsSecretariatCourrier);
+        }
+
+        // Accès GED de base : Documents + Dossiers visibles pour tous les rôles.
+        $accesGedBase = Permission::whereIn('name', ['documents.view', 'dossiers.view'])
+            ->where('guard_name', 'web')
+            ->get();
+
+        if ($accesGedBase->isNotEmpty()) {
+            foreach (Role::where('guard_name', 'web')->get() as $role) {
+                $role->givePermissionTo($accesGedBase);
+            }
+        }
+
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
     }
 }

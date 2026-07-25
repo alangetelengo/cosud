@@ -73,13 +73,35 @@
             </li>
             @endif
 
-            {{-- Courriers (module à venir) --}}
+            {{-- Courriers --}}
+            @can('courriers.view')
             <li>
-                <a href="{{ route('courriers.index') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->is('courriers*') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
+                <a href="{{ route('courriers.index') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->is('courriers') || (request()->is('courriers/*') && ! request()->is('courriers-a-recevoir')) ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
                     <span class="text-lg flex-shrink-0">✉️</span>
                     <span class="nav-text">Courriers</span>
                 </a>
             </li>
+            <li>
+                <a href="{{ route('courriers.registres.arrivee') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->routeIs('courriers.registres.arrivee') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
+                    <span class="text-lg flex-shrink-0">📗</span>
+                    <span class="nav-text">Registre Arrivée</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('courriers.registres.depart') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->routeIs('courriers.registres.depart') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
+                    <span class="text-lg flex-shrink-0">📕</span>
+                    <span class="nav-text">Registre Départ</span>
+                </a>
+            </li>
+            @if(auth()->user()->gereCourrierSecretariat())
+            <li>
+                <a href="{{ route('courriers.a-recevoir') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->is('courriers-a-recevoir') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
+                    <span class="text-lg flex-shrink-0">📥</span>
+                    <span class="nav-text">À réceptionner</span>
+                </a>
+            </li>
+            @endif
+            @endcan
 
             {{-- Administration --}}
             @if(auth()->user()->can('utilisateurs.view') || auth()->user()->hasRole('admin'))
@@ -141,6 +163,12 @@
                 <a href="{{ route('parametres.workflow.index') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->routeIs('parametres.workflow.*') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
                     <span class="text-lg flex-shrink-0">🔄</span>
                     <span class="nav-text">Workflow</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('parametres.circuits-courriers.index') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->routeIs('parametres.circuits-courriers.*') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
+                    <span class="text-lg flex-shrink-0">✉️</span>
+                    <span class="nav-text">Circuits courriers</span>
                 </a>
             </li>
             @endif

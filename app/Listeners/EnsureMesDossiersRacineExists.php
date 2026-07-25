@@ -9,8 +9,8 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Crée la racine « Mes dossiers » (nom et code par défaut) dès que possible,
- * sans passer par le formulaire — aligné sur la commande artisan dossiers:ensure-racines-mes-dossiers.
+ * Crée la racine « Mes dossiers » dès que l’utilisateur a `dossiers.create`
+ * (inscription / connexion), sans passer par le formulaire.
  *
  * Idempotent : si la racine existe déjà, rien n’est fait.
  */
@@ -35,7 +35,7 @@ class EnsureMesDossiersRacineExists
         if (! $user instanceof User || ! $user->exists) {
             return;
         }
-        if (! $user->can('dossiers.create-structure')) {
+        if (! $user->can('dossiers.create')) {
             return;
         }
 

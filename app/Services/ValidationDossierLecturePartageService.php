@@ -32,6 +32,11 @@ class ValidationDossierLecturePartageService
                 $ids[$id] = true;
             }
         }
+
+        // Révoque d’abord les partages auto de ce document (ex. validateur précédent),
+        // puis réaccorde uniquement aux destinataires de l’étape courante.
+        $this->revoquerPourDocument($document);
+
         foreach (array_keys($ids) as $userId) {
             $this->accorderLectureSurDossier($document, $dossierId, $userId, $partageParUserId);
         }

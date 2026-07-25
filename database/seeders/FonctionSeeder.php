@@ -68,7 +68,11 @@ class FonctionSeeder extends Seeder
             'role_technique' => null,
         ]);
 
-        Structure::whereIn('code', ['SVC-FIN', 'SEC-DIR', 'SJUR', 'CCG', 'SVC-DDI-DEVINT', 'SVC-DDI-BDD', 'SVC-DDI-MAINT', 'SVC-DDI-VEILLE'])->update([
+        Structure::whereIn('code', [
+            'SVC-DAF-RH', 'SVC-DAF-APPRO', 'SVC-DAF-BUDGET', 'SVC-DAF-FIN', 'SVC-DAF-DOC',
+            'SEC-DIR', 'SJUR', 'CCG',
+            'SVC-DDI-DEVINT', 'SVC-DDI-BDD', 'SVC-DDI-MAINT', 'SVC-DDI-VEILLE',
+        ])->update([
             'fonction_id' => $cs,
             'role_technique' => null,
         ]);

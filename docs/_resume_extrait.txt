@@ -1,0 +1,50 @@
+Digitalisation de la gestion des courriers
+Direction Générale — Résumé du processus métier
+Document de synthèse — GED ACSI
+1. Objectif
+Digitaliser les registres physiques (Arrivée / Départ) du secrétariat DG, avec des circuits métier distincts selon le type de document.
+2. Acteurs
+3. Circuit A — Factures (prestataires / fournisseurs)
+Deux vagues d'arrivée, reliées au même dossier métier.
+Vague 1 — Facture/Divers courriers 
+Enregistrement Courrier arrivée
+Notification / traitement DG (instructions)
+La responsable des dossiers (secrétariat DG) traite le dossier → envoie à l’AC
+Vague 2 — Chèque
+AC établi le Chèque → envoi au DG pour signature
+DG signe (paiement) et envoi à l’AC
+AC envoi au caissiers pour l’approvisionnement
+AC envoi le retour de caisse de banque à la Responsable de suivi des dépendes (Secrétariat DG)
+le responsable du suivi des dépenses clôture le dossier
+4. Circuit B — Lettres / notes / instructions du DG
+Enregistrement Courrier arrivée
+Notification DG et la particulière
+Instruction DG
+Traitement du dossier par la particulière du DG
+Transmission vers département, prestataire, fournisseur ou tiers
+5. Lien avec les registres papier
+Registre Arrivée
+Date et n° d'arrivée
+Date et n° de la correspondance (pièce reçue)
+Expéditeur
+Objet
+Date et n° de la réponse
+Registre Départ
+N° d'ordre
+Nombre de pieces  
+Date du départ
+Destinataire
+Objet
+N° archives
+Observations
+Note : la colonne « Date et N° de la réponse » du registre arrivée correspond au lien vers le courrier départ associé.
+---TABLES---
+Table 0:
+Rôle || Fonction
+Secrétariat DG || Enregistre tout ce qui arrive
+DG || Oriente, donne des instructions, valide, signe
+Particulière du DG || Pilote le secrétariat, traitement courriers entrants et sortants
+Responsable des dossiers prestataires / fournisseurs || Au secrétariat DG : traite les dossiers des prestataires et fournisseurs
+Responsable du suivi des dépenses || Au secrétariat DG : suit toutes les dépenses jusqu'à clôture
+DAF || Prépare le chèque
+AC (Agent comptable) || Effectue le paiement

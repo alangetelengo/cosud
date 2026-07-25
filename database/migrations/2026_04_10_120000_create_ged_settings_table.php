@@ -18,7 +18,7 @@ return new class extends Migration
 
         DB::table('ged_settings')->insert([
             'cle' => 'lecture_dossier_lors_partage_document',
-            'valeur' => json_encode(true),
+            'valeur' => json_encode(false),
             'created_at' => now(),
             'updated_at' => now(),
         ]);

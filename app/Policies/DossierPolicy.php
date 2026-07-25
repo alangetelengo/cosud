@@ -8,28 +8,21 @@ use App\Models\User;
 class DossierPolicy
 {
     /**
-     * Peut accéder au formulaire de création : sous-dossier (create-structure) ou racine de structure (create-racine-structure).
+     * Accès au formulaire de création :
+     * - dossiers.create : espace personnel « Mes dossiers »
+     * - dossiers.create-structure : sous-dossiers du plan de structure
+     * - dossiers.create-racine-structure : racines organisationnelles
      */
     public function create(User $user): bool
     {
-        if ($user->can('dossiers.create-structure')
-            || $user->can('dossiers.create-racine-structure')) {
-            return true;
-        }
-
-        // Tolérance métier: un utilisateur peut toujours créer un sous-dossier
-        // dans son propre arbre "Mes dossiers" déjà existant.
-        return Dossier::query()
-            ->where('racine_utilisateur_id', $user->id)
-            ->exists();
+        return $user->can('dossiers.create')
+            || $user->can('dossiers.create-structure')
+            || $user->can('dossiers.create-racine-structure');
     }
 
     /** Vérifie que l'utilisateur peut créer un dossier sous le parent donné (structure autorisée ou arbre « Mes dossiers »). */
     public function createInParent(User $user, ?int $parentId, ?int $structureId): bool
     {
-        if (! $user->can('dossiers.create-structure')) {
-            return false;
-        }
         $allowedIds = $this->structureIdsAutorisees($user);
         $racine = Dossier::where('racine_utilisateur_id', $user->id)->first();
 
@@ -39,6 +32,13 @@ class DossierPolicy
                 return false;
             }
             if ($racine && Dossier::estSousRacineMesDossiers($parent, $racine)) {
+                // $racine est déjà celle de $user (cf. ligne 27) : un compte qui n'a que
+                // dossiers.create-structure / create-racine-structure mais possédait déjà sa racine
+                // personnelle (créée avant l'introduction de dossiers.create) doit pouvoir continuer
+                // à y écrire, plutôt que de se voir bloqué sans avoir regagné dossiers.create.
+                if (! $this->create($user)) {
+                    return false;
+                }
                 if ($structureId !== null) {
                     $sidParent = $parent->structure_id ?? $parent->structure_id_depot;
                     $attendu = $sidParent ?: $user->structure_id;
@@ -49,6 +49,12 @@ class DossierPolicy
 
                 return true;
             }
+            if (in_array((int) $parent->id, Dossier::idsPourArbresPersonnelsAutresQue($user->id), true)) {
+                return $user->can('dossiers.create') && $parent->utilisateurADroitEcritureContenu($user);
+            }
+            if (! $user->can('dossiers.create-structure')) {
+                return false;
+            }
             if (empty($allowedIds)) {
                 return false;
             }
@@ -56,8 +62,13 @@ class DossierPolicy
             if (! $parentStructureId || ! in_array($parentStructureId, $allowedIds, true)) {
                 return false;
             }
-        } elseif (empty($allowedIds)) {
-            return false;
+        } else {
+            if (! $user->can('dossiers.create-structure') && ! $user->can('dossiers.create-racine-structure')) {
+                return false;
+            }
+            if (empty($allowedIds)) {
+                return false;
+            }
         }
         if ($structureId !== null && ! in_array($structureId, $allowedIds, true)) {
             return false;

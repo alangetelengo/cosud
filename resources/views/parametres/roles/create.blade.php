@@ -20,6 +20,7 @@
         'Documents' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'documents.')),
         'Types de documents' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'types-documents.')),
         'Dossiers' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'dossiers.')),
+        'Courriers' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'courriers.')),
         'Utilisateurs' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'utilisateurs.')),
     ];
     $allGrouped = collect($groups)->flatten()->toArray();
@@ -28,6 +29,8 @@
     $labels = [
         'view' => 'Consulter', 'create' => 'Créer', 'edit' => 'Modifier', 'delete' => 'Supprimer',
         'view-confidentiel' => 'Voir confidentiel', 'create-structure' => 'Créer (structure)',
+        'orienter' => 'Orienter', 'ventiler' => 'Ventiler', 'signer' => 'Signer', 'rejeter' => 'Rejeter',
+        'transmettre' => 'Transmettre', 'archiver' => 'Archiver', 'recevoir' => 'Recevoir',
     ];
     $descriptions = config('permissions_descriptions', []);
 @endphp

@@ -180,9 +180,17 @@ class DocumentController extends Controller
     public function fiche(Document $document)
     {
         $this->authorize('view', $document);
-        $document->load(['typeDocument', 'dossier.parent.parent', 'user', 'statutDocument', 'workflowValidateur', 'validations.user', 'metadonnees.typeMetadonnee', 'versions', 'historiques.user']);
+        $document->load([
+            'typeDocument', 'dossier.parent.parent', 'user', 'statutDocument', 'workflowValidateur',
+            'validations.user', 'metadonnees.typeMetadonnee', 'versions', 'historiques.user',
+            'courriers.sensCourrier', 'courriers.statutCourrier', 'courriers.typeCourrier',
+        ]);
 
-        return view('documents.fiche', compact('document'));
+        $courriersLies = $document->courriers
+            ->filter(fn ($c) => auth()->user()->can('view', $c))
+            ->values();
+
+        return view('documents.fiche', compact('document', 'courriersLies'));
     }
 
     public function edit(Document $document)
@@ -465,10 +473,12 @@ class DocumentController extends Controller
             'statut' => 'en_attente',
             'workflow_etape_actuelle_id' => $etape->id,
             'workflow_validateur_id' => $workflowValidateurId,
+            'workflow_destinataire_id' => (int) $destinataire->id,
             'workflow_validation_chain' => $workflowValidationChain,
             'workflow_etape_index' => $workflowEtapeIndex,
             'modificateur_id' => auth()->id(),
         ]);
+        $document->workflowDestinataires()->sync([(int) $destinataire->id]);
         $commentaireSkip = $skipped !== [] ? ' — étapes sautées : '.implode(', ', $skipped) : '';
         HistoriqueDocument::enregistrer(
             $document,
@@ -987,10 +997,12 @@ class DocumentController extends Controller
                     'statut' => 'valide',
                     'workflow_etape_actuelle_id' => null,
                     'workflow_validateur_id' => null,
+                    'workflow_destinataire_id' => null,
                     'workflow_validation_chain' => null,
                     'workflow_etape_index' => 0,
                     'modificateur_id' => auth()->id(),
                 ]);
+                $document->workflowDestinataires()->sync([]);
                 $this->validationDossierLecturePartage->revoquerPourDocument($document->fresh(['dossier']));
                 HistoriqueDocument::enregistrer($document, 'workflow_approbation', null, 'Validé par '.auth()->user()->name.' (dernier visa)');
                 JournalAudit::log('document.workflow_approbation', 'documents', ['document_id' => $document->id]);
@@ -1007,9 +1019,11 @@ class DocumentController extends Controller
             $prochainValidateurId = $chain[$prochaineIndex];
             $document->update([
                 'workflow_validateur_id' => $prochainValidateurId,
+                'workflow_destinataire_id' => $prochainValidateurId,
                 'workflow_etape_index' => $prochaineIndex,
                 'modificateur_id' => auth()->id(),
             ]);
+            $document->workflowDestinataires()->sync([(int) $prochainValidateurId]);
             $this->validationDossierLecturePartage->syncPourUtilisateurs(
                 $document->fresh(['dossier']),
                 [(int) $prochainValidateurId],
@@ -1034,10 +1048,12 @@ class DocumentController extends Controller
                 'statut' => 'valide',
                 'workflow_etape_actuelle_id' => null,
                 'workflow_validateur_id' => null,
+                'workflow_destinataire_id' => null,
                 'workflow_validation_chain' => null,
                 'workflow_etape_index' => 0,
                 'modificateur_id' => auth()->id(),
             ]);
+            $document->workflowDestinataires()->sync([]);
             $this->validationDossierLecturePartage->revoquerPourDocument($document->fresh(['dossier']));
             HistoriqueDocument::enregistrer($document, 'workflow_approbation', null, 'Approuvé par '.auth()->user()->name);
             JournalAudit::log('document.workflow_approbation', 'documents', ['document_id' => $document->id]);
@@ -1066,10 +1082,12 @@ class DocumentController extends Controller
                 'statut' => 'valide',
                 'workflow_etape_actuelle_id' => null,
                 'workflow_validateur_id' => null,
+                'workflow_destinataire_id' => null,
                 'workflow_validation_chain' => null,
                 'workflow_etape_index' => 0,
                 'modificateur_id' => auth()->id(),
             ]);
+            $document->workflowDestinataires()->sync([]);
             $this->validationDossierLecturePartage->revoquerPourDocument($document->fresh(['dossier']));
             HistoriqueDocument::enregistrer($document, 'workflow_approbation', null, 'Approuvé par '.auth()->user()->name.$commentaireSkip);
             JournalAudit::log('document.workflow_approbation', 'documents', ['document_id' => $document->id]);
@@ -1089,21 +1107,29 @@ class DocumentController extends Controller
 
         /** @var WorkflowEtape $etapeSuivante */
         $etapeSuivante = $resolution['etape'];
+        $notifyUsers = ($resolution['notify_users'] ?? collect())
+            ->filter()
+            ->unique('id')
+            ->values();
+        $workflowDestinataireId = null;
+        if ($notifyUsers->count() === 1) {
+            $workflowDestinataireId = (int) $notifyUsers->first()->id;
+        }
         $document->update([
             'workflow_etape_actuelle_id' => $etapeSuivante->id,
             'workflow_validateur_id' => $resolution['workflow_validateur_id'],
+            'workflow_destinataire_id' => $workflowDestinataireId,
             'workflow_validation_chain' => $resolution['workflow_validation_chain'],
             'workflow_etape_index' => (int) ($resolution['workflow_etape_index'] ?? 0),
             'modificateur_id' => auth()->id(),
         ]);
+        $document->workflowDestinataires()->sync($notifyUsers->pluck('id')->map(fn ($id) => (int) $id)->all());
         $idsEtapeSuivante = [];
         if (! empty($resolution['workflow_validateur_id'])) {
             $idsEtapeSuivante[] = (int) $resolution['workflow_validateur_id'];
         }
-        foreach (($resolution['notify_users'] ?? collect()) as $u) {
-            if ($u) {
-                $idsEtapeSuivante[] = (int) $u->id;
-            }
+        foreach ($notifyUsers as $u) {
+            $idsEtapeSuivante[] = (int) $u->id;
         }
         $this->validationDossierLecturePartage->syncPourUtilisateurs(
             $document->fresh(['dossier']),
@@ -1112,7 +1138,7 @@ class DocumentController extends Controller
         );
         HistoriqueDocument::enregistrer($document, 'workflow_approbation', null, 'Approuvé, passage à : '.$etapeSuivante->nom.$commentaireSkip);
 
-        $validateurs = ($resolution['notify_users'] ?? collect())
+        $validateurs = $notifyUsers
             ->filter(fn ($u) => $u && $u->id !== auth()->id())
             ->unique('id');
         if ($validateurs->isNotEmpty()) {
@@ -1159,10 +1185,12 @@ class DocumentController extends Controller
             'statut' => $statutRejete ? 'rejete' : 'brouillon',
             'workflow_etape_actuelle_id' => null,
             'workflow_validateur_id' => null,
+            'workflow_destinataire_id' => null,
             'workflow_validation_chain' => null,
             'workflow_etape_index' => 0,
             'modificateur_id' => auth()->id(),
         ]);
+        $document->workflowDestinataires()->sync([]);
         $this->validationDossierLecturePartage->revoquerPourDocument($document->fresh(['dossier']));
         HistoriqueDocument::enregistrer($document, 'workflow_rejet', null, 'Rejeté par '.auth()->user()->name.($request->commentaire ? ' : '.$request->commentaire : ''));
         JournalAudit::log('document.workflow_rejet', 'documents', ['document_id' => $document->id]);

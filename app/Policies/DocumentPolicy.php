@@ -20,12 +20,14 @@ class DocumentPolicy
         if (! $document->visiblePar($user)) {
             return false;
         }
-        $lieAuDocument = $this->utilisateurLieAuDocument($user, $document);
+        // Inclut les accès ciblés (ventilation courrier, directeur en attente de signature)
+        // qui doivent lever la restriction de confidentialité au même titre que visiblePar().
+        $accesMalgreConfidentiel = $document->accesConfidentielAutorise($user);
         $dossier = $document->dossier;
-        if ($dossier && $dossier->confidentiel && ! $user->can('dossiers.view-confidentiel') && ! $user->aAccesTotal() && ! $lieAuDocument) {
+        if ($dossier && $dossier->confidentiel && ! $user->can('dossiers.view-confidentiel') && ! $user->aAccesTotal() && ! $accesMalgreConfidentiel) {
             return false;
         }
-        if ($document->confidentiel && ! $user->can('dossiers.view-confidentiel') && ! $user->aAccesTotal() && ! $lieAuDocument) {
+        if ($document->confidentiel && ! $user->can('dossiers.view-confidentiel') && ! $user->aAccesTotal() && ! $accesMalgreConfidentiel) {
             return false;
         }
 

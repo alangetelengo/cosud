@@ -8,8 +8,8 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 /**
- * Compte technique d’administration (hors fichier Excel ACSI).
- * Mot de passe par défaut : « password » (comme les autres comptes seed).
+ * Compte technique d’administration (bootstrap).
+ * Mot de passe par défaut : « password ».
  */
 class AdminUserSeeder extends Seeder
 {
@@ -23,7 +23,7 @@ class AdminUserSeeder extends Seeder
         }
 
         $user = User::updateOrCreate(
-            ['email' => 'admin@acsi.cg'],
+            ['email' => 'alange@acsi.cg'],
             [
                 'name' => 'Administrateur GED',
                 'password' => Hash::make('password'),

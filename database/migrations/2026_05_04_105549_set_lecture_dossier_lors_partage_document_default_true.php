@@ -11,7 +11,7 @@ return new class extends Migration
         DB::table('ged_settings')
             ->where('cle', 'lecture_dossier_lors_partage_document')
             ->update([
-                'valeur' => json_encode(true),
+                'valeur' => json_encode(false),
                 'updated_at' => now(),
             ]);
 
@@ -23,7 +23,7 @@ return new class extends Migration
         DB::table('ged_settings')
             ->where('cle', 'lecture_dossier_lors_partage_document')
             ->update([
-                'valeur' => json_encode(false),
+                'valeur' => json_encode(true),
                 'updated_at' => now(),
             ]);
 

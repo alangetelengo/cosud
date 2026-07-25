@@ -125,9 +125,11 @@ class DossierController extends Controller
         }
         $typesDossier = $this->typesDossierPourFormulaire($user);
 
-        $peutCreerSousDossier = $user->aAccesTotal() || $user->can('dossiers.create-structure') || $racine !== null;
+        $peutCreerSousDossier = $user->aAccesTotal()
+            || $user->can('dossiers.create-structure')
+            || ($user->can('dossiers.create') && $racine !== null);
         $peutCreerRacine = $user->aAccesTotal() || $user->can('dossiers.create-racine-structure');
-        $sansRacinePersonnelle = $racine === null && $user->can('dossiers.create-structure');
+        $sansRacinePersonnelle = $racine === null && $user->can('dossiers.create');
         $structuresRacine = collect();
         if ($peutCreerRacine) {
             $structuresRacine = $user->aAccesTotal()
@@ -194,7 +196,7 @@ class DossierController extends Controller
             || $request->input('placement') === 'personnel';
 
         if ($veutRacinePersonnelle) {
-            if (! $user->can('dossiers.create-structure')) {
+            if (! $user->aAccesTotal() && ! $user->can('dossiers.create')) {
                 abort(403, 'Vous n’avez pas la permission de créer votre espace personnel.');
             }
             if ($mesDossiersRacine->find($user) !== null) {
@@ -241,17 +243,10 @@ class DossierController extends Controller
             $parentId = $data['parent_id'] ?? null;
             $parent = $parentId ? Dossier::find($parentId) : null;
 
-            // Besoin métier : l'utilisateur travaille dans une structure (service).
-            // Si aucun parent n'est choisi, on place par défaut sous la racine org de sa structure (si elle existe),
-            // au lieu de créer une racine personnelle.
+            // Sans parent : racine org de structure (create-structure), sinon « Mes dossiers » (dossiers.create).
             if (! $parent) {
-                if (! $user->can('dossiers.create-structure')) {
-                    return back()->withInput()->withErrors([
-                        'parent_id' => 'Choisissez un dossier parent dans votre espace « Mes dossiers ».',
-                    ]);
-                }
                 $defaultParent = null;
-                if ($user->structure_id) {
+                if ($user->can('dossiers.create-structure') && $user->structure_id) {
                     $defaultParent = Dossier::query()
                         ->where('actif', true)
                         ->whereNull('parent_id')
@@ -260,16 +255,22 @@ class DossierController extends Controller
                         ->orderBy('ordre')
                         ->first();
                 }
+                if (! $defaultParent && $user->can('dossiers.create') && $racine !== null) {
+                    $defaultParent = $racine;
+                }
 
                 if ($defaultParent) {
                     $parent = $defaultParent;
                     $parentId = (int) $defaultParent->id;
                 } else {
-                    $hint = $racine === null
-                        ? ' Choisissez un dossier parent, créez une racine pour une structure, ou cochez la création de votre espace personnel.'
-                        : '';
+                    $message = $user->can('dossiers.create')
+                        ? 'Choisissez un dossier parent dans votre espace « Mes dossiers ».'
+                        : 'Choisissez un dossier parent ou activez la création d’un dossier racine de structure.';
+                    if ($racine === null && $user->can('dossiers.create')) {
+                        $message .= ' Vous pouvez aussi créer votre espace personnel.';
+                    }
 
-                    return back()->withInput()->withErrors(['parent_id' => 'Choisissez un dossier parent ou activez la création d’un dossier racine de structure.'.$hint]);
+                    return back()->withInput()->withErrors(['parent_id' => $message]);
                 }
             }
 
@@ -282,10 +283,23 @@ class DossierController extends Controller
             }
 
             $sousArbrePersonnel = $this->estDansArbrePersonnelUtilisateur($user, $parent, $racine);
-            if ($sousArbrePersonnel) {
+            $arbrePersoAutre = in_array((int) $parent->id, Dossier::idsPourArbresPersonnelsAutresQue($user->id), true);
+            if ($sousArbrePersonnel || $arbrePersoAutre) {
+                // Dans son propre arbre déjà existant ($sousArbrePersonnel), le formulaire de création
+                // accessible via create-structure / create-racine-structure (cf. DossierPolicy::create)
+                // doit rester utilisable. L'écriture dans l'espace personnel d'un tiers (contributeur)
+                // reste, elle, strictement soumise à dossiers.create.
+                $permissionRequise = $sousArbrePersonnel
+                    ? $user->can('create', Dossier::class)
+                    : $user->can('dossiers.create');
+                if (! $user->aAccesTotal() && ! $permissionRequise) {
+                    return back()->withInput()->withErrors([
+                        'parent_id' => 'Vous n’avez pas la permission de créer dans un espace personnel.',
+                    ]);
+                }
                 $parentStructureId = $parent->structure_id ?? $parent->structure_id_depot;
                 $structureId = $parentStructureId ?: $user->structure_id;
-                $proprietaireId = $user->id;
+                $proprietaireId = $sousArbrePersonnel ? $user->id : ($parent->proprietaire_id ?: $user->id);
             } else {
                 if (! $user->can('dossiers.create-structure')) {
                     return back()->withInput()->withErrors([
@@ -400,15 +414,24 @@ class DossierController extends Controller
         $idsArbrePersonnel = Dossier::idsPourArbrePersonnel((int) $user->id);
         $racinePersonnelleId = (int) ($racine?->id ?? 0);
 
+        $peutCreerPersonnel = $user->aAccesTotal() || $user->can('dossiers.create');
+        $peutCreerStructure = $user->aAccesTotal() || $user->can('dossiers.create-structure');
+
         return Dossier::where('actif', true)
             ->get()
-            ->filter(function (Dossier $d) use ($user, $allowedIds, $racine, $idsArbrePersonnel) {
+            ->filter(function (Dossier $d) use ($user, $allowedIds, $racine, $idsArbrePersonnel, $peutCreerPersonnel, $peutCreerStructure) {
                 if (! $d->visiblePar($user)) {
                     return false;
                 }
                 if ($this->estDansArbrePersonnelUtilisateur($user, $d, $racine)
                     || in_array((int) $d->id, $idsArbrePersonnel, true)) {
-                    return true;
+                    return $peutCreerPersonnel;
+                }
+                if (in_array((int) $d->id, Dossier::idsPourArbresPersonnelsAutresQue($user->id), true)) {
+                    return $peutCreerPersonnel && $d->utilisateurADroitEcritureContenu($user);
+                }
+                if (! $peutCreerStructure) {
+                    return false;
                 }
                 $sid = $d->structure_id ?? $d->structure_id_depot;
 
@@ -489,21 +512,26 @@ class DossierController extends Controller
     private function parentAutorisePourCreation(User $user, Dossier $parent, ?Dossier $racine): bool
     {
         if ($this->estDansArbrePersonnelUtilisateur($user, $parent, $racine)) {
-            return true;
+            // $racine (si présente) est déjà celle de $user : un compte qui n'a que
+            // dossiers.create-structure / create-racine-structure mais possédait déjà sa racine
+            // personnelle (créée avant l'introduction de dossiers.create) doit pouvoir continuer à y
+            // écrire, plutôt que de se voir bloqué alors que le formulaire de création lui reste accessible.
+            return $user->aAccesTotal() || $user->can('create', Dossier::class);
+        }
+        if (in_array((int) $parent->id, Dossier::idsPourArbresPersonnelsAutresQue($user->id), true)) {
+            return ($user->aAccesTotal() || $user->can('dossiers.create'))
+                && $parent->utilisateurADroitEcritureContenu($user);
+        }
+        if (! $user->aAccesTotal() && ! $user->can('dossiers.create-structure')) {
+            return false;
         }
         $allowedIds = $this->structureIdsAutorisees($user);
         if (empty($allowedIds)) {
             return false;
         }
         $sid = $parent->structure_id ?? $parent->structure_id_depot;
-        if (! $sid || ! in_array($sid, $allowedIds, true)) {
-            return false;
-        }
-        if (in_array((int) $parent->id, Dossier::idsPourArbresPersonnelsAutresQue($user->id), true)) {
-            return $parent->utilisateurADroitEcritureContenu($user);
-        }
 
-        return true;
+        return (bool) ($sid && in_array($sid, $allowedIds, true));
     }
 
     private function estDansArbrePersonnelUtilisateur(User $user, Dossier $dossier, ?Dossier $racine): bool

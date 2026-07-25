@@ -113,4 +113,34 @@ class ValidationDossierLecturePartageTest extends TestCase
             'user_id' => $other->id,
         ]);
     }
+
+    public function test_sync_vers_nouvel_utilisateur_revoque_le_precedent(): void
+    {
+        GedSetting::setBool(GedSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, true);
+        $owner = User::factory()->create();
+        $premier = User::factory()->create();
+        $suivant = User::factory()->create();
+        [, $doc] = $this->creerDossierEtDocument($owner);
+        $service = app(ValidationDossierLecturePartageService::class);
+
+        $service->syncPourUtilisateurs($doc->fresh(), [$premier->id], $owner->id);
+        $this->assertDatabaseHas('dossier_partages', [
+            'dossier_id' => $doc->dossier_id,
+            'user_id' => $premier->id,
+            'droits_lecture' => true,
+        ]);
+
+        $service->syncPourUtilisateurs($doc->fresh(), [$suivant->id], $owner->id);
+
+        $this->assertDatabaseMissing('dossier_partages', [
+            'dossier_id' => $doc->dossier_id,
+            'user_id' => $premier->id,
+        ]);
+        $this->assertDatabaseHas('dossier_partages', [
+            'dossier_id' => $doc->dossier_id,
+            'user_id' => $suivant->id,
+            'droits_lecture' => true,
+            'droits_ecriture' => false,
+        ]);
+    }
 }

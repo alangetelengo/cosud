@@ -16,7 +16,11 @@
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/20 backdrop-blur-sm">
                     <span class="text-2xl font-bold text-white drop-shadow-sm">{{ $nbEnAttente }}</span>
-                    <span class="text-sm font-bold text-white drop-shadow-sm">en attente</span>
+                    <span class="text-sm font-bold text-white drop-shadow-sm">docs en attente</span>
+                </div>
+                <div class="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/20 backdrop-blur-sm">
+                    <span class="text-2xl font-bold text-white drop-shadow-sm">{{ $nbCourriersEnRetard }}</span>
+                    <span class="text-sm font-bold text-white drop-shadow-sm">courriers en retard</span>
                 </div>
                 @if($nbEnAttente > 0)
                 <a href="{{ route('documents.index', ['statut' => 'en_attente']) }}" class="px-4 py-2 rounded-xl bg-white text-emerald-700 font-semibold hover:bg-emerald-50 transition-colors no-underline text-sm">
@@ -92,6 +96,38 @@
             </div>
         </div>
     </div>
+
+    @if($nbCourriersEnRetard > 0)
+    <div class="rounded-2xl border-2 border-amber-300 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-700 overflow-hidden shadow-sm">
+        <div class="px-5 py-3 border-b border-amber-200 dark:border-amber-800 flex flex-wrap items-center justify-between gap-2">
+            <div>
+                <h2 class="font-bold text-amber-900 dark:text-amber-200">Courriers en retard de traitement</h2>
+                <p class="text-xs text-amber-800/80 dark:text-amber-300/80">Étape non traitée depuis plus de {{ $delaiRetardHeures }} h — interpellez le responsable</p>
+            </div>
+            <span class="px-3 py-1 rounded-lg bg-amber-600 text-white text-sm font-bold">{{ $nbCourriersEnRetard }}</span>
+        </div>
+        <ul class="divide-y divide-amber-200/80 dark:divide-amber-800">
+            @foreach($courriersEnRetard->take(8) as $c)
+            <li class="px-5 py-3 flex flex-wrap items-center justify-between gap-3 text-sm">
+                <div class="min-w-0">
+                    <a href="{{ route('courriers.show', $c) }}" class="font-semibold text-slate-800 dark:text-slate-100 no-underline hover:text-emerald-700">
+                        n° {{ $c->numeroRegistreComplet() }} — {{ $c->objet }}
+                    </a>
+                    <p class="text-xs text-amber-900/70 dark:text-amber-200/70 mt-0.5">
+                        Étape : {{ $c->circuitEtapeActuelle?->nom ?? '—' }}
+                        · Responsable : {{ $c->circuitEtapeActuelle?->libelleActeur() ?? '—' }}
+                        · Depuis {{ $c->circuit_etape_depuis?->diffForHumans() }}
+                    </p>
+                </div>
+                <form method="post" action="{{ route('courriers.circuit.relancer', $c) }}">
+                    @csrf
+                    <button type="submit" class="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700">Relancer</button>
+                </form>
+            </li>
+            @endforeach
+        </ul>
+    </div>
+    @endif
 
     {{-- Répartition par statut avec barres de progression --}}
     @php
