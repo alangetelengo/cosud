@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Courrier extends Model
 {
@@ -213,11 +214,32 @@ class Courrier extends Model
         return $this->hasMany(Courrier::class, 'courrier_parent_id');
     }
 
+    public function reponseDepartEnAttenteSignature(): ?self
+    {
+        return $this->reponsesDepart()
+            ->whereHas('statutCourrier', fn ($q) => $q->where('code', 'transmis_directeur'))
+            ->latest('id')
+            ->first();
+    }
+
+    public function reponseDepartSigneeEnAttenteExpedition(): ?self
+    {
+        return $this->reponsesDepart()
+            ->whereHas('statutCourrier', fn ($q) => $q->where('code', 'signe'))
+            ->latest('id')
+            ->first();
+    }
+
     public function documents(): BelongsToMany
     {
         return $this->belongsToMany(Document::class, 'courrier_document')
             ->withPivot('est_principal')
             ->withTimestamps();
+    }
+
+    public function suiviPaiement(): HasOne
+    {
+        return $this->hasOne(SuiviPaiement::class);
     }
 
     public function orientations(): HasMany
@@ -371,15 +393,12 @@ class Courrier extends Model
         if ($user->gereCourrierSecretariat() || $user->hasRole('particulier_dg')) {
             $structureId = (int) $user->structure_id;
 
+            // Registre / listes : uniquement les courriers de CE secrétariat.
+            // Les départs reçus d’une autre direction restent hors liste (page « À réceptionner »
+            // + visiblePar pour ouvrir la fiche), puis deviennent une Arrivée après réception.
             return $query->where(function (Builder $q) use ($user, $structureId) {
                 $q->where('structure_id', $structureId)
-                    ->orWhere('createur_id', $user->id)
-                    ->orWhere(function (Builder $sub) use ($structureId) {
-                        $sub->whereNotNull('structure_destinataire_id')
-                            ->where('structure_destinataire_id', $structureId)
-                            ->whereNull('courrier_arrivee_lie_id')
-                            ->whereHas('statutCourrier', fn ($sq) => $sq->where('code', 'expedie'));
-                    });
+                    ->orWhere('createur_id', $user->id);
             });
         }
 
@@ -387,13 +406,7 @@ class Courrier extends Model
             $q->where('createur_id', $user->id)
                 ->orWhere('directeur_en_attente_id', $user->id)
                 ->orWhere('destinataire_agent_id', $user->id)
-                ->orWhereHas('ventilationDestinataires', fn ($vq) => $vq->where('user_id', $user->id))
-                ->orWhere(function ($sub) use ($user) {
-                    $sub->whereNotNull('structure_destinataire_id')
-                        ->where('structure_destinataire_id', $user->structure_id)
-                        ->whereNull('courrier_arrivee_lie_id')
-                        ->whereHas('statutCourrier', fn ($sq) => $sq->where('code', 'expedie'));
-                });
+                ->orWhereHas('ventilationDestinataires', fn ($vq) => $vq->where('user_id', $user->id));
         });
     }
 
@@ -454,15 +467,9 @@ class Courrier extends Model
     {
         $code = $this->statutCourrier?->code ?? '';
 
+        // Départ : l’expédition clôt les actions ; plus de « Transmission / trace d’envoi ».
         if ($this->estDepart()) {
-            if ($code !== 'expedie') {
-                return false;
-            }
-
-            // Une seule trace d’envoi avec accusé : pas de nouveau formulaire après AR.
-            return ! $this->transmissions()
-                ->where('accuse_reception', true)
-                ->exists();
+            return false;
         }
 
         return in_array($code, ['oriente', 'ventile'], true);
@@ -479,8 +486,9 @@ class Courrier extends Model
     {
         $code = $this->statutCourrier?->code ?? '';
 
+        // Départ : infos registre saisies à l’expédition — plus d’action « Archiver » après envoi.
         if ($this->estDepart()) {
-            return in_array($code, ['expedie', 'reception_refusee'], true);
+            return $code === 'reception_refusee';
         }
 
         return $code === 'ventile';

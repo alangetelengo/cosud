@@ -1,0 +1,157 @@
+Scénario de test — Circuits de traitement des courriers
+Application GED — Module Courriers
+Objectif : valider, par une saisie réelle dans l’application, l’ensemble des flux implémentés pour le Circuit A « Factures prestataires / fournisseurs » et le Circuit B « Courriers généraux », y compris : instructions DG avec collaborateur confié (optionnel), projet de réponse / validation / rejet, réponse directe du DG, envoi de chèque AC → signature DG → notif fournisseur, fiches FSP (suivi des paiements), preuve de paiement et clôture, accès aux pièces, et masquage du bouton « Relancer » quand c’est le tour du DG.
+Version document : juillet 2026 — alignée sur les développements circuit courriers + module FSP (suivi des paiements).
+1. Comptes de test
+Mot de passe identique pour tous les comptes : password
+Important : l’enregistrement Arrivée au secrétariat DG (SEC-DIR) est réalisé par Lucienne (particulière du DG) ou Anne Lethicia (responsable dossiers prestataires), toutes deux rattachées à SEC-DIR. Brigitte Essonga (SEC-DDSAIT) n’est pas le point d’entrée du scénario DG.
+Rôle | Email | Nom | Structure
+Particulière du DG | 003144s@acsi.cg | LUCIENNE NGOUMBI | SEC-DIR
+Responsable dossiers prestataires | 001958d@acsi.cg | ANNE LETHICIA TATY-TCHICAYA | SEC-DIR
+Directeur Général (DG) | 003057w@acsi.cg | LORD MARHYNO GANDOU | DG
+Directeur DAF | 003329t@acsi.cg | NGONO MAMPASSI | DAF
+Agent comptable (AC) | 003232b@acsi.cg | RAÏSSA LEBANITOU | DAC
+Particulière de l’AC | 002871v@acsi.cg | NICOLE BIENVENUE OBA | SEC-DAC
+Responsable suivi des dépenses | 003091k@acsi.cg | ASTRIDE ELENI OSSEBI | SEC-DIR
+Secrétaire DDSAIT | 003064f@acsi.cg | BRIGITTE ESSONGA | SEC-DDSAIT
+Secrétaire DAF | 003063e@acsi.cg | RUTH JEMIMAH MAYELA | SEC-DAF
+2. Vue d’ensemble des circuits
+2.1 Circuit B — Courriers généraux
+Enchaînement typique : Enregistrement (auto) → Notification (auto) → Instruction DG → Traitement particulière (projet) → Validation DG → Création départ brouillon (Lucienne).
+Variantes : (1) le DG répond lui-même et signe (clôture) ; (2) le DG rejette le projet (retour à Traitement particulière) ; (3) instruction par le directeur de la structure destinataire.
+2.2 Circuit A — Factures prestataires / MAD
+Enchaînement typique : Enregistrement (auto) → Instructions DG (± collaborateur confié) → [Traitement dossiers → AC] (auto si pas de collaborateur confié hors rôle AC) ou saut direct si collaborateur = AC → AC établit le chèque (montant + message) → création FSP + notif Astride → DG signe (scan + notif fournisseur) → AC → caissiers (auto) → Retour caisse (auto) → Preuve de paiement → Clôture.
+Types de courrier paiement : Facture (FSP FACTURE) et Mise à disposition / MAD (FSP MAD).
+Variante : à l’étape Instructions DG, le DG peut « Répondre moi-même et signer » (clôture immédiate du circuit facture, sans bascule AC/chèque).
+2.3 Suivi des paiements (FSP) — registre numérique
+Menu : Suivi des paiements (sidebar, sous les registres courrier).
+Onglets : FSP FACTURE | FSP MAD.
+Alimentation : automatique quand l’AC envoie le chèque au DG (formulaire « Envoyer le chèque au DG » avec montant obligatoire).
+Consultation / export CSV : responsable suivi des dépenses (Astride), particulières, AC, DG selon permissions.
+3. Test A — Circuit « Courriers généraux »
+3.1 Exemple de courrier à saisir
+Champ | Valeur | Sens
+Type de courrier | Administratif (ou Invitation / Autre — circuit général) | Arrivée
+Expéditeur | Ministère de la Fonction Publique | Arrivée
+Objet | Demande de mise à jour de l'organigramme de la Direction | Arrivée
+Date du courrier | Date du jour | Arrivée
+Référence expéditeur | MFP/CAB/2026/00412 | Arrivée
+Pièce jointe | N'importe quel PDF de test | Arrivée
+3.2 Cas A1 — Chemin nominal (projet Lucienne → validation DG → départ brouillon)
+Se connecter avec Lucienne (003144s@acsi.cg) → Courriers → Nouveau courrier arrivée → saisir le courrier ci-dessus → Enregistrer.
+Fiche du courrier → onglet Historique circuit.
+Attendu : Étape en cours = « Instruction DG » (enregistrement + notification déjà auto-validés). Pas de bouton « Valider l’étape » générique pour cette étape d’instruction.
+Se connecter avec le DG (003057w@acsi.cg) → ouvrir la cloche de notifications.
+Attendu : Pas de triple notification pour le même enchaînement (bug historique corrigé).
+Ouvrir le courrier → panneau Circuit métier : formulaire « A — Instruire le dossier » (instructions obligatoires ; collaborateur confié facultatif — laisser vide ici).
+Saisir par ex. : « Merci de préparer une réponse indiquant que l’organigramme mis à jour sera transmis sous 15 jours. » → Enregistrer les instructions.
+Attendu : Étape = « Traitement par la particulière ». Dans Actions : formulaire de soumission du projet (document + objet). Pas de bouton générique « Valider l’étape ». « Relancer le responsable » est visible pour le DG (ce n’est plus son tour).
+Avant les instructions (rejouer sur un autre courrier si besoin) : en tant que Lucienne à l’étape Instruction DG, vérifier le panneau Actions.
+Attendu : Message « En attente des instructions du DG / directeur » — pas le texte « Enregistrez vos instructions… » réservé au DG.
+Avec Lucienne à Traitement particulière → joindre un document de réponse → Soumettre le projet de réponse au DG. Ne pas cocher confidentialité / collaborateur destinataire (champs interdits à cette étape).
+Attendu : Étape = « Validation de la réponse » (DG).
+Avec le DG → Actions : « Valider et envoyer à Lucienne pour créer le courrier de réponse » (pas « Créer le départ » / « Répondre moi-même » à cette étape après validation).
+Attendu : Étape = « Création du départ (particulière) ».
+Avec Lucienne → formulaire « Créer le courrier départ (brouillon) » : objet, destinataire (structure ou collaborateur si confidentiel) → Créer le brouillon.
+Attendu : Courrier départ créé en brouillon ; circuit arrivée avancé / clôturé selon le moteur. Pas de nouveau clic « Valider l’étape » pour matérialiser la création.
+3.3 Cas A2 — DG répond lui-même et signe (bypass particulière)
+Créer un nouveau courrier administratif (Lucienne) → se connecter en DG à l’étape Instruction DG ou après instruction à Traitement particulière.
+Dans Actions → « Répondre moi-même et signer » → joindre le document, choisir destinataire (structure ou collaborateur si confidentiel) → Créer et signer.
+Attendu : Courrier départ créé au statut signé ; circuit arrivée clôturé (pas de suite particulière / validation).
+3.4 Cas A3 — DG rejette le projet de Lucienne
+Reprendre A1 jusqu’à la soumission du projet → en DG : Rejeter avec motif (ex. « Reformuler le 2e paragraphe »).
+Attendu : Retour à « Traitement par la particulière » ; motif visible pour Lucienne ; elle peut resoumettre un nouveau document.
+3.5 Cas A4 — Relancer (circuit général)
+À l’étape Instruction DG connecté en DG : vérifier le panneau Circuit métier.
+Attendu : Bouton « Relancer le responsable » absent (ce serait se relancer soi-même).
+Après instructions, à Traitement particulière, toujours en DG.
+Attendu : « Relancer le responsable » visible (relance utile vers Lucienne).
+4. Test B — Circuit « Factures prestataires »
+4.1 Exemple de courrier à saisir
+Champ | Valeur | Sens
+Type de courrier | Facture | Arrivée
+Expéditeur | ETS KOMBO & Fils (prestataire) | Arrivée
+Email expéditeur | alangetelengo87@gmail.com (pour test notif recouvrement) | Arrivée
+Téléphone | 242066835332 | Arrivée
+Objet | Facture N°2026-0087 — fourniture de matériel informatique | Arrivée
+Référence / N° fulgurant | 00230 | Arrivée
+Date du courrier | Date du jour | Arrivée
+Pièce jointe | PDF ou image de facture de test | Arrivée
+4.2 Cas B1 — Chemin nominal avec collaborateur confié (AC)
+Se connecter avec Anne (001958d@acsi.cg) → créer le courrier facture ci-dessus → Enregistrer.
+Fiche → Historique circuit.
+Attendu : Étape en cours = « Notification / instructions DG ».
+Toujours avec Anne : panneau Actions.
+Attendu : Message « En attente des instructions du DG / directeur » — pas le formulaire d’instructions ni « Répondre moi-même ».
+Se connecter avec le DG → Circuit métier : « A — Instruire le dossier » (instructions + Confier à un collaborateur facultatif).
+Attendu : Séparation claire : A = instructions sans pièce ; B (Actions) = « Répondre moi-même et signer » (formulaire fermé par défaut). « Relancer » absent (tour du DG).
+Instructions : « Établir le chèque pour le paiement de cette facture. » → Confier à : RAÏSSA LEBANITOU → Enregistrer les instructions.
+Attendu : Saut vers « AC établit le chèque → envoi DG ». Affichage « Collaborateur confié — Raïssa… ». Raïssa peut ouvrir les pièces jointes (plus d’« accès restreint »).
+Se connecter avec Raïssa (003232b@acsi.cg) → Actions : « Envoyer le chèque au DG ».
+Renseigner : Montant du chèque (ex. 1 949 700 FCFA), message obligatoire, scan facultatif → Envoyer le chèque au DG.
+Attendu : Étape = « DG signe le chèque ». Message AC visible sur la fiche. Bloc FSP FACTURE visible (n° + montant). Notification « Entrée chèque — suivi des dépenses » pour Astride. Ligne créée dans menu Suivi des paiements (onglet FSP FACTURE). Pas de nouveau courrier départ créé.
+Se connecter avec Astride (003091k@acsi.cg) → Suivi des paiements → vérifier la ligne (N°, date, intitulé, montant, fournisseur, instruction DG).
+Se connecter avec le DG → Actions : « Signer le chèque » — scan du chèque signé obligatoire, message optionnel, case « Notifier le fournisseur » cochée → Enregistrer le chèque signé.
+Attendu : Après signature : relais AC → caissiers et retour caisse en auto → étape « Preuve de paiement fournisseur ». Si email expéditeur renseigné : notification fournisseur (recouvrement). Pas de « Valider l’étape » sur les relais automatiques.
+Se connecter avec Astride → Actions : joindre la preuve de paiement → Enregistrer la preuve et clôturer.
+Attendu : Circuit clôturé ; preuve jointe aux pièces ; historique contient la clôture.
+4.3 Cas B2 — Instructions sans agent (suite normale du circuit)
+Nouveau courrier facture → DG instruit sans choisir d’agent → Enregistrer.
+Attendu : Étape = « AC établit le chèque » directement (relais « Traitement dossiers → AC » validé automatiquement).
+Avec Raïssa : « Envoyer le chèque au DG » avec montant → reprendre B1 à partir de la signature DG.
+4.4 Cas B3 — DG répond lui-même sur une facture (clôture immédiate)
+À l’étape Instructions DG → Actions → « Répondre moi-même et signer » → document + destinataire → Créer et signer.
+Attendu : Circuit facture clôturé immédiatement ; pas d’enchaînement AC / chèque / FSP / caissiers.
+4.5 Cas B4 — Accès pièces pour le collaborateur confié
+Sur un courrier facture confié à Raïssa (comme B1) : ouvrir les pièces jointes avec son compte.
+Attendu : Liens cliquables vers les documents — pas « (accès restreint) ».
+4.6 Cas B5 — Relancer (circuit facture)
+DG à Instructions DG ou Signature chèque : vérifier Circuit métier.
+Attendu : « Relancer le responsable » masqué.
+DG lorsque l’étape est chez l’AC ou le suivi des dépenses.
+Attendu : « Relancer le responsable » visible.
+4.7 Cas B6 — FSP MAD (mise à disposition)
+Créer un courrier arrivée de type « Mise à disposition (MAD) » → reprendre le circuit facture (instructions DG, AC, chèque).
+Attendu : Ligne créée dans Suivi des paiements → onglet FSP MAD (colonnes Demandeur, Responsable chargé du dossier).
+5. Suivi des paiements (FSP) — tests complémentaires
+5.1 Consultation et export
+Se connecter avec Astride → Menu Suivi des paiements.
+Filtrer par année et rechercher par intitulé / fournisseur.
+Attendu : Tableau avec total en bas de page. Bouton « Exporter Excel (CSV) » télécharge un fichier compatible Excel.
+5.2 Étapes automatiques (circuit facture)
+Vérifier sur la fiche courrier (panneau Circuit métier) qu’il n’y a pas de bouton « Valider l’étape » sur : Traitement dossiers → AC (sans collaborateur confié hors rôle), AC → caissiers, Retour de caisse → suivi des dépenses.
+Attendu : Message « étape de relais validée automatiquement » dans le suivi du circuit.
+6. Notifications à observer
+Événement | Destinataires attendus (si non confidentiel)
+Passage d’étape circuit | Acteur de l’étape + particulier_dg + particulier_ac (selon étape)
+Dossier confié à un collaborateur | Collaborateur confié + particulières (si non confidentiel)
+Entrée chèque (AC établit + montant) | responsable_suivi_depenses (Astride) — type « Entrée chèque — suivi des dépenses »
+Chèque signé (case cochée) | Email / SMS de l’expéditeur externe (recouvrement)
+Preuve de paiement | Acteur suivi dépenses + rôles configurés sur l’étape
+Étape confidentielle (est_confidentiel) | Pas de notif systématique aux particulières
+7. Grille d’observation à compléter
+Point vérifié | Attendu | Observé (OK / KO + note)
+Circuit général — étape initiale | Instruction DG |
+Circuit facture — étape initiale | Instructions DG |
+Notifications DG sans triplons | Pas 3 notifs pour le même enchaînement |
+Séparation A (instruire) / B (répondre moi-même) | Oui, B fermé par défaut |
+Secrétaire / Anne : pas le message « Enregistrez vos instructions » | Oui |
+Relancer masqué au tour du DG (général + facture) | Oui |
+Relancer visible hors tour DG | Oui |
+Facture : collaborateur confié AC → saut étape AC | Oui |
+Facture : sans agent → relais dossiers→AC auto | Oui |
+AC : Envoyer chèque + montant (pas Valider l’étape) | Oui |
+FSP FACTURE créée à l’envoi chèque | Oui |
+Astride notifiée à l’entrée chèque | Oui |
+Menu Suivi des paiements + export CSV | Oui |
+DG : Signer chèque + notif fournisseur | Oui |
+Relais caissiers / retour caisse auto | Oui |
+Preuve paiement → clôture auto | Oui |
+DG répond lui-même (facture) → clôture sans AC | Oui |
+Note : noter toute anomalie (capture d’écran bienvenue) pour valider ou ajuster le comportement décrit.
+8. Correspondance tests automatisés (référence développeur)
+Les cas ci-dessus sont couverts notamment par :
+- tests/Feature/CircuitCourrierConfigurableTest.php
+- tests/Feature/CircuitCourrierInstructionAgentTest.php
+- tests/Feature/SuiviPaiementTest.php
+Commande : php artisan test --compact

@@ -9,12 +9,14 @@ use App\Models\PrioriteCourrier;
 use App\Models\SensCourrier;
 use App\Models\StatutCourrier;
 use App\Models\Structure;
+use App\Models\SuiviPaiement;
 use App\Models\TypeCourrier;
 use App\Models\TypeDocument;
 use App\Models\User;
 use App\Notifications\CourrierFournisseurRecouvrementNotification;
 use App\Notifications\CourrierWorkflowNotification;
 use App\Services\CircuitCourrierMoteurService;
+use App\Services\CourrierNotificationService;
 use Database\Seeders\CircuitCourrierSeeder;
 use Database\Seeders\CourrierReferentielSeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
@@ -41,17 +43,24 @@ class CircuitCourrierInstructionAgentTest extends TestCase
         ]);
     }
 
-    public function test_instruire_sans_agent_garde_le_circuit_normal(): void
+    public function test_instruire_sans_agent_passe_automatiquement_a_l_ac(): void
     {
+        Notification::fake();
+
         $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+
         $courrier = $this->demarrerFacture($dg);
 
         $courrier = app(CircuitCourrierMoteurService::class)
             ->instruire($courrier, $dg, 'À payer avant le 30 du mois.');
 
         $this->assertNull($courrier->agent_confie_id);
-        $this->assertSame('traitement_dossiers_vers_ac', $courrier->circuitEtapeActuelle->code);
+        // Plus de « Valider l’étape » chez Anne : relais dossiers → AC auto.
+        $this->assertSame('ac_etablit_cheque', $courrier->circuitEtapeActuelle->code);
         $this->assertSame('À payer avant le 30 du mois.', $courrier->instructions_dg);
+        Notification::assertSentTo($ac, CourrierWorkflowNotification::class);
     }
 
     public function test_instruire_avec_agent_comptable_saute_vers_etape_ac(): void
@@ -100,7 +109,7 @@ class CircuitCourrierInstructionAgentTest extends TestCase
         $this->assertSame($agentLibre->id, $courrier->agent_confie_id);
         $this->assertSame('traitement_dossiers_vers_ac', $courrier->circuitEtapeActuelle->code);
         $this->assertTrue($moteur->peutAgir($courrier, $agentLibre));
-        $this->assertSame('Agent confié — '.$agentLibre->name, $moteur->libelleActeurPour($courrier, $courrier->circuitEtapeActuelle));
+        $this->assertSame('Collaborateur confié — '.$agentLibre->name, $moteur->libelleActeurPour($courrier, $courrier->circuitEtapeActuelle));
 
         $responsable = User::factory()->create();
         $responsable->assignRole('responsable_dossiers_prestataires');
@@ -209,6 +218,7 @@ class CircuitCourrierInstructionAgentTest extends TestCase
         $this->actingAs($ac)
             ->post(route('courriers.circuit.envoyer-cheque', $courrier, absolute: false), [
                 'message' => 'Chèque établi, prêt pour signature.',
+                'montant' => 1949700,
                 'scan_cheque' => UploadedFile::fake()->create('cheque.pdf', 30, 'application/pdf'),
             ])
             ->assertRedirect();
@@ -219,9 +229,75 @@ class CircuitCourrierInstructionAgentTest extends TestCase
         $this->assertNull($courrier->agent_confie_id);
         $this->assertSame(0, Courrier::where('courrier_parent_id', $courrier->id)->count());
         $this->assertTrue($courrier->documents()->where('nom_original', 'cheque.pdf')->exists());
+        $this->assertDatabaseHas('suivi_paiements', [
+            'courrier_id' => $courrier->id,
+            'type' => SuiviPaiement::TYPE_FSP_FACTURE,
+            'montant' => 1949700,
+        ]);
 
         Notification::assertSentTo($particuliereDg, CourrierWorkflowNotification::class);
         Notification::assertSentTo($particuliereAc, CourrierWorkflowNotification::class);
+    }
+
+    public function test_ac_etablit_cheque_notifie_responsable_suivi_depenses_et_cree_fsp(): void
+    {
+        Notification::fake();
+
+        $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+        $suivi = User::factory()->create();
+        $suivi->assignRole('responsable_suivi_depenses');
+
+        $moteur = app(CircuitCourrierMoteurService::class);
+        $courrier = $moteur->instruire(
+            $this->demarrerFacture($dg),
+            $dg,
+            'Bon pour accord.',
+            $ac->id,
+        );
+
+        $courrier = $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque établi.', 599294);
+
+        $this->assertSame('dg_signe_cheque', $courrier->circuitEtapeActuelle->code);
+        $this->assertDatabaseHas('suivi_paiements', [
+            'courrier_id' => $courrier->id,
+            'type' => SuiviPaiement::TYPE_FSP_FACTURE,
+            'montant' => 599294,
+            'instruction_dg' => 'Bon pour accord.',
+            'etabli_par_id' => $ac->id,
+        ]);
+
+        Notification::assertSentTo(
+            $suivi,
+            CourrierWorkflowNotification::class,
+            function (CourrierWorkflowNotification $notification) use ($courrier): bool {
+                return $notification->type === CourrierNotificationService::ENTREE_CHEQUE_SUIVI_DEPENSE
+                    && $notification->courrier->id === $courrier->id;
+            }
+        );
+    }
+
+    public function test_ac_etablit_cheque_mad_cree_fsp_mad(): void
+    {
+        $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+
+        $courrier = $this->creerCourrierArrivee($dg, 'mad');
+        $circuit = CircuitCourrier::where('code', 'facture_prestataire')->firstOrFail();
+        $courrier = app(CircuitCourrierMoteurService::class)->demarrer($courrier, $circuit, $dg);
+
+        $moteur = app(CircuitCourrierMoteurService::class);
+        $courrier = $moteur->instruire($courrier, $dg, 'Bon pour accord.', $ac->id);
+        $courrier = $moteur->envoyerChequeAuDg($courrier, $ac, 'MAD établie.', 1926000);
+
+        $this->assertDatabaseHas('suivi_paiements', [
+            'courrier_id' => $courrier->id,
+            'type' => SuiviPaiement::TYPE_FSP_MAD,
+            'montant' => 1926000,
+            'responsable_dossier_id' => $ac->id,
+        ]);
     }
 
     public function test_dg_signe_cheque_notifie_fournisseur_et_avance(): void
@@ -234,7 +310,7 @@ class CircuitCourrierInstructionAgentTest extends TestCase
 
         $moteur = app(CircuitCourrierMoteurService::class);
         $courrier = $moteur->instruire($this->demarrerFacture($dg), $dg, 'Établir le chèque.', $ac->id);
-        $courrier = $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque prêt.');
+        $courrier = $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque prêt.', 8944253);
         $courrier->update([
             'expediteur_email' => 'fournisseur@example.com',
             'expediteur_libelle' => 'ETS KOMBO',
@@ -258,7 +334,8 @@ class CircuitCourrierInstructionAgentTest extends TestCase
             ->assertRedirect();
 
         $courrier->refresh();
-        $this->assertSame('ac_vers_caissiers', $courrier->circuitEtapeActuelle->code);
+        // Après signature : relais AC→caissiers et retour caisse en auto → preuve de paiement.
+        $this->assertSame('preuve_paiement', $courrier->circuitEtapeActuelle->code);
         $this->assertTrue($courrier->documents()->where('nom_original', 'cheque-signe.pdf')->exists());
 
         Notification::assertSentOnDemand(
@@ -279,10 +356,8 @@ class CircuitCourrierInstructionAgentTest extends TestCase
 
         $moteur = app(CircuitCourrierMoteurService::class);
         $courrier = $moteur->instruire($this->demarrerFacture($dg), $dg, 'Payer.', $ac->id);
-        $courrier = $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque prêt.');
+        $courrier = $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque prêt.', 8944253);
         $courrier = $moteur->signerChequeDg($courrier, $dg, 'Signé.', false);
-        $courrier = $moteur->avancer($courrier, $ac, 'Vers caissiers');
-        $courrier = $moteur->avancer($courrier, $ac, 'Retour caisse');
         $this->assertSame('preuve_paiement', $courrier->circuitEtapeActuelle->code);
 
         $this->actingAs($suivi)
@@ -314,7 +389,7 @@ class CircuitCourrierInstructionAgentTest extends TestCase
 
         $moteur = app(CircuitCourrierMoteurService::class);
         $courrier = $moteur->instruire($courrier, $dg, 'Traiter le dossier.');
-        $this->assertSame('traitement_dossiers_vers_ac', $courrier->circuitEtapeActuelle->code);
+        $this->assertSame('ac_etablit_cheque', $courrier->circuitEtapeActuelle->code);
 
         $this->actingAs($dg)
             ->get(route('courriers.show', $courrier, absolute: false))
@@ -331,9 +406,25 @@ class CircuitCourrierInstructionAgentTest extends TestCase
             ->get(route('courriers.show', $courrier, absolute: false))
             ->assertOk()
             ->assertSee('A — Instruire le dossier', false)
-            ->assertSee('Confier à un agent', false)
+            ->assertSee('Confier à un collaborateur', false)
+            ->assertSee('À payer avant le 30 du mois', false)
+            ->assertDontSee('préparer un projet de note', false)
             ->assertSee('B — Répondre moi-même', false)
             ->assertSee('Répondre moi-même et signer', false);
+    }
+
+    public function test_placeholder_instructions_adapte_au_circuit_general(): void
+    {
+        $dg = $this->creerDg();
+        $courrier = $this->creerCourrierArrivee($dg, 'administratif');
+        $circuit = CircuitCourrier::where('code', 'courrier_general')->firstOrFail();
+        $courrier = app(CircuitCourrierMoteurService::class)->demarrer($courrier, $circuit, $dg);
+
+        $this->actingAs($dg)
+            ->get(route('courriers.show', $courrier, absolute: false))
+            ->assertOk()
+            ->assertSee('préparer un projet de note', false)
+            ->assertDontSee('À payer avant le 30 du mois', false);
     }
 
     private function demarrerFacture(User $acteur): Courrier

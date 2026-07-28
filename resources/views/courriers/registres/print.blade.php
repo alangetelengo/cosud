@@ -135,7 +135,7 @@
     <div class="sheet">
         <div class="header">
             <div>
-                <p class="eyebrow">Secrétariat Direction Générale — ACSI</p>
+                <p class="eyebrow">{{ $libelleStructureRegistre }}</p>
                 <h1 class="title">{{ $sensCode === 'depart' ? 'DÉPART' : 'ARRIVÉE' }}</h1>
             </div>
             <div class="meta">

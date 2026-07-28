@@ -18,12 +18,7 @@
 
 @section('content')
 <div class="space-y-6">
-    @if(session('success'))
-    <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800">{{ session('success') }}</div>
-    @endif
-    @if(session('error'))
-    <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-800">{{ session('error') }}</div>
-    @endif
+    @include('partials.flash-session')
 
     <p class="text-sm text-slate-600 dark:text-slate-400 max-w-3xl">
         Définissez les circuits métier par type de dossier courrier (facture, courrier général…). Chaque circuit est une chaîne d’étapes paramétrables (acteur, action, mouvement).

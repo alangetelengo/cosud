@@ -26,22 +26,24 @@
         ? $moteurCircuitActions->libelleActeurPour($courrier, $etapeCircuitActuelle)
         : null;
 
-    // Chemin A (particulière) : soumission d'un projet de réponse à la validation du DG.
+    // Chemin A (particulière) : préparer le courrier de réponse et le transmettre pour signature.
     $peutSoumettreReponse = $etapeCircuitActuelle?->code === 'traitement_particuliere';
-    // DG à l'étape « validation_reponse_dg » : valide (renvoi à Lucienne) ou rejette.
+    // DG : signe (ou rejette) le courrier de réponse déjà créé.
     $peutStatuerSurReponse = $etapeCircuitActuelle?->code === 'validation_reponse_dg' && $estActeurCircuitActuel;
-    // Après validation DG : uniquement la particulière (acteur de l’étape) crée le départ en brouillon.
-    // Le DG ne doit plus voir ces boutons (ni en mode « pas votre tour »).
-    $peutCreerDepartBrouillon = $etapeCircuitActuelle?->code === 'creation_depart_particuliere'
+    $reponseEnAttenteSignature = $peutStatuerSurReponse || $etapeCircuitActuelle?->code === 'validation_reponse_dg'
+        ? $courrier->reponseDepartEnAttenteSignature()
+        : null;
+    $peutExpedierReponseCircuit = $etapeCircuitActuelle?->code === 'expedition_reponse'
         && $estActeurCircuitActuel;
-    // Chemin B : le DG peut créer et signer lui-même la réponse (circuit général ou facture),
-    // tant que le projet n’a pas encore été validé et renvoyé à la particulière.
+    $reponseSigneeAExpedier = $peutExpedierReponseCircuit
+        ? $courrier->reponseDepartSigneeEnAttenteExpedition()
+        : null;
+    // Chemin B : le DG peut créer et signer lui-même la réponse uniquement tant qu’il
+    // n’a pas encore instruit le dossier (étape d’instructions).
     $peutCreerReponseDirecte = $hasCircuit
         && auth()->user()->aAccesTotal()
         && $courrier->statutCourrier->code !== 'cloture'
         && in_array($etapeCircuitActuelle?->code, [
-            'traitement_particuliere',
-            'validation_reponse_dg',
             'instruction_dg',
             'instructions_dg',
         ], true);
@@ -61,22 +63,14 @@
     // Formulaire de soumission ouvert d’emblée pour l’actrice attendue.
     $ouvrirFormulaireSoumettreReponse = $peutSoumettreReponse
         && ($estActeurCircuitActuel || $errors->hasAny(['document_reponse', 'objet']));
-    $ouvrirFormulaireCreerDepart = $peutCreerDepartBrouillon;
     $formInitial = $ouvrirFormulaireSoumettreReponse
         ? 'soumettre-reponse'
-        : ($ouvrirFormulaireCreerDepart
-            ? 'creer-depart-brouillon'
-            : ($errors->has('motif_rejet') ? 'rejeter-reponse' : null));
+        : ($errors->has('motif_rejet') ? 'rejeter-reponse' : null);
 @endphp
 
 @section('content')
 <div class="w-full" x-data="{ tab: '{{ $defaultTab }}', form: @js($formInitial) }">
-    @if(session('success'))
-    <div class="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">{{ session('success') }}</div>
-    @endif
-    @if(session('error'))
-    <div class="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm">{{ session('error') }}</div>
-    @endif
+    @include('partials.flash-session', ['class' => 'mb-4'])
 
     <div class="flex flex-col lg:flex-row gap-5 items-start">
         {{-- COLONNE GAUCHE --}}
@@ -199,6 +193,12 @@
                     @if($courrier->message_ac)
                     <div class="mt-4 p-3 rounded-xl bg-sky-50 dark:bg-sky-900/20 border border-sky-200 text-sm">
                         <strong>Message AC :</strong> {{ $courrier->message_ac }}
+                    </div>
+                    @endif
+                    @if($courrier->suiviPaiement)
+                    <div class="mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 text-sm">
+                        <strong>{{ $courrier->suiviPaiement->libelleType() }} n° {{ $courrier->suiviPaiement->numeroComplet() }}</strong>
+                        <span class="block text-slate-600 dark:text-slate-300 mt-1">Montant : {{ number_format((float) $courrier->suiviPaiement->montant, 0, ',', ' ') }} FCFA</span>
                     </div>
                     @endif
                     @if($courrier->observations)
@@ -394,13 +394,13 @@
                         <p class="text-[11px] text-slate-400 italic px-1">En attente des instructions du DG / directeur avant de pouvoir créer une réponse.</p>
                         @endif
                         @else
-                        {{-- Circuit « courrier_general » : soumission par la particulière puis validation par le DG --}}
+                        {{-- Circuit général : préparer réponse (= départ) → signature DG → expédition --}}
                         @if($peutSoumettreReponse)
-                        @if(! $estActeurCircuitActuel)
+                        @if(! $estActeurCircuitActuel && ! auth()->user()->aAccesTotal())
                         <button type="button"
-                                @click="flashAlert('Ce n’est pas votre tour dans le circuit : c’est actuellement à « {{ $libelleActeurCircuitActuel }} » d’agir. Ouvrir le formulaire de soumission quand même ?', () => { form = 'soumettre-reponse' }, {icon:'⚠️', danger:true, confirmText:'Ouvrir le formulaire', title:'Pas votre tour'})"
+                                @click="flashAlert('Ce n’est pas votre tour dans le circuit : c’est actuellement à « {{ $libelleActeurCircuitActuel }} » d’agir. Ouvrir le formulaire quand même ?', () => { form = 'soumettre-reponse' }, {icon:'⚠️', danger:true, confirmText:'Ouvrir le formulaire', title:'Pas votre tour'})"
                                 class="w-full px-3 py-2 rounded-lg border border-dashed border-amber-300 dark:border-amber-700 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20">
-                            Préparer une réponse <span class="opacity-70">(pas votre tour)</span>
+                            Préparer la réponse <span class="opacity-70">(pas votre tour)</span>
                         </button>
                         @endif
                         @if($courrier->motif_rejet && $courrier->rejete_par_id)
@@ -408,92 +408,70 @@
                             <strong>Rejeté par {{ $courrier->rejetePar?->name }} :</strong> {{ $courrier->motif_rejet }}
                         </p>
                         @endif
-                        {{-- Formulaire visible d’emblée pour la particulière : joindre le document puis
-                             confirmer l’envoi. Un seul flashAlert, au moment du vrai POST. --}}
                         <form x-show="form === 'soumettre-reponse'" x-cloak method="post" action="{{ route('courriers.circuit.soumettre-reponse', $courrier) }}" enctype="multipart/form-data" class="space-y-2 {{ $estActeurCircuitActuel ? '' : 'pt-1 border-t border-slate-100' }}">
                             @csrf
-                            <p class="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Projet de réponse à soumettre au DG</p>
+                            <p class="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Courrier de réponse à transmettre pour signature</p>
                             <div>
-                                <label class="block text-[11px] font-semibold mb-1">Document de réponse <span class="text-red-500">*</span></label>
+                                <label class="block text-[11px] font-semibold mb-1">Document <span class="text-red-500">*</span></label>
                                 <input type="file" name="document_reponse" required accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white file:font-semibold file:text-xs">
                                 @error('document_reponse')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                             </div>
-                            <input type="text" name="objet" value="{{ old('objet') }}" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Objet (optionnel)">
+                            <input type="text" name="objet" value="{{ old('objet', 'Réponse — '.$courrier->objet) }}" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Objet du courrier départ">
                             <p class="text-[11px] text-slate-500 leading-snug">
-                                Joignez uniquement le document de réponse. Le destinataire final sera choisi par le DG à la validation.
+                                Le document devient le courrier de départ en attente de signature du DG. Le destinataire se choisit à l’expédition.
                                 @if($courrier->est_confidentiel)
                                 <span class="block mt-1 text-amber-700 dark:text-amber-300">🔒 Courrier confidentiel.</span>
                                 @endif
                             </p>
                             <button type="button"
-                                    onclick="flashAlert('Envoyer ce projet de réponse au DG pour validation ? Le DG sera notifié.', this.closest('form'), {icon:'📎', danger:false, confirmText:'Soumettre au DG', title:'Soumission'})"
+                                    onclick="flashAlert('Transmettre ce courrier de réponse au DG pour signature ?', this.closest('form'), {icon:'📎', danger:false, confirmText:'Transmettre', title:'Transmission pour signature'})"
                                     class="w-full px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold">
-                                Soumettre le projet de réponse au DG
+                                Transmettre pour signature
                             </button>
                         </form>
                         @elseif($peutStatuerSurReponse)
                         <div class="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-900/20 p-3 space-y-2">
-                            <p class="text-xs font-semibold text-indigo-900 dark:text-indigo-200">Projet de réponse soumis par la particulière</p>
-                            @if($courrier->documentReponse)
-                            <a href="{{ route('documents.download', $courrier->documentReponse) }}" target="_blank" class="block text-xs text-indigo-700 dark:text-indigo-300 underline truncate">📎 {{ $courrier->documentReponse->titre ?: $courrier->documentReponse->nom_original }}</a>
+                            <p class="text-xs font-semibold text-indigo-900 dark:text-indigo-200">Courrier de réponse en attente de signature</p>
+                            @if($reponseEnAttenteSignature)
+                            <a href="{{ route('courriers.show', $reponseEnAttenteSignature) }}" class="block text-xs text-indigo-700 dark:text-indigo-300 underline">
+                                Voir le départ n° {{ $reponseEnAttenteSignature->numeroRegistreComplet() }} — {{ $reponseEnAttenteSignature->objet }}
+                            </a>
+                            @php $docSign = $reponseEnAttenteSignature->documents->first(); @endphp
+                            @if($docSign)
+                            <a href="{{ route('documents.download', $docSign) }}" target="_blank" class="block text-xs text-indigo-700 dark:text-indigo-300 underline truncate">📎 {{ $docSign->titre ?: $docSign->nom_original }}</a>
                             @endif
-                            @if($courrier->reponse_objet)
-                            <p class="text-[11px] text-slate-600 dark:text-slate-300">Objet proposé : <strong>{{ $courrier->reponse_objet }}</strong></p>
                             @endif
-                            <p class="text-[11px] text-slate-500 leading-snug">Le destinataire sera renseigné par la particulière lors de la création du courrier départ (selon vos indications).</p>
+                            <p class="text-[11px] text-slate-500 leading-snug">Signez pour autoriser l’expédition, ou rejetez avec un motif.</p>
                             <form method="post" action="{{ route('courriers.circuit.valider-reponse', $courrier) }}">
                                 @csrf
                                 <button type="button"
-                                        onclick="flashAlert('Valider ce projet et le renvoyer à la particulière pour qu’elle crée le courrier départ en brouillon ?', this.closest('form'), {icon:'✓', danger:false, confirmText:'Valider et envoyer', title:'Validation de la réponse'})"
-                                        class="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold">Valider et envoyer à Lucienne pour créer le courrier de réponse</button>
+                                        onclick="flashAlert('Signer ce courrier de réponse ? La particulière pourra ensuite l’expédier.', this.closest('form'), {icon:'✓', danger:false, confirmText:'Signer', title:'Signature de la réponse'})"
+                                        class="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold">Signer la réponse</button>
                             </form>
                             <button type="button"
-                                    @click="flashAlert('Rejeter ce projet de réponse ? Indiquez le motif à la particulière.', () => { form = 'rejeter-reponse' }, {icon:'↩️', danger:true, confirmText:'Continuer', title:'Rejet de la réponse'})"
+                                    @click="flashAlert('Rejeter cette réponse ? Indiquez le motif à la particulière.', () => { form = 'rejeter-reponse' }, {icon:'↩️', danger:true, confirmText:'Continuer', title:'Rejet de la réponse'})"
                                     class="w-full px-3 py-2 rounded-lg border border-red-300 text-red-700 dark:text-red-300 text-xs font-semibold">Rejeter</button>
                         </div>
-                        @elseif($peutCreerDepartBrouillon)
-                        <form x-show="form === 'creer-depart-brouillon'" x-cloak method="post" action="{{ route('courriers.creer-reponse', $courrier) }}"
-                              x-data="{ confidentiel: {{ $courrier->reponse_confidentielle ? 'true' : 'false' }} }"
-                              class="space-y-2">
-                            @csrf
-                            <p class="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Créer le courrier départ (brouillon)</p>
-                            @if($courrier->documentReponse)
-                            <a href="{{ route('documents.download', $courrier->documentReponse) }}" target="_blank" class="block text-xs text-indigo-700 dark:text-indigo-300 underline truncate">📎 Projet validé : {{ $courrier->documentReponse->titre ?: $courrier->documentReponse->nom_original }}</a>
+                        @elseif($peutExpedierReponseCircuit)
+                        <div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/20 p-3 space-y-2">
+                            <p class="text-xs font-semibold text-emerald-900 dark:text-emerald-200">Réponse signée — à expédier</p>
+                            @if($reponseSigneeAExpedier)
+                            <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                                Le DG a signé le courrier n° {{ $reponseSigneeAExpedier->numeroRegistreComplet() }}.
+                                Expédiez-le vers le secrétariat destinataire (dernière étape).
+                            </p>
+                            <a href="{{ route('courriers.show', $reponseSigneeAExpedier) }}"
+                               class="block w-full text-center px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold no-underline">
+                                Ouvrir le départ pour l’expédier
+                            </a>
+                            @else
+                            <p class="text-[11px] text-amber-700">Aucun départ signé trouvé — vérifiez le fil du courrier.</p>
                             @endif
-                            <input type="text" name="objet" value="{{ old('objet', $courrier->reponse_objet) }}" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Objet (optionnel)">
-                            <label class="flex items-center gap-2 text-xs"><input type="checkbox" name="reponse_confidentielle" value="1" x-model="confidentiel"> Réponse confidentielle (destinataire = un agent précis)</label>
-                            <template x-if="! confidentiel">
-                                <div>
-                                    @if($courrier->estOrigineInterne())
-                                    <p class="text-[11px] text-slate-500">Réponse interne vers <strong>{{ $courrier->structureExpediteur?->nom ?? $courrier->expediteur_libelle ?? 'la direction émettrice' }}</strong>.</p>
-                                    @else
-                                    <select name="structure_destinataire_id" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900">
-                                        <option value="">Structure destinataire</option>
-                                        @foreach($secretariats as $s)<option value="{{ $s->id }}" @selected((string) old('structure_destinataire_id') === (string) $s->id)>{{ $s->nom }}</option>@endforeach
-                                    </select>
-                                    @error('structure_destinataire_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-                                    @endif
-                                </div>
-                            </template>
-                            <template x-if="confidentiel">
-                                <div>
-                                    <select name="destinataire_agent_id" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900">
-                                        <option value="">Agent destinataire</option>
-                                        @foreach($agentsOrientation as $ag)<option value="{{ $ag->id }}" @selected((string) old('destinataire_agent_id') === (string) $ag->id)>{{ $ag->name }}</option>@endforeach
-                                    </select>
-                                    @error('destinataire_agent_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-                                </div>
-                            </template>
-                            <button type="button"
-                                    onclick="flashAlert('Créer le courrier départ en brouillon ? Il devra ensuite être transmis pour signature.', this.closest('form'), {icon:'✉️', danger:false, confirmText:'Créer le brouillon', title:'Courrier départ'})"
-                                    class="w-full px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold">
-                                Créer le courrier départ (brouillon)
-                            </button>
-                        </form>
+                        </div>
                         @elseif(in_array($etapeCircuitActuelle?->code, ['instruction_dg', 'instructions_dg'], true))
                         @if($estActeurCircuitActuel)
                         <p class="text-[11px] text-slate-500 italic px-1 leading-snug">
-                            <strong>A — Instruire :</strong> utilisez le panneau « Circuit métier » (instructions ± agent, sans pièce).
+                            <strong>A — Instruire :</strong> utilisez le panneau « Circuit métier » (instructions ± collaborateur, sans pièce).
                         </p>
                         @else
                         <p class="text-[11px] text-slate-400 italic px-1">En attente des instructions du DG / directeur.</p>
@@ -506,6 +484,11 @@
                             @endif
                             <form method="post" action="{{ route('courriers.circuit.envoyer-cheque', $courrier) }}" enctype="multipart/form-data" class="space-y-2">
                                 @csrf
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Montant du chèque (FCFA) <span class="text-red-500">*</span></label>
+                                    <input type="number" name="montant" required min="1" step="1" value="{{ old('montant') }}" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : 1949700">
+                                    @error('montant')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
                                 <div>
                                     <label class="block text-[11px] font-semibold mb-1">Message au DG <span class="text-red-500">*</span></label>
                                     <textarea name="message" required rows="3" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : Chèque établi, prêt pour signature…">{{ old('message') }}</textarea>
@@ -676,7 +659,13 @@
 
                         @can('expedierVersSecretariat', $courrier)
                         <div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-900/20 p-3 space-y-2">
-                            <p class="text-xs text-slate-700 dark:text-slate-300">Le directeur a validé ce courrier. Choisissez le secrétariat destinataire puis expédiez.</p>
+                            <p class="text-xs text-slate-700 dark:text-slate-300">
+                                @if($courrier->courrier_parent_id)
+                                Réponse signée. Choisissez le secrétariat destinataire puis expédiez (dernière étape).
+                                @else
+                                Le directeur a validé ce courrier. Choisissez le secrétariat destinataire puis expédiez.
+                                @endif
+                            </p>
                             <form method="post" action="{{ route('courriers.expedier-interne', $courrier) }}" class="space-y-2">
                                 @csrf
                                 <div>
@@ -684,7 +673,7 @@
                                     <select name="structure_destinataire_id" required class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-800">
                                         <option value="">— Choisir un secrétariat —</option>
                                         @foreach($secretariats as $s)
-                                        <option value="{{ $s->id }}" @selected(old('structure_destinataire_id') == $s->id)>{{ $s->nom }}</option>
+                                        <option value="{{ $s->id }}" @selected(old('structure_destinataire_id', $courrier->structure_destinataire_id) == $s->id)>{{ $s->nom }}</option>
                                         @endforeach
                                     </select>
                                     @error('structure_destinataire_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
@@ -734,13 +723,12 @@
                     <button type="button"
                             @click="flashAlert('Enregistrer une trace de transmission / accusé de réception ?', () => { form = 'transmettre' }, {icon:'📋', danger:false, confirmText:'Continuer', title:'Transmission'})"
                             class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-semibold text-slate-700 dark:text-slate-200">Transmission</button>
-                    @elsecan('view', $courrier)
-                    @if($courrier->estDepart() && $courrier->statutCourrier?->code === 'expedie' && $courrier->aAccuseReceptionEnregistre())
+                    @endcan
+                    @if($courrier->estDepart() && $courrier->statutCourrier?->code === 'expedie')
                     <p class="rounded-lg border border-emerald-200 bg-emerald-50/80 dark:bg-emerald-900/20 px-3 py-2 text-[11px] text-emerald-800 dark:text-emerald-200 leading-snug">
-                        Accusé de réception déjà enregistré. Consultez l’onglet <strong>Transmissions</strong> ou le fil.
+                        Courrier expédié — aucune action supplémentaire.
                     </p>
                     @endif
-                    @endcan
                     @can('archiver', $courrier)
                     <button type="button"
                             @click="flashAlert('Compléter les infos registre (n° archives, observations…) puis archiver ?', () => { form = 'archiver' }, {icon:'📦', danger:false, confirmText:'Continuer', title:'Archivage'})"
@@ -869,7 +857,7 @@
                         <textarea name="motif_rejet" required rows="3" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Motif du rejet…">{{ old('motif_rejet') }}</textarea>
                         @error('motif_rejet')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                         <button type="button"
-                                onclick="flashAlert('Confirmer le rejet de ce projet de réponse ?', this.closest('form'), {icon:'↩️', danger:true, confirmText:'Rejeter', title:'Rejet'})"
+                                onclick="flashAlert('Confirmer le rejet de cette réponse ?', this.closest('form'), {icon:'↩️', danger:true, confirmText:'Rejeter', title:'Rejet'})"
                                 class="w-full px-3 py-2 rounded-lg bg-amber-600 text-white text-xs font-semibold">Confirmer le rejet</button>
                     </form>
                     @endif
@@ -884,7 +872,7 @@
                             @error('document_reponse')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                         </div>
                         <input type="text" name="objet" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Objet (optionnel)">
-                        <label class="flex items-center gap-2 text-xs"><input type="checkbox" name="reponse_confidentielle" value="1" x-model="confidentiel"> Réponse confidentielle (destinataire = un agent précis)</label>
+                        <label class="flex items-center gap-2 text-xs"><input type="checkbox" name="reponse_confidentielle" value="1" x-model="confidentiel"> Réponse confidentielle (destinataire = un collaborateur)</label>
                         <template x-if="! confidentiel">
                             <div>
                                 @if($courrier->estOrigineInterne())
@@ -901,7 +889,7 @@
                         <template x-if="confidentiel">
                             <div>
                                 <select name="destinataire_agent_id" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900">
-                                    <option value="">Agent destinataire</option>
+                                    <option value="">Collaborateur destinataire</option>
                                     @foreach($agentsOrientation as $ag)<option value="{{ $ag->id }}">{{ $ag->name }}</option>@endforeach
                                 </select>
                                 @error('destinataire_agent_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror

@@ -180,6 +180,11 @@ class CourrierController extends Controller
     public function show(Courrier $courrier)
     {
         $this->authorize('view', $courrier);
+
+        if ($courrier->circuit_etape_actuelle_id && auth()->user()) {
+            $courrier = $this->circuitMoteur->assurerEtapesAutomatiques($courrier, auth()->user());
+        }
+
         $courrier->load([
             'sensCourrier', 'statutCourrier', 'typeCourrier', 'prioriteCourrier', 'parapheur',
             'createur', 'signataire', 'directeurEnAttente', 'rejetePar',
@@ -188,9 +193,9 @@ class CourrierController extends Controller
             'transmissions.deUser', 'transmissions.versUser', 'transmissions.versStructure',
             'ventilationDestinataires.user', 'ventilationDestinataires.document',
             'dossier', 'structure', 'structureDestinataire', 'structureExpediteur',
-            'courrierParent', 'courrierDepartSource', 'courrierArriveeLie', 'reponsesDepart',
+            'courrierParent', 'courrierDepartSource', 'courrierArriveeLie', 'reponsesDepart.documents', 'reponsesDepart.statutCourrier',
             'circuit', 'circuitEtapeActuelle', 'circuitHistoriques.etape', 'circuitHistoriques.user',
-            'documentReponse', 'reponseStructureDestinataire', 'destinataireAgent', 'agentConfie',
+            'documentReponse', 'reponseStructureDestinataire', 'destinataireAgent', 'agentConfie', 'suiviPaiement',
         ]);
         $structures = Structure::where('actif', true)->orderBy('nom')->get();
         $directions = Structure::query()
@@ -379,6 +384,18 @@ class CourrierController extends Controller
     public function cloturer(Courrier $courrier)
     {
         $this->authorize('update', $courrier);
+
+        if (! $courrier->estArrivee()) {
+            return back()->with('error', 'Seuls les courriers arrivée peuvent être clôturés manuellement.');
+        }
+
+        // Clôture manuelle réservée aux dossiers déjà traités côté statut
+        // (ex. classé sans suite après orientation/ventilation). Les réponses
+        // avec départ sont clôturées automatiquement à l’expédition.
+        if (! $courrier->peutTransitionnerVers('cloture')) {
+            return back()->with('error', 'Ce dossier ne peut pas encore être clôturé manuellement. Expédiez d’abord le courrier réponse, ou orientez/ventilez le dossier.');
+        }
+
         $this->workflowService->transitionner($courrier, 'cloture');
 
         return back()->with('success', 'Courrier arrivée clôturé.');
@@ -422,15 +439,30 @@ class CourrierController extends Controller
 
         $this->workflowService->transitionner($courrier, 'signe', [
             'signataire_id' => auth()->id(),
+            'directeur_en_attente_id' => null,
         ]);
 
+        $courrier = $courrier->fresh(['courrierParent.circuitEtapeActuelle', 'statutCourrier']);
+        if ($courrier->courrierParent
+            && $courrier->courrierParent->circuitEtapeActuelle?->code === 'validation_reponse_dg') {
+            try {
+                $this->circuitMoteur->signerReponseDepart(
+                    $courrier->courrierParent,
+                    $courrier,
+                    auth()->user()
+                );
+            } catch (\InvalidArgumentException) {
+                // Signature du départ OK ; le circuit arrivée sera rattrapé si besoin.
+            }
+        }
+
         $this->courrierNotifications->notifierCreateur(
-            $courrier->fresh(),
+            $courrier,
             auth()->user(),
             CourrierNotificationService::VALIDE_POUR_ENVOI
         );
 
-        return back()->with('success', 'Courrier validé — le secrétariat peut l\'expédier vers le destinataire.');
+        return back()->with('success', 'Courrier signé — le secrétariat / la particulière peut l\'expédier.');
     }
 
     public function rejeterDepart(RejeterDepartCourrierRequest $request, Courrier $courrier)
@@ -492,7 +524,17 @@ class CourrierController extends Controller
                 'date_expedition' => now(),
             ]);
 
-            $courrier = $courrier->fresh(['destinataireAgent']);
+            $courrier = $courrier->fresh(['destinataireAgent', 'courrierParent.statutCourrier', 'courrierParent.sensCourrier', 'courrierParent.circuitEtapeActuelle']);
+            $this->workflowService->cloturerArriveeLieeApresExpedition($courrier);
+
+            if ($courrier->courrier_parent_id && $courrier->courrierParent) {
+                $this->circuitMoteur->completerApresExpeditionReponse(
+                    $courrier->courrierParent,
+                    $request->user(),
+                    'Réponse n° '.$courrier->numeroRegistreComplet().' expédiée.'
+                );
+            }
+
             if ($courrier->destinataireAgent) {
                 $this->courrierNotifications->notifier(
                     $courrier->destinataireAgent,
@@ -502,7 +544,7 @@ class CourrierController extends Controller
                 );
             }
 
-            return back()->with('success', 'Courrier expédié — le destinataire (agent) en est informé.');
+            return back()->with('success', 'Courrier expédié — le collaborateur destinataire en est informé.');
         }
 
         $destinataire = Structure::findOrFail($request->structure_destinataire_id);
@@ -518,7 +560,17 @@ class CourrierController extends Controller
             'date_expedition' => now(),
         ]);
 
-        $courrier = $courrier->fresh(['structureDestinataire']);
+        $courrier = $courrier->fresh(['structureDestinataire', 'courrierParent.statutCourrier', 'courrierParent.sensCourrier', 'courrierParent.circuitEtapeActuelle']);
+        $this->workflowService->cloturerArriveeLieeApresExpedition($courrier);
+
+        if ($courrier->courrier_parent_id && $courrier->courrierParent) {
+            $this->circuitMoteur->completerApresExpeditionReponse(
+                $courrier->courrierParent,
+                $request->user(),
+                'Réponse n° '.$courrier->numeroRegistreComplet().' expédiée.'
+            );
+        }
+
         $libelle = $courrier->structureDestinataire?->nom ?? 'destinataire';
 
         $this->courrierNotifications->notifierSecretariatStructure(
@@ -566,9 +618,9 @@ class CourrierController extends Controller
 
     /**
      * Création du courrier départ réponse.
-     * - Étape « creation_depart_particuliere » : brouillon (à faire signer ensuite).
      * - Override DG (`signer_immediatement`) : créé directement au statut « Signé ».
      * - Sans circuit : chemin historique.
+     * - Chemin A : via soumettre-reponse (création départ) + valider-reponse (signature).
      */
     public function creerReponse(CreerReponseCourrierRequest $request, Courrier $courrier)
     {
@@ -580,10 +632,11 @@ class CourrierController extends Controller
         $signerImmediatement = $request->boolean('signer_immediatement')
             && ($request->user()->aAccesTotal() || $request->user()->hasRole('admin'));
 
-        $statut = $signerImmediatement
-            ? StatutCourrier::where('sens_courrier_id', $sensDepart->id)->where('code', 'signe')->firstOrFail()
-            : $this->workflowService->statutInitialPourSens((int) $sensDepart->id);
+        if (! $signerImmediatement) {
+            return back()->with('error', 'Utilisez « Transmettre pour signature » pour préparer la réponse.');
+        }
 
+        $statut = StatutCourrier::where('sens_courrier_id', $sensDepart->id)->where('code', 'signe')->firstOrFail();
         $nums = $this->numeroService->prochainNumero((int) $sensDepart->id);
 
         $confidentielle = $request->boolean('reponse_confidentielle', (bool) $courrier->reponse_confidentielle);
@@ -614,25 +667,23 @@ class CourrierController extends Controller
             'origine' => $courrier->estOrigineInterne() ? Courrier::ORIGINE_INTERNE : Courrier::ORIGINE_EXTERNE,
             'courrier_parent_id' => $courrier->id,
             'date_courrier' => now()->toDateString(),
-            'objet' => $request->input('objet') ?: ($courrier->reponse_objet ?: ('Réponse — '.$courrier->objet)),
+            'objet' => $request->input('objet') ?: ('Réponse — '.$courrier->objet),
             'structure_destinataire_id' => $structureDestinataireId,
             'destinataire_agent_id' => $agentDestinataireId,
             'destinataire_libelle' => $destinataireLibelle,
             'createur_id' => auth()->id(),
-            'signataire_id' => $signerImmediatement ? auth()->id() : null,
+            'signataire_id' => $request->user()->id,
             'structure_id' => auth()->user()->structure_id,
             'dossier_id' => $courrier->dossier_id,
         ]);
 
         if ($request->hasFile('document_reponse')) {
             $this->attacherDocument($reponse, $request->file('document_reponse'), SensCourrier::DEPART, true);
-        } elseif ($courrier->document_reponse_id) {
-            $reponse->documents()->attach($courrier->document_reponse_id, ['est_principal' => true]);
         }
 
         $this->auditerCourrier('courrier.creer_reponse', $reponse, [
             'courrier_parent_id' => $courrier->id,
-            'mode' => $signerImmediatement ? 'signe' : 'brouillon',
+            'mode' => 'signe',
         ]);
 
         $courrier->forceFill([
@@ -643,30 +694,15 @@ class CourrierController extends Controller
             'reponse_objet' => null,
         ])->save();
 
-        $commentaireCircuit = ($signerImmediatement ? 'Courrier réponse créé et signé — n° ' : 'Courrier réponse créé en brouillon — n° ').$reponse->numeroRegistreComplet();
-
-        if ($signerImmediatement) {
-            // Le DG court-circuite le reste du circuit (facture ou général).
-            $this->circuitMoteur->terminerApresReponseDirecte(
-                $courrier->fresh(['circuitEtapeActuelle']),
-                $request->user(),
-                $commentaireCircuit
-            );
-        } else {
-            $this->circuitMoteur->completerApresCreationDepart(
-                $courrier->fresh(['circuitEtapeActuelle']),
-                $request->user(),
-                $commentaireCircuit
-            );
-        }
-
-        $message = $signerImmediatement
-            ? 'Courrier départ réponse créé et signé — lié au fil du courrier n° '.$courrier->numeroRegistreComplet().'.'
-            : 'Courrier départ réponse créé en brouillon — à transmettre pour signature. Lié au fil du courrier n° '.$courrier->numeroRegistreComplet().'.';
+        $this->circuitMoteur->terminerApresReponseDirecte(
+            $courrier->fresh(['circuitEtapeActuelle']),
+            $request->user(),
+            'Courrier réponse créé et signé — n° '.$reponse->numeroRegistreComplet()
+        );
 
         return redirect()
             ->route('courriers.show', $reponse)
-            ->with('success', $message);
+            ->with('success', 'Courrier départ réponse créé et signé — prêt à être expédié. Lié au fil du courrier n° '.$courrier->numeroRegistreComplet().'.');
     }
 
     /**

@@ -34,6 +34,7 @@ class CourrierActeursDgSeeder extends Seeder
             'particulier_dg',
             'particulier_ac',
             'responsable_dossiers_prestataires',
+            'responsable_suivi_depenses',
             'secretaire_direction',
             'directeur',
             'agent_comptable',
@@ -69,6 +70,15 @@ class CourrierActeursDgSeeder extends Seeder
                 'role' => 'responsable_dossiers_prestataires',
                 'structure' => $structures['SEC-DIR'],
                 'pivot_role' => 'Responsable dossiers prestataires / fournisseurs',
+                'fonction_id' => null,
+            ],
+            [
+                // Responsable suivi des dépenses — secrétariat / DG.
+                'email' => '003091k@acsi.cg',
+                'name' => 'ASTRIDE ELENI OSSEBI',
+                'role' => 'responsable_suivi_depenses',
+                'structure' => $structures['SEC-DIR'],
+                'pivot_role' => 'Responsable suivi des dépenses',
                 'fonction_id' => null,
             ],
             [
@@ -136,6 +146,12 @@ class CourrierActeursDgSeeder extends Seeder
             ]);
         }
 
-        $this->command?->info('Acteurs courriers affectés : DG, secrétariats, DAF, DAC (agent comptable + particulière).');
+        // Ancien titulaire du rôle (re-seed) : retirer responsable_suivi_depenses.
+        $ancienSuivi = User::where('email', '003269d@acsi.cg')->first();
+        if ($ancienSuivi && $ancienSuivi->hasRole('responsable_suivi_depenses')) {
+            $ancienSuivi->removeRole('responsable_suivi_depenses');
+        }
+
+        $this->command?->info('Acteurs courriers affectés : DG, secrétariats (dont responsable dépenses), DAF, DAC.');
     }
 }

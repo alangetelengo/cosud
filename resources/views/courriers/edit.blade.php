@@ -11,15 +11,15 @@
 @section('content')
 @include('partials.form-submit-loading')
 
-@if(session('error'))
-<div class="mb-5 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 text-red-800 text-sm">{{ session('error') }}</div>
-@endif
+@include('partials.flash-session', ['class' => 'mb-5'])
 
 @if($errors->any())
-<div class="mb-5 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 text-red-800 text-sm">
-    <ul class="list-disc list-inside text-xs space-y-0.5">
+<div x-data="{ show: true }" x-show="show" x-transition class="mb-5 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200/80 dark:border-red-800 text-red-800 dark:text-red-200 flex items-start gap-4 shadow-sm" role="alert">
+    <span class="flex-shrink-0 w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/50 flex items-center justify-center text-red-600 dark:text-red-400 font-bold" aria-hidden="true">!</span>
+    <ul class="flex-1 list-disc list-inside text-sm font-medium space-y-0.5">
         @foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach
     </ul>
+    <button type="button" @click="show = false" class="flex-shrink-0 w-8 h-8 rounded-lg hover:bg-red-200/50 dark:hover:bg-red-800/30 flex items-center justify-center text-lg font-bold transition-colors" title="Fermer" aria-label="Fermer">×</button>
 </div>
 @endif
 

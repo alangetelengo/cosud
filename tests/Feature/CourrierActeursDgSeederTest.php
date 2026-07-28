@@ -47,6 +47,18 @@ class CourrierActeursDgSeederTest extends TestCase
         $this->assertSame($secDir->id, (int) $respDossiers->structure_id);
         $this->assertTrue($respDossiers->can('documents.view'));
         $this->assertTrue($respDossiers->can('dossiers.view'));
+
+        $respDepenses = User::where('email', '003091k@acsi.cg')->firstOrFail();
+        $this->assertSame('ASTRIDE ELENI OSSEBI', $respDepenses->name);
+        $this->assertTrue($respDepenses->hasRole('responsable_suivi_depenses'));
+        $this->assertSame($secDir->id, (int) $respDepenses->structure_id);
+        $this->assertTrue($respDepenses->can('documents.view'));
+        $this->assertTrue($respDepenses->can('dossiers.view'));
+
+        $ancienSuivi = User::where('email', '003269d@acsi.cg')->first();
+        if ($ancienSuivi) {
+            $this->assertFalse($ancienSuivi->hasRole('responsable_suivi_depenses'));
+        }
     }
 
     public function test_seed_affecte_agent_comptable_dac_et_particuliere(): void

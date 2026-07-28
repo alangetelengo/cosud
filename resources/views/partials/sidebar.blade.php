@@ -40,8 +40,8 @@
             </li>
             @endcan
 
-            {{-- Recherche --}}
-            @can('documents.view')
+            {{-- Recherche (permission dédiée, admin par défaut) --}}
+            @can('recherche.view')
             <li>
                 <a href="{{ url('/recherche') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->is('recherche*') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
                     <span class="text-lg flex-shrink-0">🔍</span>
@@ -50,8 +50,8 @@
             </li>
             @endcan
 
-            {{-- Corbeille --}}
-            @can('documents.view')
+            {{-- Corbeille (permission dédiée, admin par défaut) --}}
+            @can('corbeille.view')
             <li>
                 <a href="{{ route('corbeille.index') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->is('corbeille*') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
                     <span class="text-lg flex-shrink-0">🗑️</span>
@@ -93,6 +93,14 @@
                     <span class="nav-text">Registre Départ</span>
                 </a>
             </li>
+            @can('suivi-paiements.view')
+            <li>
+                <a href="{{ route('suivi-paiements.index') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->routeIs('suivi-paiements.*') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
+                    <span class="text-lg flex-shrink-0">💳</span>
+                    <span class="nav-text">Suivi des paiements</span>
+                </a>
+            </li>
+            @endcan
             @if(auth()->user()->gereCourrierSecretariat())
             <li>
                 <a href="{{ route('courriers.a-recevoir') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->is('courriers-a-recevoir') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">

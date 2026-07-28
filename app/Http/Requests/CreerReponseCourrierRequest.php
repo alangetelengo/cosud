@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use App\Models\Document;
-use App\Services\CircuitCourrierMoteurService;
 use App\Services\ParapheurDepartService;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -11,9 +10,9 @@ use Illuminate\Foundation\Http\FormRequest;
  * Création du courrier départ réponse.
  *
  * - Sans circuit : chemin historique (parapheur départ).
- * - Avec circuit, étape « creation_depart_particuliere » : la particulière crée un départ
- *   en brouillon à partir du projet validé (destinataire libre, indiqué verbalement par le DG).
- * - Avec circuit, override DG (`signer_immediatement`) : création signée immédiatement.
+ * - Avec circuit, override DG (`signer_immediatement`) : création signée immédiatement
+ *   à l’étape d’instructions (chemin B).
+ * - Le chemin A (préparation + signature) passe par `soumettre-reponse` / `valider-reponse`.
  */
 class CreerReponseCourrierRequest extends FormRequest
 {
@@ -29,15 +28,12 @@ class CreerReponseCourrierRequest extends FormRequest
             return true;
         }
 
-        if ($this->user()->aAccesTotal() || $this->user()->hasRole('admin')) {
-            return true;
-        }
-
         $etape = $courrier->circuitEtapeActuelle;
 
-        return $etape
-            && $etape->code === 'creation_depart_particuliere'
-            && app(CircuitCourrierMoteurService::class)->userCorrespondActeur($this->user(), $etape, $courrier);
+        // Chemin B uniquement : DG / admin à l’étape d’instructions.
+        return $this->boolean('signer_immediatement')
+            && ($this->user()->aAccesTotal() || $this->user()->hasRole('admin'))
+            && in_array($etape?->code, ['instruction_dg', 'instructions_dg'], true);
     }
 
     public function rules(): array
@@ -104,6 +100,14 @@ class CreerReponseCourrierRequest extends FormRequest
 
             if ($signerImmediatement && ! ($this->user()->aAccesTotal() || $this->user()->hasRole('admin'))) {
                 $validator->errors()->add('signer_immediatement', 'Seuls le DG / l\'administrateur peuvent signer immédiatement.');
+            }
+
+            if ($signerImmediatement
+                && ! in_array($courrier->circuitEtapeActuelle?->code, ['instruction_dg', 'instructions_dg'], true)) {
+                $validator->errors()->add(
+                    'signer_immediatement',
+                    'La réponse directe n\'est possible qu\'à l\'étape des instructions DG.'
+                );
             }
 
             if ($signerImmediatement) {

@@ -6,6 +6,7 @@ use App\Models\Courrier;
 use App\Models\Structure;
 use App\Models\User;
 use App\Notifications\CourrierExpediteurTraiteNotification;
+use App\Notifications\CourrierExpediteurValideNotification;
 use App\Notifications\CourrierFournisseurRecouvrementNotification;
 use App\Notifications\CourrierWorkflowNotification;
 use Illuminate\Support\Collection;
@@ -52,6 +53,8 @@ class CourrierNotificationService
     public const EXPEDITEUR_TRAITE = 'expediteur_traite';
 
     public const FOURNISSEUR_RECOUVREMENT = 'fournisseur_recouvrement';
+
+    public const ENTREE_CHEQUE_SUIVI_DEPENSE = 'entree_cheque_suivi_depense';
 
     public function notifier(User $destinataire, Courrier $courrier, User $acteur, string $type, ?string $detail = null): void
     {
@@ -183,6 +186,15 @@ class CourrierNotificationService
     }
 
     /**
+     * Informe l’expéditeur externe (e-mail / SMS) que son dossier a été validé
+     * par la Direction (réponse signée ; expédition éventuellement encore en cours).
+     */
+    public function notifierExpediteurExterneValide(Courrier $courrier): void
+    {
+        $this->notifierExpediteurExterne($courrier, new CourrierExpediteurValideNotification($courrier));
+    }
+
+    /**
      * Informe l’expéditeur externe (e-mail / SMS) que son courrier arrivée a été clôturé.
      */
     public function notifierExpediteurExterneTraite(Courrier $courrier): void
@@ -206,16 +218,16 @@ class CourrierNotificationService
 
         $email = trim((string) ($courrier->expediteur_email ?? ''));
         $telephone = trim((string) ($courrier->expediteur_telephone ?? ''));
-        $vonageOk = $telephone !== '' && filled(config('services.vonage.key'));
+        $smsOk = $telephone !== '' && app(SmsService::class)->isConfigured();
 
-        if ($email === '' && ! $vonageOk) {
+        if ($email === '' && ! $smsOk) {
             return;
         }
 
         try {
-            if ($email !== '' && $vonageOk) {
+            if ($email !== '' && $smsOk) {
                 Notification::route('mail', $email)
-                    ->route('vonage', $telephone)
+                    ->route('ged_sms', $telephone)
                     ->notify($notification);
 
                 return;
@@ -228,7 +240,7 @@ class CourrierNotificationService
                 return;
             }
 
-            Notification::route('vonage', $telephone)
+            Notification::route('ged_sms', $telephone)
                 ->notify($notification);
         } catch (\Throwable $e) {
             Log::channel('eged')->error('Notification expéditeur externe échouée', [
@@ -236,5 +248,19 @@ class CourrierNotificationService
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+    public function notifierEntreeChequeSuiviDepenses(Courrier $courrier, User $acteur, float $montant): void
+    {
+        $montantFormate = number_format($montant, 0, ',', ' ');
+        $detail = 'Chèque établi par l’AC — montant : '.$montantFormate.' FCFA — à inscrire au suivi des dépenses.';
+
+        $this->notifierRoles(
+            ['responsable_suivi_depenses'],
+            $courrier,
+            $acteur,
+            self::ENTREE_CHEQUE_SUIVI_DEPENSE,
+            $detail
+        );
     }
 }

@@ -67,6 +67,10 @@ class CourrierRegistreController extends Controller
             $annees = collect([$annee]);
         }
 
+        $structureRegistre = auth()->user()->structure;
+        $libelleStructureRegistre = $structureRegistre?->nom
+            ?: (auth()->user()->aAccesTotal() ? 'Direction Générale — ACSI' : 'Secrétariat — ACSI');
+
         if ($print) {
             $courriers = $query->get();
 
@@ -75,6 +79,7 @@ class CourrierRegistreController extends Controller
                 'sens' => $sens,
                 'sensCode' => $sensCode,
                 'annee' => $annee,
+                'libelleStructureRegistre' => $libelleStructureRegistre,
             ]);
         }
 
@@ -90,6 +95,7 @@ class CourrierRegistreController extends Controller
             'sensCode' => $sensCode,
             'annee' => $annee,
             'annees' => $annees,
+            'libelleStructureRegistre' => $libelleStructureRegistre,
         ]);
     }
 }

@@ -72,7 +72,7 @@
                             <div class="registre-single-face registre-feuille-face">
                                 <div class="registre-feuille-head">
                                     <div>
-                                        <p class="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-semibold mb-1">Secrétariat DG — ACSI</p>
+                                        <p class="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-semibold mb-1">{{ $libelleStructureRegistre }}</p>
                                         <h3>{{ $libSensUpper }}</h3>
                                     </div>
                                     <div class="text-right text-xs text-slate-600">
@@ -116,7 +116,7 @@
                             <div class="registre-single-face registre-cloture-face">
                                 <p class="registre-cover-kicker">Clôture du registre</p>
                                 <h2>
-                                    Nous, Secrétariat de la Direction Générale de l’ACSI,
+                                    Nous, {{ $libelleStructureRegistre }},
                                     arrêtons et clôturons le présent registre de courrier
                                     <strong>{{ $libSens }}</strong> pour l’année <strong>{{ $annee }}</strong>,
                                     comprenant <strong>{{ $courriers->count() }}</strong> entrée(s)
@@ -131,7 +131,7 @@
                                     @if($hasLogo)
                                         <img src="{{ asset('images/image-logo.jpg') }}" alt="ACSI" class="registre-cover-seal">
                                     @endif
-                                    <div class="mt-2 text-sm font-semibold">Le Secrétariat DG</div>
+                                    <div class="mt-2 text-sm font-semibold">{{ $libelleStructureRegistre }}</div>
                                 </div>
                                 <p class="registre-cover-label">Fin du livret</p>
                             </div>

@@ -20,6 +20,8 @@ class RoleAndPermissionSeeder extends Seeder
         $permissions = [
             'documents.view', 'documents.view-hierarchique', 'documents.create', 'documents.edit', 'documents.delete',
             'types-documents.view', 'types-documents.create', 'types-documents.edit', 'types-documents.delete',
+            'recherche.view',
+            'corbeille.view',
             'dossiers.view', 'dossiers.create', 'dossiers.edit', 'dossiers.delete', 'dossiers.view-confidentiel',
             'dossiers.create-structure',
             /** Créer un dossier racine (sans parent) rattaché à une structure — ex. responsable / directeur. */
@@ -29,21 +31,36 @@ class RoleAndPermissionSeeder extends Seeder
             'utilisateurs.view', 'utilisateurs.create', 'utilisateurs.edit', 'utilisateurs.delete',
             'courriers.view', 'courriers.create', 'courriers.edit', 'courriers.orienter', 'courriers.ventiler',
             'courriers.signer', 'courriers.rejeter', 'courriers.transmettre', 'courriers.archiver', 'courriers.recevoir',
+            'suivi-paiements.view',
         ];
 
         foreach ($permissions as $perm) {
             Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
         }
 
+        /** Menus réservés à l’admin par défaut (réattribuables via Paramètres → Rôles). */
+        $permissionsMenusAdminSeuls = [
+            'types-documents.view',
+            'types-documents.create',
+            'types-documents.edit',
+            'types-documents.delete',
+            'recherche.view',
+            'corbeille.view',
+        ];
+
         $admin = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         $admin->syncPermissions(Permission::where('guard_name', 'web')->pluck('name'));
 
         $dg = Role::firstOrCreate(['name' => 'dg', 'guard_name' => 'web']);
-        $dg->syncPermissions(Permission::where('guard_name', 'web')->pluck('name'));
+        $dg->syncPermissions(
+            Permission::where('guard_name', 'web')
+                ->whereNotIn('name', $permissionsMenusAdminSeuls)
+                ->pluck('name')
+        );
 
         $permissionsSecretariatCourrier = [
             'documents.view', 'documents.create', 'documents.edit',
-            'types-documents.view', 'dossiers.view', 'dossiers.create', 'dossiers.edit',
+            'dossiers.view', 'dossiers.create', 'dossiers.edit',
             'courriers.view', 'courriers.create', 'courriers.edit', 'courriers.transmettre',
             'courriers.archiver', 'courriers.recevoir',
         ];
@@ -56,7 +73,6 @@ class RoleAndPermissionSeeder extends Seeder
             'documents.view',
             'documents.create',
             'documents.edit',
-            'types-documents.view',
             'dossiers.view',
             'dossiers.create',
             'dossiers.edit',
@@ -71,7 +87,7 @@ class RoleAndPermissionSeeder extends Seeder
         $user = Role::firstOrCreate(['name' => 'utilisateur', 'guard_name' => 'web']);
         $user->syncPermissions([
             'documents.view', 'documents.create', 'documents.edit',
-            'types-documents.view', 'dossiers.view', 'dossiers.create', 'dossiers.edit', 'dossiers.delete',
+            'dossiers.view', 'dossiers.create', 'dossiers.edit', 'dossiers.delete',
             'dossiers.create-structure',
         ]);
 
@@ -96,7 +112,7 @@ class RoleAndPermissionSeeder extends Seeder
             'caissier',
         ] as $roleCircuit) {
             $role = Role::firstOrCreate(['name' => $roleCircuit, 'guard_name' => 'web']);
-            $role->syncPermissions($permissionsSecretariatCourrier);
+            $role->syncPermissions(array_merge($permissionsSecretariatCourrier, ['suivi-paiements.view']));
         }
 
         // Accès GED de base : Documents + Dossiers visibles pour tous les rôles.
@@ -108,6 +124,11 @@ class RoleAndPermissionSeeder extends Seeder
             foreach (Role::where('guard_name', 'web')->get() as $role) {
                 $role->givePermissionTo($accesGedBase);
             }
+        }
+
+        // Garantit que seuls les rôles explicitement autorisés gardent les menus admin.
+        foreach (Role::where('guard_name', 'web')->where('name', '!=', 'admin')->get() as $role) {
+            $role->revokePermissionTo($permissionsMenusAdminSeuls);
         }
 
         app()[PermissionRegistrar::class]->forgetCachedPermissions();

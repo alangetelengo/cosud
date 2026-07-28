@@ -47,18 +47,28 @@ class CourrierWorkflowNotification extends Notification
     }
 
     /**
-     * @return array{message: string, message_title: string, url: string, courrier_id: int, type: string}
+     * @return array{message: string, message_title: string, message_body: string, url: string, courrier_id: int, type: string, detail: ?string}
      */
     public function toArray(object $notifiable): array
     {
         $labels = $this->libelles();
+        $numero = $this->courrier->numeroRegistreComplet();
+        $objet = trim((string) ($this->courrier->objet ?? ''));
+
+        // Texte affiché dans la cloche / liste : titre actionnable + n° + objet.
+        $message = $labels['title'].' — n° '.$numero;
+        if ($objet !== '') {
+            $message .= ' — '.$objet;
+        }
 
         return [
-            'message' => $labels['body'].' — n° '.$this->courrier->numeroRegistreComplet(),
+            'message' => $message,
             'message_title' => $labels['title'],
+            'message_body' => $labels['body'],
             'url' => $this->urlAction(),
             'courrier_id' => $this->courrier->id,
             'type' => $this->type,
+            'detail' => $this->detail,
         ];
     }
 
@@ -125,20 +135,20 @@ class CourrierWorkflowNotification extends Notification
                 'body' => 'Le DG vous demande de préparer un élément de réponse pour validation.',
             ],
             CourrierNotificationService::ETAPE_CIRCUIT => [
-                'title' => 'Courrier — étape à traiter',
-                'body' => 'Une étape du circuit courrier vous concerne.',
+                'title' => $this->titreEtapeCircuit(),
+                'body' => $this->corpsEtapeCircuit(),
             ],
             CourrierNotificationService::REPONSE_A_VALIDER => [
-                'title' => 'Projet de réponse à valider',
-                'body' => 'La particulière a soumis un projet de réponse : validez-le ou rejetez-le avec un motif.',
+                'title' => 'Réponse à signer',
+                'body' => 'La particulière a transmis un courrier de réponse : signez-le ou rejetez-le avec un motif.',
             ],
             CourrierNotificationService::REPONSE_REJETEE => [
-                'title' => 'Projet de réponse rejeté',
-                'body' => 'Le DG a rejeté le projet de réponse soumis : corrigez-le et resoumettez-le.',
+                'title' => 'Réponse rejetée',
+                'body' => 'Le DG a rejeté le courrier de réponse : corrigez-le et retransmettez-le pour signature.',
             ],
             CourrierNotificationService::REPONSE_VALIDEE_A_CREER => [
-                'title' => 'Projet de réponse validé — créer le départ',
-                'body' => 'Le DG a validé le projet de réponse : créez le courrier départ en brouillon (destinataire selon ses indications).',
+                'title' => 'Réponse signée — à expédier',
+                'body' => 'Le DG a signé le courrier de réponse : expédiez-le vers le secrétariat destinataire.',
             ],
             CourrierNotificationService::RETARD_TRAITEMENT => [
                 'title' => 'Courrier en retard de traitement',
@@ -148,10 +158,60 @@ class CourrierWorkflowNotification extends Notification
                 'title' => 'Relance DG — courrier en attente',
                 'body' => 'Le Directeur Général vous relance pour le traitement d\'un courrier en attente.',
             ],
+            CourrierNotificationService::ENTREE_CHEQUE_SUIVI_DEPENSE => [
+                'title' => 'Entrée chèque — suivi des dépenses',
+                'body' => 'L’Agent comptable a établi un chèque : inscrivez-le sur la fiche de suivi des paiements.',
+            ],
             default => [
                 'title' => 'Courrier — mise à jour',
                 'body' => 'Le courrier a été mis à jour.',
             ],
         };
+    }
+
+    private function titreEtapeCircuit(): string
+    {
+        $etape = $this->nomEtapeDepuisDetail();
+
+        return $etape !== null
+            ? 'À traiter : '.$etape
+            : 'Action requise sur un courrier';
+    }
+
+    private function corpsEtapeCircuit(): string
+    {
+        $etape = $this->nomEtapeDepuisDetail();
+        $objet = trim((string) ($this->courrier->objet ?? ''));
+
+        if ($etape !== null && $objet !== '') {
+            return 'Le circuit attend votre action à l\'étape « '.$etape.' » pour le courrier « '.$objet.' ».';
+        }
+
+        if ($etape !== null) {
+            return 'Le circuit attend votre action à l\'étape « '.$etape.' ». Ouvrez le courrier pour traiter.';
+        }
+
+        return 'Une étape du circuit courrier attend votre action. Ouvrez le courrier pour traiter.';
+    }
+
+    /**
+     * Extrait le nom d'étape depuis le détail produit par le moteur
+     * (« Étape en cours : Nom — aide | Instructions : … »).
+     */
+    private function nomEtapeDepuisDetail(): ?string
+    {
+        if (! is_string($this->detail) || trim($this->detail) === '') {
+            return null;
+        }
+
+        if (! preg_match('/^Étape en cours\s*:\s*([^|]+)/u', $this->detail, $matches)) {
+            return null;
+        }
+
+        $partie = trim($matches[1]);
+        $segments = preg_split('/\s+[—\-]\s+/u', $partie, 2) ?: [$partie];
+        $nom = trim((string) ($segments[0] ?? ''));
+
+        return $nom !== '' ? $nom : null;
     }
 }

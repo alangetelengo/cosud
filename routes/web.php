@@ -17,6 +17,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RechercheController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\StructureController;
+use App\Http\Controllers\SuiviPaiementController;
 use App\Http\Controllers\TypeCourrierController;
 use App\Http\Controllers\TypeDocumentController;
 use App\Http\Controllers\TypeDossierController;
@@ -145,6 +146,8 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::get('/registres/courriers/depart', [CourrierRegistreController::class, 'depart'])->name('courriers.registres.depart');
     Route::get('/registres/courriers/arrivee/imprimer', [CourrierRegistreController::class, 'printArrivee'])->name('courriers.registres.print-arrivee');
     Route::get('/registres/courriers/depart/imprimer', [CourrierRegistreController::class, 'printDepart'])->name('courriers.registres.print-depart');
+    Route::get('/suivi-paiements', [SuiviPaiementController::class, 'index'])->name('suivi-paiements.index');
+    Route::get('/suivi-paiements/export', [SuiviPaiementController::class, 'export'])->name('suivi-paiements.export');
     Route::get('/courriers', [CourrierController::class, 'index'])->name('courriers.index');
     Route::get('/courriers/create', [CourrierController::class, 'create'])->name('courriers.create');
     Route::post('/courriers', [CourrierController::class, 'store'])->name('courriers.store');

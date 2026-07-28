@@ -3,10 +3,12 @@
 namespace App\Providers;
 
 use App\Listeners\EnsureMesDossiersRacineExists;
+use App\Notifications\Channels\GedSmsChannel;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -37,5 +39,7 @@ class AppServiceProvider extends ServiceProvider
                 : 0;
             $view->with('unreadNotificationsCount', $unreadCount);
         });
+
+        Notification::extend('ged_sms', fn ($app) => $app->make(GedSmsChannel::class));
     }
 }

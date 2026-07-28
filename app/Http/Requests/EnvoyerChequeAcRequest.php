@@ -38,6 +38,7 @@ class EnvoyerChequeAcRequest extends FormRequest
     {
         return [
             'message' => ['required', 'string', 'max:2000'],
+            'montant' => ['required', 'numeric', 'min:1'],
             'scan_cheque' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ];
     }
@@ -49,6 +50,9 @@ class EnvoyerChequeAcRequest extends FormRequest
     {
         return [
             'message.required' => 'Le message au DG est obligatoire.',
+            'montant.required' => 'Le montant du chèque est obligatoire.',
+            'montant.numeric' => 'Le montant doit être un nombre.',
+            'montant.min' => 'Le montant doit être supérieur à zéro.',
             'scan_cheque.mimes' => 'Le scan du chèque doit être un PDF ou une image (jpg, png).',
         ];
     }

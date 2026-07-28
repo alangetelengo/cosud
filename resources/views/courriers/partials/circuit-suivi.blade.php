@@ -6,19 +6,31 @@
     $peutAvancerCircuit = $circuitCompatible && $moteur->peutAgir($courrier, auth()->user());
     $etapeCourante = $circuitCompatible ? $courrier->circuitEtapeActuelle : null;
     $etapeExigeInstructions = $etapeCourante?->action === \App\Models\CircuitCourrierEtape::ACTION_INSTRUIRE;
-    // « Traitement par la particulière » se termine via la soumission du projet de réponse.
+    // « Traitement / préparation » se termine via la transmission pour signature.
     $etapeTraiteeViaSoumissionReponse = $peutSoumettreReponse ?? false;
-    // « Validation de la réponse » se termine via Valider / Rejeter dans Actions.
+    // « Validation / signature de la réponse » se termine via Signer / Rejeter dans Actions.
     $etapeTraiteeViaValidationReponse = ($etapeCourante?->code === 'validation_reponse_dg');
+    $etapeTraiteeViaExpeditionReponse = ($etapeCourante?->code === 'expedition_reponse');
     // « AC établit le chèque » se termine via l’envoi au DG dans Actions.
     $etapeTraiteeViaEnvoiChequeAc = ($etapeCourante?->code === 'ac_etablit_cheque');
     // « DG signe le chèque » se termine via le scan signé dans Actions.
     $etapeTraiteeViaSignatureChequeDg = ($etapeCourante?->code === 'dg_signe_cheque');
     // « Preuve de paiement » se termine via le dépôt dans Actions.
     $etapeTraiteeViaPreuvePaiement = ($etapeCourante?->code === 'preuve_paiement');
-    // Ne pas présenter « création courrier réponse » pour les étapes facture dédiées.
+    // Ne pas présenter « création courrier réponse » pour les étapes facture dédiées
+    // ni pour la préparation particulière (gérée via transmission pour signature).
     $etapeCompleteeParReponse = ($etapeCourante?->meneVersCreationDepart() ?? false)
-        && ! in_array($etapeCourante?->code, ['dg_signe_cheque', 'traitement_dossiers_vers_ac'], true);
+        && ! in_array($etapeCourante?->code, ['dg_signe_cheque', 'traitement_dossiers_vers_ac', 'traitement_particuliere'], true);
+    // Relais facture validés automatiquement (pas de « Valider l’étape »).
+    // Exception : agent confié hors rôle AC sur « Traitement dossiers » (override).
+    $etapeRelaisFactureAuto = in_array($etapeCourante?->code, [
+        'ac_vers_caissiers',
+        'retour_caisse_depenses',
+    ], true) || (($etapeCourante?->code === 'traitement_dossiers_vers_ac') && ! $courrier->agent_confie_id);
+    $placeholderInstructions = match ($courrier->circuit?->code) {
+        'facture_prestataire' => 'Ex. : À payer avant le 30 du mois, transmettre à l’Agent Comptable…',
+        default => 'Ex. : Répondre favorablement, préparer un projet de note…',
+    };
 @endphp
 
 @if($circuitCompatible)
@@ -74,12 +86,11 @@
         <form method="post" action="{{ route('courriers.circuit.instruire', $courrier) }}" class="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-700">
             @csrf
             <p class="text-[11px] font-semibold text-slate-700 dark:text-slate-200">A — Instruire le dossier</p>
-            <p class="text-[10.5px] text-slate-500 leading-snug">Sans pièce jointe. Vous pouvez confier le dossier à un agent (facultatif) : il devient le prochain acteur.</p>
             <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Vos instructions <span class="text-red-500">*</span></label>
-            <textarea name="instructions" required rows="3" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : À payer avant le 30 du mois, transmettre à l’Agent Comptable…">{{ old('instructions') }}</textarea>
+            <textarea name="instructions" required rows="3" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="{{ $placeholderInstructions }}">{{ old('instructions') }}</textarea>
             @error('instructions')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
             <div>
-                <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">Confier à un agent <span class="font-normal text-slate-400">(facultatif)</span></label>
+                <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">Confier à un collaborateur <span class="font-normal text-slate-400">(facultatif)</span></label>
                 <select name="agent_confie_id" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900">
                     <option value="">— Suite normale du circuit —</option>
                     @foreach(($agentsOrientation ?? collect()) as $ag)
@@ -94,17 +105,21 @@
                 Enregistrer les instructions
             </button>
         </form>
+        @elseif($peutAvancerCircuit && $etapeTraiteeViaSoumissionReponse)
+        <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
+            Cette étape se termine en transmettant le courrier de réponse pour signature (voir « Actions » ci-dessous).
+        </p>
         @elseif($peutAvancerCircuit && $etapeCompleteeParReponse)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
             Cette étape se termine automatiquement lors de la création du courrier réponse (voir « Actions » ci-dessous).
         </p>
-        @elseif($peutAvancerCircuit && $etapeTraiteeViaSoumissionReponse)
-        <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
-            Cette étape se termine par la soumission du projet de réponse au DG (voir « Actions » ci-dessous).
-        </p>
         @elseif($peutAvancerCircuit && $etapeTraiteeViaValidationReponse)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
-            Validez ou rejetez le projet via « Actions » ci-dessous.
+            Signez ou rejetez la réponse via « Actions » ci-dessous.
+        </p>
+        @elseif($peutAvancerCircuit && $etapeTraiteeViaExpeditionReponse)
+        <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
+            Expédiez le courrier départ signé via « Actions » (lien vers le départ).
         </p>
         @elseif($peutAvancerCircuit && $etapeTraiteeViaEnvoiChequeAc)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
@@ -117,6 +132,10 @@
         @elseif($peutAvancerCircuit && $etapeTraiteeViaPreuvePaiement)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
             Cette étape se termine en déposant la preuve de paiement (voir « Actions » ci-dessous) — le dossier sera clôturé.
+        </p>
+        @elseif($etapeRelaisFactureAuto)
+        <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
+            Cette étape de relais est validée automatiquement — pas d’action manuelle requise.
         </p>
         @elseif($peutAvancerCircuit && $courrier->circuitEtapeActuelle)
         <form method="post" action="{{ route('courriers.circuit.avancer', $courrier) }}" class="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-700">

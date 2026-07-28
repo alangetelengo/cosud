@@ -20,6 +20,8 @@
     $groups = [
         'Documents' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'documents.')),
         'Types de documents' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'types-documents.')),
+        'Recherche' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'recherche.')),
+        'Corbeille' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'corbeille.')),
         'Dossiers' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'dossiers.')),
         'Courriers' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'courriers.')),
         'Utilisateurs' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'utilisateurs.')),

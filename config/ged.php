@@ -59,4 +59,23 @@ return [
      * Registre courriers (livret flip-book) : nombre de lignes par feuillet.
      */
     'registre_lignes_par_feuillet' => (int) env('GED_REGISTRE_LIGNES_PAR_FEUILLET', 10),
+
+    /**
+     * SMS aux expéditeurs externes (validation / clôture / recouvrement).
+     * Même API que SIFEC : wirepick | infobip.
+     */
+    'sms' => [
+        'provider' => env('GED_SMS_PROVIDER', 'wirepick'),
+        'sender_id' => env('GED_SMS_SENDER_ID', 'ETAT-CIVIL'),
+        'wirepick' => [
+            'client' => env('GED_SMS_WIREPICK_CLIENT'),
+            'password' => env('GED_SMS_WIREPICK_PASSWORD'),
+            'endpoint' => env('GED_SMS_WIREPICK_ENDPOINT', 'https://api.wirepick.com/httpsms/send'),
+            'http_method' => env('GED_SMS_WIREPICK_HTTP_METHOD', 'get'),
+        ],
+        'infobip' => [
+            'api_key' => env('GED_SMS_INFOBIP_API_KEY'),
+            'send_url' => env('GED_SMS_INFOBIP_SEND_URL', 'https://mpn66j.api.infobip.com/sms/2/text/advanced'),
+        ],
+    ],
 ];

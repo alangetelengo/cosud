@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Document;
 use App\Models\Dossier;
-use App\Models\TypeDocument;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -12,6 +11,8 @@ class RechercheController extends Controller
 {
     public function index(Request $request)
     {
+        $this->authorize('recherche.view');
+
         $q = $request->get('q', '');
         $documents = collect();
         $dossiers = collect();

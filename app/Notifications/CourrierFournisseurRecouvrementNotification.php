@@ -3,11 +3,14 @@
 namespace App\Notifications;
 
 use App\Models\Courrier;
+use App\Services\SmsService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Messages\VonageMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Fournisseur / prestataire : chèque signé — passage au recouvrement.
+ */
 class CourrierFournisseurRecouvrementNotification extends Notification
 {
     use Queueable;
@@ -25,8 +28,8 @@ class CourrierFournisseurRecouvrementNotification extends Notification
             $channels[] = 'mail';
         }
 
-        if ($notifiable->routeNotificationFor('vonage') && config('services.vonage.key')) {
-            $channels[] = 'vonage';
+        if ($notifiable->routeNotificationFor('ged_sms') && app(SmsService::class)->isConfigured()) {
+            $channels[] = 'ged_sms';
         }
 
         return $channels;
@@ -34,23 +37,23 @@ class CourrierFournisseurRecouvrementNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $numero = $this->courrier->numeroRegistreComplet();
+        $numero = $this->numero();
 
         return (new MailMessage)
-            ->subject('GED : chèque signé — courrier n° '.$numero.' (recouvrement)')
+            ->subject('GED : dossier n° '.$numero.' — chèque signé, recouvrement possible')
             ->greeting('Bonjour,')
-            ->line('Le chèque relatif à votre facture (courrier n° '.$numero.') a été signé.')
-            ->line('**Objet :** '.$this->courrier->objet)
-            ->line('Vous pouvez procéder au recouvrement auprès de l’ACSI.')
-            ->line('Merci de votre confiance.');
+            ->line('**État de votre dossier :** le chèque relatif à votre facture (courrier n° '.$numero.') a été **signé** par la Direction.')
+            ->line('**Objet :** '.$this->objet())
+            ->line('**Ce que cela signifie :** le paiement est autorisé ; votre dossier est prêt pour le recouvrement.')
+            ->line('**Ce que vous devez faire :** présentez-vous auprès de l’ACSI (ou contactez le service comptable) pour procéder au **recouvrement** du chèque, en rappelant le n° '.$numero.'.')
+            ->line('Merci de votre confiance.')
+            ->salutation('L’équipe GED — '.config('app.name'));
     }
 
-    public function toVonage(object $notifiable): VonageMessage
+    public function toGedSms(object $notifiable): string
     {
-        $numero = $this->courrier->numeroRegistreComplet();
-
-        return (new VonageMessage)
-            ->content('GED : chèque signé pour le courrier n° '.$numero.'. Vous pouvez procéder au recouvrement.');
+        return 'GED n°'.$this->numero().' : chèque SIGNÉ. '
+            .'Présentez-vous à l’ACSI pour le RECOUVREMENT (rappeler ce n°).';
     }
 
     /**
@@ -58,13 +61,23 @@ class CourrierFournisseurRecouvrementNotification extends Notification
      */
     public function toArray(object $notifiable): array
     {
-        $numero = $this->courrier->numeroRegistreComplet();
-
         return [
-            'message' => 'Chèque signé pour le courrier n° '.$numero.' — recouvrement possible.',
-            'message_title' => 'Chèque signé — recouvrement',
+            'message' => 'Dossier n° '.$this->numero().' : chèque signé — présentez-vous à l’ACSI pour le recouvrement.',
+            'message_title' => 'Chèque signé — à recouvrer',
             'courrier_id' => $this->courrier->id,
             'type' => 'fournisseur_recouvrement',
         ];
+    }
+
+    protected function numero(): string
+    {
+        return $this->courrier->numeroRegistreComplet();
+    }
+
+    protected function objet(): string
+    {
+        $objet = trim((string) ($this->courrier->objet ?? ''));
+
+        return $objet !== '' ? $objet : '—';
     }
 }

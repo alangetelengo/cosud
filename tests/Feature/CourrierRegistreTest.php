@@ -74,6 +74,7 @@ class CourrierRegistreTest extends TestCase
             ->assertSee('COURRIER', false)
             ->assertSee('Page de garde', false)
             ->assertSee('arrêtons et clôturons', false)
+            ->assertSee(Structure::where('code', 'SEC-DIR')->value('nom'), false)
             ->assertDontSee('Filtrer', false);
     }
 

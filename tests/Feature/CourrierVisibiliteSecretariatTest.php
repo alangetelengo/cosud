@@ -131,9 +131,28 @@ class CourrierVisibiliteSecretariatTest extends TestCase
         $this->assertTrue($depart->visiblePar($ruth));
         $this->assertTrue($depart->visiblePar($emetteur));
 
+        // Fiche consultable pour réception, mais hors registre / liste Départ du destinataire.
+        $this->assertFalse(
+            Courrier::query()->visibleBy($ruth)->whereKey($depart->id)->exists()
+        );
+
+        $this->actingAs($ruth)
+            ->get(route('courriers.index', ['sens' => 'depart'], absolute: false))
+            ->assertOk()
+            ->assertDontSee('Départ en attente DAF', false);
+
+        $this->actingAs($ruth)
+            ->get(route('courriers.registres.depart', ['annee' => $depart->numero_registre_annee], absolute: false))
+            ->assertOk()
+            ->assertDontSee('Départ en attente DAF', false);
+
         $this->actingAs($ruth)
             ->get(route('courriers.a-recevoir', absolute: false))
             ->assertOk()
             ->assertSee('Départ en attente DAF', false);
+
+        $this->actingAs($ruth)
+            ->get(route('courriers.show', $depart, absolute: false))
+            ->assertOk();
     }
 }

@@ -28,15 +28,7 @@
 @endphp
 
 <div class="space-y-5">
-    @if(session('success'))
-    <div x-data="{ show: true }" x-show="show" x-transition class="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 flex items-center gap-3">
-        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-800/40 shrink-0">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-        </span>
-        <span class="flex-1 text-sm font-medium">{{ session('success') }}</span>
-        <button type="button" @click="show = false" class="w-8 h-8 rounded-lg hover:bg-emerald-200/50 dark:hover:bg-emerald-800/30 text-lg font-bold" title="Fermer">×</button>
-    </div>
-    @endif
+    @include('partials.flash-session')
 
     {{-- Bandeau onglets + recherche --}}
     <div class="rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">

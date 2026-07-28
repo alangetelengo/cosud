@@ -135,7 +135,7 @@ class CircuitCourrierSeeder extends Seeder
             ['code' => 'courrier_general'],
             [
                 'libelle' => 'Courriers généraux / notes / instructions',
-                'description' => 'Circuit B : arrivée → notif DG+particulière → instruction → projet particulière → validation DG → création départ brouillon',
+                'description' => 'Circuit B : arrivée → instruction → préparation départ → signature DG → expédition',
                 'sens_initial' => CircuitCourrier::SENS_ARRIVEE,
                 'actif' => true,
             ]
@@ -178,35 +178,35 @@ class CircuitCourrierSeeder extends Seeder
             [
                 'ordre' => 4,
                 'code' => 'traitement_particuliere',
-                'nom' => 'Traitement par la particulière',
-                'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
-                'acteur_valeur' => 'particulier_dg',
-                'action' => CircuitCourrierEtape::ACTION_TRAITER,
-                'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
-                'notifie_roles' => [],
-                'instructions_aide' => 'La particulière du DG prépare un projet de réponse (document à joindre) et le soumet au DG pour validation.',
-            ],
-            [
-                'ordre' => 5,
-                'code' => 'validation_reponse_dg',
-                'nom' => 'Validation de la réponse par le DG',
-                'acteur_type' => CircuitCourrierEtape::ACTEUR_DIRECTEUR_DESTINATAIRE,
-                'acteur_valeur' => null,
-                'action' => CircuitCourrierEtape::ACTION_VALIDER,
-                'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
-                'notifie_roles' => ['particulier_dg'],
-                'instructions_aide' => 'Le DG valide le projet de réponse et le renvoie à la particulière pour création du courrier départ, ou le rejette avec un motif.',
-            ],
-            [
-                'ordre' => 6,
-                'code' => 'creation_depart_particuliere',
-                'nom' => 'Création du courrier départ (particulière)',
+                'nom' => 'Préparation de la réponse',
                 'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
                 'acteur_valeur' => 'particulier_dg',
                 'action' => CircuitCourrierEtape::ACTION_TRAITER,
                 'mouvement' => CircuitCourrierEtape::MOUVEMENT_CREER_DEPART,
                 'notifie_roles' => [],
-                'instructions_aide' => 'La particulière crée le courrier départ en brouillon (destinataire selon les indications du DG), puis le fait signer selon le circuit départ.',
+                'instructions_aide' => 'La particulière prépare le courrier de réponse (document) et le transmet au DG pour signature.',
+            ],
+            [
+                'ordre' => 5,
+                'code' => 'validation_reponse_dg',
+                'nom' => 'Signature de la réponse par le DG',
+                'acteur_type' => CircuitCourrierEtape::ACTEUR_DIRECTEUR_DESTINATAIRE,
+                'acteur_valeur' => null,
+                'action' => CircuitCourrierEtape::ACTION_VALIDER,
+                'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
+                'notifie_roles' => ['particulier_dg'],
+                'instructions_aide' => 'Le DG signe le courrier de réponse (ou le rejette avec un motif). La particulière pourra ensuite l’expédier.',
+            ],
+            [
+                'ordre' => 6,
+                'code' => 'expedition_reponse',
+                'nom' => 'Expédition de la réponse',
+                'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
+                'acteur_valeur' => 'particulier_dg',
+                'action' => CircuitCourrierEtape::ACTION_TRAITER,
+                'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
+                'notifie_roles' => [],
+                'instructions_aide' => 'La particulière expédie le courrier départ signé vers le secrétariat destinataire — le dossier arrivée sera clôturé.',
                 'est_finale' => true,
             ],
         ]);
@@ -214,6 +214,11 @@ class CircuitCourrierSeeder extends Seeder
         TypeCourrier::updateOrCreate(
             ['code' => 'facture'],
             ['libelle' => 'Facture prestataire / fournisseur', 'actif' => true, 'circuit_courrier_id' => $facture->id]
+        );
+
+        TypeCourrier::updateOrCreate(
+            ['code' => 'mad'],
+            ['libelle' => 'Mise à disposition (MAD)', 'actif' => true, 'circuit_courrier_id' => $facture->id]
         );
 
         TypeCourrier::whereIn('code', ['administratif', 'invitation', 'reponse', 'autre', 'demande'])
@@ -268,6 +273,7 @@ class CircuitCourrierSeeder extends Seeder
             'types-documents.view',
             'courriers.view', 'courriers.create', 'courriers.edit', 'courriers.transmettre',
             'courriers.archiver', 'courriers.recevoir',
+            'suivi-paiements.view',
         ])->pluck('name');
 
         foreach ([

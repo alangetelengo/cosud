@@ -52,6 +52,54 @@ class CourrierWorkflowService
         });
     }
 
+    /**
+     * Clôture l’arrivée liée après expédition du départ réponse.
+     * Contourne les transitions classiques (recu → …) : le traitement métier est terminé.
+     */
+    public function cloturerArriveeLieeApresExpedition(Courrier $depart): ?Courrier
+    {
+        $arrivee = $depart->courrierParent;
+        if (! $arrivee || ! $arrivee->estArrivee()) {
+            return null;
+        }
+
+        if ($arrivee->statutCourrier?->code === 'cloture') {
+            return $arrivee;
+        }
+
+        $statut = StatutCourrier::query()
+            ->where('sens_courrier_id', $arrivee->sens_courrier_id)
+            ->where('code', 'cloture')
+            ->where('actif', true)
+            ->firstOrFail();
+
+        return DB::transaction(function () use ($arrivee, $statut, $depart) {
+            $ancienCode = $arrivee->statutCourrier?->code;
+            $arrivee->statut_courrier_id = $statut->id;
+            $arrivee->save();
+
+            JournalAudit::log('courrier.transition', 'courriers', [
+                'commentaire' => json_encode([
+                    'courrier_id' => $arrivee->id,
+                    'de' => $ancienCode,
+                    'vers' => 'cloture',
+                    'motif' => 'cloture_auto_apres_expedition_reponse',
+                    'depart_id' => $depart->id,
+                ]),
+            ]);
+
+            $fresh = $arrivee->fresh([
+                'sensCourrier', 'statutCourrier', 'typeCourrier', 'prioriteCourrier', 'parapheur', 'createur',
+            ]);
+
+            if ($fresh) {
+                $this->courrierNotifications->notifierExpediteurExterneTraite($fresh);
+            }
+
+            return $fresh;
+        });
+    }
+
     public function statutInitialPourSens(int $sensCourrierId): StatutCourrier
     {
         return StatutCourrier::query()

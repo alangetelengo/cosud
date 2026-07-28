@@ -19,6 +19,7 @@ class CircuitCourrierMoteurService
     public function __construct(
         private readonly CourrierNotificationService $notifications,
         private readonly CourrierSecretariatService $secretariat,
+        private readonly SuiviPaiementService $suiviPaiements,
     ) {}
 
     public function demarrer(Courrier $courrier, ?CircuitCourrier $circuit = null, ?User $acteur = null): Courrier
@@ -180,7 +181,7 @@ class CircuitCourrierMoteurService
             $courrier->loadMissing('agentConfie');
             $nom = $courrier->agentConfie?->name;
 
-            return $nom ? 'Agent confié — '.$nom : 'Agent confié';
+            return $nom ? 'Collaborateur confié — '.$nom : 'Collaborateur confié';
         }
 
         if ($etape->acteur_type === CircuitCourrierEtape::ACTEUR_DIRECTEUR_DESTINATAIRE) {
@@ -215,6 +216,20 @@ class CircuitCourrierMoteurService
 
     public function avancer(Courrier $courrier, User $acteur, ?string $commentaire = null): Courrier
     {
+        $courrier = $this->avancerEtapesSansNotifier($courrier, $acteur, $commentaire);
+
+        // Une seule notification, sur l’étape réellement atteinte à l’issue de l’enchaînement
+        // automatique — pas une par étape intermédiaire traversée (ex. notification auto-validée).
+        $this->notifierEtapeCourante($courrier, $acteur);
+
+        return $courrier;
+    }
+
+    /**
+     * Avance le circuit (y compris étapes automatiques) sans envoyer de notification.
+     */
+    protected function avancerEtapesSansNotifier(Courrier $courrier, User $acteur, ?string $commentaire = null): Courrier
+    {
         if (! $courrier->circuit_etape_actuelle_id) {
             throw new InvalidArgumentException('Aucun circuit actif sur ce courrier.');
         }
@@ -224,13 +239,8 @@ class CircuitCourrierMoteurService
         }
 
         $courrier = $this->avancerUneEtape($courrier, $acteur, $commentaire);
-        $courrier = $this->poursuivreEtapesAutomatiques($courrier, $acteur);
 
-        // Une seule notification, sur l’étape réellement atteinte à l’issue de l’enchaînement
-        // automatique — pas une par étape intermédiaire traversée (ex. notification auto-validée).
-        $this->notifierEtapeCourante($courrier, $acteur);
-
-        return $courrier;
+        return $this->poursuivreEtapesAutomatiques($courrier, $acteur);
     }
 
     /**
@@ -252,7 +262,7 @@ class CircuitCourrierMoteurService
         if ($agentConfieId !== null) {
             $agent = User::query()->where('actif', true)->find($agentConfieId);
             if (! $agent) {
-                throw new InvalidArgumentException('L’agent confié est introuvable ou inactif.');
+                throw new InvalidArgumentException('Le collaborateur confié est introuvable ou inactif.');
             }
         }
 
@@ -336,9 +346,10 @@ class CircuitCourrierMoteurService
 
     /**
      * L’AC envoie le chèque au DG (message + scan optionnel déjà attaché au courrier) :
-     * enregistre le message et avance automatiquement vers la signature DG.
+     * enregistre le message, crée la fiche FSP et notifie la responsable suivi dépenses,
+     * puis avance automatiquement vers la signature DG.
      */
-    public function envoyerChequeAuDg(Courrier $courrier, User $acteur, string $message): Courrier
+    public function envoyerChequeAuDg(Courrier $courrier, User $acteur, string $message, float $montant): Courrier
     {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->code !== 'ac_etablit_cheque') {
@@ -349,15 +360,24 @@ class CircuitCourrierMoteurService
             throw new InvalidArgumentException('Vous n’êtes pas autorisé à envoyer le chèque au DG.');
         }
 
-        $courrier->update([
-            'message_ac' => $message,
-        ]);
+        $courrier = DB::transaction(function () use ($courrier, $acteur, $message, $montant): Courrier {
+            $courrier->update([
+                'message_ac' => $message,
+            ]);
 
-        return $this->avancer(
-            $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
-            $acteur,
-            $message
-        );
+            $this->suiviPaiements->creerDepuisEntreeCheque($courrier->fresh(), $acteur, $montant);
+
+            return $this->avancerEtapesSansNotifier(
+                $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
+                $acteur,
+                $message
+            );
+        });
+
+        $this->notifierEtapeCourante($courrier, $acteur);
+        $this->notifications->notifierEntreeChequeSuiviDepenses($courrier, $acteur, $montant);
+
+        return $courrier;
     }
 
     /**
@@ -426,72 +446,106 @@ class CircuitCourrierMoteurService
     }
 
     /**
-     * La particulière soumet un projet de réponse (document + destinataire proposé) à la
-     * validation du DG : les champs de préparation sont enregistrés sur le courrier arrivée
-     * puis le circuit avance vers l’étape « validation_reponse_dg ». Aucun courrier départ
-     * n’est créé à ce stade — cf. `CourrierController::creerReponse()` après validation.
+     * La particulière crée le courrier départ (projet = départ) et le place
+     * en attente de signature DG — le circuit avance vers « validation_reponse_dg ».
      *
-     * @param  array{document_reponse_id: ?int, reponse_confidentielle: bool, reponse_structure_destinataire_id: ?int, destinataire_agent_id: ?int, reponse_objet: ?string}  $donnees
+     * @param  array{document_id: int, objet?: ?string, reponse_id: int}  $donnees
      */
-    public function soumettreReponsePourValidation(Courrier $courrier, User $acteur, array $donnees): Courrier
+    public function soumettreDepartPourSignature(Courrier $arrivee, User $acteur, array $donnees): Courrier
     {
-        $etape = $courrier->circuitEtapeActuelle;
+        $etape = $arrivee->circuitEtapeActuelle;
         if (! $etape || $etape->code !== 'traitement_particuliere') {
-            throw new InvalidArgumentException('Aucune étape de traitement en cours sur ce courrier.');
+            throw new InvalidArgumentException('Aucune étape de préparation de réponse en cours sur ce courrier.');
         }
 
-        $courrier->update([
-            'document_reponse_id' => $donnees['document_reponse_id'] ?? null,
-            'reponse_confidentielle' => (bool) ($donnees['reponse_confidentielle'] ?? false),
-            'reponse_structure_destinataire_id' => $donnees['reponse_structure_destinataire_id'] ?? null,
-            'destinataire_agent_id' => $donnees['destinataire_agent_id'] ?? null,
-            'reponse_objet' => $donnees['reponse_objet'] ?? null,
+        // Exclure le départ qu’on vient de créer (même transaction) : il est déjà
+        // en « transmis_directeur » et serait sinon pris pour un doublon.
+        $dejaEnAttente = $arrivee->reponseDepartEnAttenteSignature();
+        if ($dejaEnAttente && (int) $dejaEnAttente->id !== (int) ($donnees['reponse_id'] ?? 0)) {
+            throw new InvalidArgumentException('Un courrier de réponse est déjà en attente de signature.');
+        }
+
+        $arrivee->update([
+            'document_reponse_id' => $donnees['document_id'] ?? null,
+            'reponse_objet' => $donnees['objet'] ?? null,
             'motif_rejet' => null,
             'rejete_par_id' => null,
             'date_rejet' => null,
         ]);
 
-        return $this->avancer($courrier->fresh(['circuitEtapeActuelle']), $acteur, 'Projet de réponse soumis pour validation.');
-    }
-
-    /**
-     * Le DG valide le projet de réponse et le renvoie à la particulière pour qu’elle
-     * crée le courrier départ en brouillon (étape « creation_depart_particuliere »).
-     */
-    public function validerProjetVersParticuliere(Courrier $courrier, User $acteur, ?string $commentaire = null): Courrier
-    {
-        $etape = $courrier->circuitEtapeActuelle;
-        if (! $etape || $etape->code !== 'validation_reponse_dg') {
-            throw new InvalidArgumentException('Aucune validation de réponse en cours sur ce courrier.');
-        }
-
-        if (! $this->peutAgir($courrier, $acteur)) {
-            throw new InvalidArgumentException('Vous n’êtes pas autorisé à valider cette réponse.');
-        }
-
-        if (! $courrier->document_reponse_id) {
-            throw new InvalidArgumentException('Aucun projet de réponse n’est attaché à ce courrier.');
-        }
-
-        $courrier = $this->avancer(
-            $courrier->fresh(['circuitEtapeActuelle']),
+        $arrivee = $this->avancer(
+            $arrivee->fresh(['circuitEtapeActuelle']),
             $acteur,
-            $commentaire ?: 'Projet de réponse validé — à créer en courrier départ par la particulière.'
+            'Courrier de réponse n° '.($donnees['numero_reponse'] ?? '').' transmis pour signature.'
         );
 
-        return $courrier->fresh(['circuit', 'circuitEtapeActuelle']);
+        // Une seule notif DG : notifierEtapeCourante (via avancer) envoie déjà REPONSE_A_VALIDER.
+
+        return $arrivee->fresh(['circuit', 'circuitEtapeActuelle']);
     }
 
     /**
-     * Le DG rejette le projet de réponse soumis : retour à l’étape « traitement_particuliere »
-     * avec le motif conservé (affiché à la particulière), le document proposé étant effacé
-     * pour qu’elle en soumette un nouveau.
+     * Le DG signe le courrier de réponse : le départ passe à « signé », le circuit
+     * avance vers l’expédition, l’expéditeur externe est informé (dossier validé).
+     */
+    public function signerReponseDepart(Courrier $arrivee, Courrier $depart, User $acteur, ?string $commentaire = null): Courrier
+    {
+        $etape = $arrivee->circuitEtapeActuelle;
+        if (! $etape || $etape->code !== 'validation_reponse_dg') {
+            throw new InvalidArgumentException('Aucune signature de réponse en cours sur ce courrier.');
+        }
+
+        if (! $this->peutAgir($arrivee, $acteur)) {
+            throw new InvalidArgumentException('Vous n’êtes pas autorisé à signer cette réponse.');
+        }
+
+        if ((int) $depart->courrier_parent_id !== (int) $arrivee->id) {
+            throw new InvalidArgumentException('Ce courrier départ n’est pas lié à cette arrivée.');
+        }
+
+        if (! in_array($depart->statutCourrier?->code, ['transmis_directeur', 'signe'], true)) {
+            throw new InvalidArgumentException('Ce courrier de réponse n’est pas en attente de signature.');
+        }
+
+        $arrivee = $this->avancer(
+            $arrivee->fresh(['circuitEtapeActuelle']),
+            $acteur,
+            $commentaire ?: 'Réponse signée — à expédier par la particulière (n° '.$depart->numeroRegistreComplet().').'
+        );
+
+        // Une seule notif particulière : avancer → expedition_reponse (REPONSE_VALIDEE_A_CREER).
+        $this->notifications->notifierExpediteurExterneValide($arrivee->fresh(['sensCourrier', 'statutCourrier']));
+
+        return $arrivee->fresh(['circuit', 'circuitEtapeActuelle']);
+    }
+
+    /**
+     * Signataire historique (rétrocompat) : DG ayant signé / validé l’étape.
+     */
+    public function signataireApresValidationProjet(Courrier $courrier): ?User
+    {
+        $historique = CircuitCourrierHistorique::query()
+            ->where('courrier_id', $courrier->id)
+            ->where('evenement', 'avancement')
+            ->whereHas('etape', fn ($q) => $q->where('code', 'validation_reponse_dg'))
+            ->latest('id')
+            ->first();
+
+        if ($historique?->user_id) {
+            return User::query()->find($historique->user_id);
+        }
+
+        return $this->resoudreActeurDirecteur($courrier);
+    }
+
+    /**
+     * Le DG rejette le courrier de réponse : retour à « traitement_particuliere ».
      */
     public function rejeterReponse(Courrier $courrier, User $acteur, string $motif): Courrier
     {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->code !== 'validation_reponse_dg') {
-            throw new InvalidArgumentException('Aucune validation de réponse en cours sur ce courrier.');
+            throw new InvalidArgumentException('Aucune signature de réponse en cours sur ce courrier.');
         }
 
         if (! $this->peutAgir($courrier, $acteur)) {
@@ -534,6 +588,31 @@ class CircuitCourrierMoteurService
     }
 
     /**
+     * Après expédition du départ réponse : clôture l’étape finale du circuit arrivée.
+     */
+    public function completerApresExpeditionReponse(Courrier $arrivee, User $acteur, ?string $commentaire = null): Courrier
+    {
+        $etape = $arrivee->circuitEtapeActuelle;
+        if (! $etape || $etape->code !== 'expedition_reponse') {
+            return $arrivee->fresh(['circuit', 'circuitEtapeActuelle']);
+        }
+
+        if (! $this->peutAgir($arrivee, $acteur) && ! $acteur->aAccesTotal() && ! $acteur->hasRole('admin')) {
+            return $arrivee->fresh(['circuit', 'circuitEtapeActuelle']);
+        }
+
+        try {
+            return $this->avancer(
+                $arrivee->fresh(['circuitEtapeActuelle']),
+                $acteur,
+                $commentaire ?: 'Réponse expédiée — circuit terminé.'
+            );
+        } catch (InvalidArgumentException) {
+            return $arrivee->fresh(['circuit', 'circuitEtapeActuelle']);
+        }
+    }
+
+    /**
      * Clôture le circuit arrivée après qu’un DG a créé et signé lui-même une réponse
      * (bypass du reste du circuit métier — facture ou général).
      */
@@ -557,7 +636,10 @@ class CircuitCourrierMoteurService
             $courrier->circuit_etape_depuis = null;
             $courrier->save();
 
-            return $courrier->fresh(['circuit', 'circuitEtapeActuelle']);
+            $fresh = $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'sensCourrier', 'statutCourrier']);
+            $this->notifications->notifierExpediteurExterneValide($fresh);
+
+            return $fresh;
         });
     }
 
@@ -647,19 +729,82 @@ class CircuitCourrierMoteurService
     }
 
     /**
-     * Enchaîne automatiquement les étapes de simple notification (aucune décision humaine
-     * requise) jusqu’à la prochaine étape qui exige une véritable action d’un acteur.
+     * Rattrapage : si le courrier est bloqué sur une étape désormais automatique
+     * (ex. « Traitement dossiers → AC »), l’avance et notifie l’acteur suivant.
+     */
+    public function assurerEtapesAutomatiques(Courrier $courrier, User $acteur): Courrier
+    {
+        if (! $courrier->circuit_etape_actuelle_id) {
+            return $courrier;
+        }
+
+        $courrier->loadMissing(['circuitEtapeActuelle', 'agentConfie']);
+        $avantId = $courrier->circuit_etape_actuelle_id;
+
+        if (! $courrier->circuitEtapeActuelle || ! $this->etapeEstAutomatique($courrier, $courrier->circuitEtapeActuelle)) {
+            return $courrier;
+        }
+
+        $courrier = $this->poursuivreEtapesAutomatiques($courrier, $acteur);
+
+        if ((int) $courrier->circuit_etape_actuelle_id !== (int) $avantId) {
+            $this->notifierEtapeCourante($courrier, $acteur);
+        }
+
+        return $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'agentConfie']);
+    }
+
+    /**
+     * Enchaîne automatiquement les étapes qui n’exigent aucune décision humaine
+     * jusqu’à la prochaine étape métier (instruction, traitement dédié, signature…).
      */
     protected function poursuivreEtapesAutomatiques(Courrier $courrier, User $acteur): Courrier
     {
         $etape = $courrier->circuitEtapeActuelle;
 
-        while ($etape && $etape->action === CircuitCourrierEtape::ACTION_NOTIFIER) {
-            $courrier = $this->avancerUneEtape($courrier->fresh(['circuitEtapeActuelle']), $acteur, 'Notification automatique : '.$etape->nom);
+        while ($etape && $this->etapeEstAutomatique($courrier, $etape)) {
+            $courrier = $this->avancerUneEtape(
+                $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
+                $acteur,
+                'Validation automatique : '.$etape->nom
+            );
             $etape = $courrier->circuitEtapeActuelle;
         }
 
         return $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'circuitHistoriques.etape', 'circuitHistoriques.user']);
+    }
+
+    /**
+     * Étapes sans action métier dédiée (pas de « Valider l’étape ») :
+     * - notification pure ;
+     * - relais facture : dossiers → AC, AC → caissiers, retour caisse.
+     * Exception : agent confié hors rôle AC sur « Traitement dossiers » (override).
+     */
+    protected function etapeEstAutomatique(Courrier $courrier, CircuitCourrierEtape $etape): bool
+    {
+        if ($etape->action === CircuitCourrierEtape::ACTION_NOTIFIER) {
+            return true;
+        }
+
+        if (in_array($etape->code, [
+            'ac_vers_caissiers',
+            'retour_caisse_depenses',
+        ], true)) {
+            return true;
+        }
+
+        if ($etape->code === 'traitement_dossiers_vers_ac') {
+            $courrier->loadMissing('agentConfie');
+
+            // Agent confié qui ne correspond pas au rôle AC : il agit sur cette étape.
+            if ($courrier->agent_confie_id) {
+                return false;
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     public function notifierEtapeCourante(Courrier $courrier, User $acteur): void
@@ -729,7 +874,7 @@ class CircuitCourrierMoteurService
             $roles = array_merge($roles, ['secretaire_direction', 'particulier_dg']);
         }
 
-        $type = $etape->code === 'creation_depart_particuliere'
+        $type = $etape->code === 'expedition_reponse'
             ? CourrierNotificationService::REPONSE_VALIDEE_A_CREER
             : CourrierNotificationService::ETAPE_CIRCUIT;
 

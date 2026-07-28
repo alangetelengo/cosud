@@ -584,7 +584,7 @@ class CourrierModuleTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_depart_expedie_masque_transmission_apres_accuse_reception(): void
+    public function test_depart_expedie_refuse_transmission_meme_sans_accuse(): void
     {
         $secDir = Structure::where('code', 'SEC-DIR')->firstOrFail();
         $secDaf = Structure::where('code', 'SEC-DAF')->firstOrFail();
@@ -595,7 +595,7 @@ class CourrierModuleTest extends TestCase
             'statut_courrier_id' => StatutCourrier::where('code', 'expedie')->value('id'),
             'numero_registre' => 80,
             'numero_registre_annee' => (int) now()->format('Y'),
-            'objet' => 'Départ avec AR déjà saisi',
+            'objet' => 'Départ expédié sans trace',
             'origine' => 'interne',
             'createur_id' => $secretaire->id,
             'structure_id' => $secDir->id,
@@ -606,26 +606,13 @@ class CourrierModuleTest extends TestCase
         $this->actingAs($secretaire)
             ->get(route('courriers.show', $depart, absolute: false))
             ->assertOk()
-            ->assertSee('>Transmission<', false);
-
-        $this->actingAs($secretaire)
-            ->post(route('courriers.transmettre', $depart, absolute: false), [
-                'vers_structure_id' => $secDaf->id,
-                'commentaire' => 'Dossier transmis et accusé avec succès',
-                'accuse_reception' => '1',
-            ])
-            ->assertRedirect();
-
-        $this->actingAs($secretaire)
-            ->get(route('courriers.show', $depart, absolute: false))
-            ->assertOk()
             ->assertDontSee('>Transmission<', false)
-            ->assertSee('Accusé de réception déjà enregistré', false);
+            ->assertSee('Courrier expédié — aucune action supplémentaire', false);
 
         $this->actingAs($secretaire)
             ->post(route('courriers.transmettre', $depart, absolute: false), [
                 'vers_structure_id' => $secDaf->id,
-                'commentaire' => 'Deuxième tentative',
+                'commentaire' => 'Tentative de trace',
                 'accuse_reception' => '1',
             ])
             ->assertForbidden();
@@ -769,7 +756,7 @@ class CourrierModuleTest extends TestCase
         $this->assertSame('annule', $depart->statutCourrier->code);
     }
 
-    public function test_depart_expedie_affiche_archiver_et_transmission(): void
+    public function test_depart_expedie_n_affiche_plus_transmission_ni_archiver(): void
     {
         $secretaire = $this->creerSecretaire();
         $secDdsait = Structure::where('code', 'SEC-DDSAIT')->firstOrFail();
@@ -789,9 +776,23 @@ class CourrierModuleTest extends TestCase
         $this->actingAs($secretaire)
             ->get(route('courriers.show', $depart, absolute: false))
             ->assertOk()
-            ->assertSee('>Transmission<', false)
-            ->assertSee('>Archiver<', false)
+            ->assertSee('Courrier expédié — aucune action supplémentaire', false)
+            ->assertDontSee('>Transmission<', false)
+            ->assertDontSee('>Archiver<', false)
             ->assertDontSee('Transmettre au directeur', false);
+
+        $this->actingAs($secretaire)
+            ->post(route('courriers.transmettre', $depart, absolute: false), [
+                'vers_structure_id' => $secDdsait->id,
+                'commentaire' => 'Tentative',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($secretaire)
+            ->post(route('courriers.archiver', $depart, absolute: false), [
+                'numero_archives' => 'DG/DEP/2026/999',
+            ])
+            ->assertForbidden();
     }
 
     public function test_historique_fil_affiche_le_dernier_mouvement_en_premier(): void
