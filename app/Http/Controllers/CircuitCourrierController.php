@@ -250,6 +250,7 @@ class CircuitCourrierController extends Controller
                 $courrier->fresh(),
                 $request->user(),
                 $request->validated('message'),
+                $request->validated('observation'),
             );
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());
@@ -295,6 +296,8 @@ class CircuitCourrierController extends Controller
                     ->firstOrFail();
                 $nums = $this->numeroService->prochainNumero((int) $sensDepart->id);
 
+                $objetDepart = $courrier->objetReponseDepartParDefaut();
+
                 $reponse = Courrier::create([
                     'sens_courrier_id' => $sensDepart->id,
                     'type_courrier_id' => TypeCourrier::where('code', 'reponse')->value('id'),
@@ -306,7 +309,7 @@ class CircuitCourrierController extends Controller
                     'origine' => $courrier->estOrigineInterne() ? Courrier::ORIGINE_INTERNE : Courrier::ORIGINE_EXTERNE,
                     'courrier_parent_id' => $courrier->id,
                     'date_courrier' => now()->toDateString(),
-                    'objet' => $request->input('objet') ?: ('Réponse — '.$courrier->objet),
+                    'objet' => $objetDepart,
                     'createur_id' => $request->user()->id,
                     'directeur_en_attente_id' => $directeur->id,
                     'structure_id' => $request->user()->structure_id,
@@ -317,7 +320,7 @@ class CircuitCourrierController extends Controller
 
                 $this->moteur->soumettreDepartPourSignature($courrier, $request->user(), [
                     'document_id' => $document->id,
-                    'objet' => $request->input('objet'),
+                    'objet' => $objetDepart,
                     'numero_reponse' => $reponse->numeroRegistreComplet(),
                     'reponse_id' => $reponse->id,
                 ]);

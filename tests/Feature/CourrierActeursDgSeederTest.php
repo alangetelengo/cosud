@@ -91,6 +91,26 @@ class CourrierActeursDgSeederTest extends TestCase
         $this->assertTrue($particuliere->can('dossiers.view'));
     }
 
+    public function test_seed_affecte_directeur_ddsait(): void
+    {
+        $this->seed([
+            RoleAndPermissionSeeder::class,
+            StructureSeeder::class,
+            ACSIFonctionsSeeder::class,
+            CourrierReferentielSeeder::class,
+            CircuitCourrierSeeder::class,
+            CourrierActeursDgSeeder::class,
+        ]);
+
+        $ddsait = Structure::where('code', 'DDSAIT')->firstOrFail();
+
+        $directeur = User::where('email', '003152b@acsi.cg')->firstOrFail();
+        $this->assertSame('BRICE GANGOUE', $directeur->name);
+        $this->assertTrue($directeur->hasRole('directeur'));
+        $this->assertSame($ddsait->id, (int) $directeur->structure_id);
+        $this->assertSame($directeur->id, $ddsait->titulaireValidationActuel()?->id);
+    }
+
     public function test_circuit_seeder_ne_retire_pas_documents_et_dossiers(): void
     {
         $this->seed([

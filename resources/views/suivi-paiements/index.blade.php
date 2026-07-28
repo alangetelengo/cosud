@@ -58,23 +58,23 @@
         </div>
 
         <div class="overflow-x-auto">
-            <table class="min-w-full text-xs">
+            <table class="w-full table-fixed text-xs">
                 <thead class="bg-slate-100 dark:bg-slate-900/60 text-slate-700 dark:text-slate-200">
                     <tr>
-                        <th class="px-3 py-2 text-left font-bold whitespace-nowrap">N°</th>
-                        <th class="px-3 py-2 text-left font-bold whitespace-nowrap">Date</th>
-                        <th class="px-3 py-2 text-left font-bold min-w-[220px]">Intitulé</th>
-                        <th class="px-3 py-2 text-right font-bold whitespace-nowrap">Montant</th>
+                        <th class="w-[4%] px-3 py-2 text-left font-bold whitespace-nowrap">N°</th>
+                        <th class="w-[6%] px-3 py-2 text-left font-bold whitespace-nowrap">Date</th>
+                        <th class="w-[18%] px-3 py-2 text-left font-bold">Intitulé</th>
+                        <th class="w-[8%] px-3 py-2 text-right font-bold whitespace-nowrap">Montant</th>
                         @if($type === \App\Models\SuiviPaiement::TYPE_FSP_MAD)
-                            <th class="px-3 py-2 text-left font-bold whitespace-nowrap">Demandeur</th>
-                            <th class="px-3 py-2 text-left font-bold whitespace-nowrap">Responsable chargé du dossier</th>
+                            <th class="w-[10%] px-3 py-2 text-left font-bold">Demandeur</th>
+                            <th class="w-[10%] px-3 py-2 text-left font-bold">Responsable chargé du dossier</th>
                         @else
-                            <th class="px-3 py-2 text-left font-bold whitespace-nowrap">Fournisseur</th>
-                            <th class="px-3 py-2 text-left font-bold whitespace-nowrap">Service demandeur</th>
+                            <th class="w-[10%] px-3 py-2 text-left font-bold">Fournisseur</th>
+                            <th class="w-[10%] px-3 py-2 text-left font-bold">Service demandeur</th>
                         @endif
-                        <th class="px-3 py-2 text-left font-bold min-w-[140px]">Instruction du DG</th>
-                        <th class="px-3 py-2 text-left font-bold">Observation</th>
-                        <th class="px-3 py-2 text-left font-bold whitespace-nowrap">Courrier</th>
+                        <th class="w-[14%] px-3 py-2 text-left font-bold">Instruction du DG</th>
+                        <th class="w-[14%] px-3 py-2 text-left font-bold">Observation</th>
+                        <th class="w-[6%] px-3 py-2 text-left font-bold whitespace-nowrap">Courrier</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-700">

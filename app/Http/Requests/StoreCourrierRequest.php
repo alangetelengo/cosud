@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Courrier;
 use App\Models\Document;
+use App\Models\TypeCourrier;
 use App\Services\CourrierDoublonService;
 use App\Services\ParapheurDepartService;
 use Illuminate\Foundation\Http\FormRequest;
@@ -39,6 +40,13 @@ class StoreCourrierRequest extends FormRequest
             'structure_destinataire_id' => [
                 'nullable',
                 'exists:structures,id',
+            ],
+            'service_demandeur_structure_id' => [
+                Rule::requiredIf(fn () => $this->typeCourrierNecessiteServiceDemandeur()),
+                'nullable',
+                Rule::exists('structures', 'id')->where(function ($query) {
+                    $query->where('type', 'direction')->where('actif', true);
+                }),
             ],
             'objet' => ['required', 'string', 'max:500'],
             'fichier' => [
@@ -110,6 +118,19 @@ class StoreCourrierRequest extends FormRequest
         return [
             'fichier.required' => 'Le scan est obligatoire pour un courrier arrivée externe.',
             'nouveau_type_document_id.required' => 'Choisissez le type de pièce à déposer dans le parapheur.',
+            'service_demandeur_structure_id.required' => 'Le service demandeur (direction) est obligatoire pour une facture ou une MAD.',
+            'service_demandeur_structure_id.exists' => 'Choisissez une direction valide dans le référentiel.',
         ];
+    }
+
+    private function typeCourrierNecessiteServiceDemandeur(): bool
+    {
+        if ($this->input('sens') !== 'arrivee' || ! $this->filled('type_courrier_id')) {
+            return false;
+        }
+
+        $type = TypeCourrier::query()->find($this->input('type_courrier_id'));
+
+        return $type !== null && in_array($type->code, ['facture', 'mad'], true);
     }
 }

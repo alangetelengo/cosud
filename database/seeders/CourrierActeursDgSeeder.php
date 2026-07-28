@@ -21,7 +21,7 @@ class CourrierActeursDgSeeder extends Seeder
             ->get()
             ->keyBy('code');
 
-        foreach (['DG', 'SEC-DIR', 'SEC-DDSAIT', 'SEC-DAF', 'SEC-DAC', 'DAF', 'DAC'] as $code) {
+        foreach (['DG', 'SEC-DIR', 'SEC-DDSAIT', 'SEC-DAF', 'SEC-DAC', 'DAF', 'DDSAIT', 'DAC'] as $code) {
             if (! $structures->has($code)) {
                 $this->command?->warn("CourrierActeursDgSeeder : structure {$code} introuvable.");
 
@@ -106,6 +106,14 @@ class CourrierActeursDgSeeder extends Seeder
                 'fonction_id' => $fonctionDirecteurDirection,
             ],
             [
+                'email' => '003152b@acsi.cg',
+                'name' => 'BRICE GANGOUE',
+                'role' => 'directeur',
+                'structure' => $structures['DDSAIT'],
+                'pivot_role' => 'Directeur DDSAIT',
+                'fonction_id' => $fonctionDirecteurDirection,
+            ],
+            [
                 'email' => '003232b@acsi.cg',
                 'name' => 'RAÏSSA LEBANITOU',
                 'role' => 'agent_comptable',
@@ -152,6 +160,6 @@ class CourrierActeursDgSeeder extends Seeder
             $ancienSuivi->removeRole('responsable_suivi_depenses');
         }
 
-        $this->command?->info('Acteurs courriers affectés : DG, secrétariats (dont responsable dépenses), DAF, DAC.');
+        $this->command?->info('Acteurs courriers affectés : DG, secrétariats (dont responsable dépenses), DAF, DDSAIT, DAC.');
     }
 }

@@ -46,7 +46,8 @@ class CreerReponseCourrierRequest extends FormRequest
                     $courrier->estOrigineInterne() ? 'nullable' : 'required',
                     'exists:structures,id',
                 ],
-                'objet' => ['nullable', 'string', 'max:500'],
+                // Objet du départ = « Réponse — {objet arrivée} » (forcé côté serveur).
+                'objet' => ['prohibited'],
                 'document_ids' => ['nullable', 'array'],
                 'document_ids.*' => ['integer', 'exists:documents,id'],
             ];
@@ -58,7 +59,8 @@ class CreerReponseCourrierRequest extends FormRequest
         return [
             'signer_immediatement' => ['nullable', 'boolean'],
             'document_reponse' => [$signerImmediatement ? 'nullable' : 'nullable', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:10240'],
-            'objet' => ['nullable', 'string', 'max:500'],
+            // Objet du départ = « Réponse — {objet arrivée} » (forcé côté serveur).
+            'objet' => ['prohibited'],
             'reponse_confidentielle' => ['nullable', 'boolean'],
             'structure_destinataire_id' => [
                 $confidentielle || $courrier->estOrigineInterne() ? 'nullable' : 'required',

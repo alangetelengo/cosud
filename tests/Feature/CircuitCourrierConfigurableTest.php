@@ -159,10 +159,17 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->assertSame('traitement_particuliere', $courrier->circuitEtapeActuelle->code);
 
         // Chemin A : la particulière crée le départ et le transmet pour signature.
+        // Un objet libre posté ne doit pas être accepté (objet forcé côté serveur).
         $this->actingAs($particuliere)
             ->post(route('courriers.circuit.soumettre-reponse', $courrier, absolute: false), [
                 'document_reponse' => UploadedFile::fake()->create('reponse.pdf', 30, 'application/pdf'),
-                'objet' => 'Réponse favorable',
+                'objet' => 'projet de reponse en attente de validation',
+            ])
+            ->assertSessionHasErrors('objet');
+
+        $this->actingAs($particuliere)
+            ->post(route('courriers.circuit.soumettre-reponse', $courrier, absolute: false), [
+                'document_reponse' => UploadedFile::fake()->create('reponse.pdf', 30, 'application/pdf'),
             ])
             ->assertRedirect();
 
@@ -171,7 +178,7 @@ class CircuitCourrierConfigurableTest extends TestCase
         $reponse = Courrier::where('courrier_parent_id', $courrier->id)->firstOrFail();
         $this->assertSame('transmis_directeur', $reponse->statutCourrier->code);
         $this->assertSame($dg->id, $reponse->directeur_en_attente_id);
-        $this->assertSame('Réponse favorable', $reponse->objet);
+        $this->assertSame('Réponse — Dossier test circuit', $reponse->objet);
 
         // Le DG signe — la particulière peut ensuite expédier.
         $this->actingAs($dg)
@@ -213,7 +220,6 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->actingAs($particuliere)
             ->post(route('courriers.circuit.soumettre-reponse', $courrier, absolute: false), [
                 'document_reponse' => UploadedFile::fake()->create('note.pdf', 20, 'application/pdf'),
-                'objet' => 'Note de stage',
             ])
             ->assertRedirect();
 
@@ -308,7 +314,6 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->actingAs($particuliere)
             ->post(route('courriers.circuit.soumettre-reponse', $courrier, absolute: false), [
                 'document_reponse' => UploadedFile::fake()->create('reponse.pdf', 30, 'application/pdf'),
-                'objet' => 'Réponse favorable',
             ])
             ->assertRedirect();
 
@@ -392,7 +397,6 @@ class CircuitCourrierConfigurableTest extends TestCase
             ->post(route('courriers.creer-reponse', $courrier, absolute: false), [
                 'signer_immediatement' => '1',
                 'document_reponse' => UploadedFile::fake()->create('reponse-facture.pdf', 20, 'application/pdf'),
-                'objet' => 'Réponse DG sur facture',
                 'structure_destinataire_id' => $secDdsait->id,
             ])
             ->assertRedirect();
@@ -426,7 +430,6 @@ class CircuitCourrierConfigurableTest extends TestCase
             ->post(route('courriers.creer-reponse', $courrier, absolute: false), [
                 'signer_immediatement' => '1',
                 'document_reponse' => UploadedFile::fake()->create('reponse-dg.pdf', 20, 'application/pdf'),
-                'objet' => 'Réponse directe du DG',
                 'structure_destinataire_id' => $secDdsait->id,
             ])
             ->assertRedirect();
@@ -436,7 +439,7 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->assertSame('signe', $reponse->statutCourrier->code);
         $this->assertSame($dg->id, $reponse->signataire_id);
         $this->assertSame($secDdsait->id, $reponse->structure_destinataire_id);
-        $this->assertSame('Réponse directe du DG', $reponse->objet);
+        $this->assertSame('Réponse — Dossier test circuit', $reponse->objet);
     }
 
     public function test_dg_peut_repondre_de_maniere_confidentielle_a_un_agent_precis(): void
@@ -455,7 +458,6 @@ class CircuitCourrierConfigurableTest extends TestCase
             ->post(route('courriers.creer-reponse', $courrier, absolute: false), [
                 'signer_immediatement' => '1',
                 'document_reponse' => UploadedFile::fake()->create('reponse-confidentielle.pdf', 20, 'application/pdf'),
-                'objet' => 'Réponse confidentielle du DG',
                 'reponse_confidentielle' => '1',
                 'destinataire_agent_id' => $agent->id,
             ])
@@ -465,6 +467,7 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->assertSame('signe', $reponse->statutCourrier->code);
         $this->assertSame($agent->id, $reponse->destinataire_agent_id);
         $this->assertNull($reponse->structure_destinataire_id);
+        $this->assertSame('Réponse — Dossier test circuit', $reponse->objet);
 
         // L’agent destinataire confidentiel doit pouvoir consulter son courrier départ.
         $this->actingAs($agent)
@@ -793,6 +796,9 @@ class CircuitCourrierConfigurableTest extends TestCase
             'objet' => 'Dossier test circuit',
             'createur_id' => $user->id,
             'structure_id' => $user->structure_id,
+            'service_demandeur_structure_id' => in_array($typeCode, ['facture', 'mad'], true)
+                ? Structure::where('code', 'DAF')->value('id')
+                : null,
         ]);
     }
 }

@@ -108,7 +108,6 @@ class CourrierExpediteurContactClotureTest extends TestCase
         $this->actingAs($particuliere)
             ->post(route('courriers.circuit.soumettre-reponse', $courrier, absolute: false), [
                 'document_reponse' => UploadedFile::fake()->create('note.pdf', 20, 'application/pdf'),
-                'objet' => 'prière de trouver la note soumise à validation',
             ])
             ->assertRedirect();
 

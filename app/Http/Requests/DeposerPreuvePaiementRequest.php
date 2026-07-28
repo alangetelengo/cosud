@@ -38,6 +38,7 @@ class DeposerPreuvePaiementRequest extends FormRequest
         return [
             'preuve_paiement' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'message' => ['nullable', 'string', 'max:2000'],
+            'observation' => ['nullable', 'string', 'max:2000'],
         ];
     }
 

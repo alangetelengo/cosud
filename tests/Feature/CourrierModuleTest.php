@@ -857,11 +857,10 @@ class CourrierModuleTest extends TestCase
         $this->actingAs($secretaire)
             ->post(route('courriers.creer-reponse', $arrivee, absolute: false), [
                 'structure_destinataire_id' => $secDdsait->id,
-                'objet' => 'Réponse au ministère',
             ])
             ->assertRedirect(route('courriers.show', $arrivee, absolute: false));
 
-        $reponse = Courrier::where('objet', 'Réponse au ministère')->firstOrFail();
+        $reponse = Courrier::where('objet', 'Réponse — Courrier ministère')->firstOrFail();
         $this->assertSame($arrivee->id, $reponse->courrier_parent_id);
 
         $fil = app(CourrierFilService::class);
@@ -872,7 +871,7 @@ class CourrierModuleTest extends TestCase
             ->get(route('courriers.show', $arrivee, absolute: false))
             ->assertOk()
             ->assertSee('Fil (', false)
-            ->assertSee('Réponse au ministère', false)
+            ->assertSee('Réponse — Courrier ministère', false)
             ->assertSee('Document entrant', false)
             ->assertSee('Document sortant', false);
     }
@@ -907,12 +906,10 @@ class CourrierModuleTest extends TestCase
         $arrivee = Courrier::findOrFail($depart->courrier_arrivee_lie_id);
 
         $this->actingAs($secretaireDest)
-            ->post(route('courriers.creer-reponse', $arrivee, absolute: false), [
-                'objet' => 'Réponse à la direction',
-            ])
+            ->post(route('courriers.creer-reponse', $arrivee, absolute: false), [])
             ->assertRedirect(route('courriers.show', $arrivee, absolute: false));
 
-        $reponse = Courrier::where('objet', 'Réponse à la direction')->firstOrFail();
+        $reponse = Courrier::where('objet', 'Réponse — '.$arrivee->objet)->firstOrFail();
         $this->assertSame($arrivee->id, $reponse->courrier_parent_id);
         $this->assertSame('interne', $reponse->origine);
         $this->assertSame($secDir->id, $reponse->structure_destinataire_id);

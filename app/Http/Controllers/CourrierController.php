@@ -109,6 +109,11 @@ class CourrierController extends Controller
         $types = TypeCourrier::where('actif', true)->with('circuit')->orderBy('libelle')->get();
         $priorites = PrioriteCourrier::where('actif', true)->orderBy('ordre')->get();
         $secretariats = Structure::secretariatsDirections()->get();
+        $directions = Structure::query()
+            ->where('actif', true)
+            ->where('type', 'direction')
+            ->orderBy('nom')
+            ->get();
         $documentsParapheur = $sensCode === 'depart'
             ? $this->parapheurDepartService->queryEligiblePour(auth()->user())->limit(100)->get()
             : collect();
@@ -117,7 +122,7 @@ class CourrierController extends Controller
             : collect();
 
         return view('courriers.create', compact(
-            'sens', 'sensCode', 'types', 'priorites', 'secretariats',
+            'sens', 'sensCode', 'types', 'priorites', 'secretariats', 'directions',
             'documentsParapheur', 'typesDocumentParapheur',
         ));
     }
@@ -153,6 +158,7 @@ class CourrierController extends Controller
             'est_expediteur_externe' => $request->boolean('est_expediteur_externe', $sens->code === SensCourrier::ARRIVEE),
             'structure_expediteur_id' => $request->structure_expediteur_id,
             'structure_destinataire_id' => $request->structure_destinataire_id,
+            'service_demandeur_structure_id' => $request->service_demandeur_structure_id,
             'objet' => $request->objet,
             'createur_id' => auth()->id(),
             'structure_id' => auth()->user()->structure_id,
@@ -192,7 +198,7 @@ class CourrierController extends Controller
             'orientationNotifies',
             'transmissions.deUser', 'transmissions.versUser', 'transmissions.versStructure',
             'ventilationDestinataires.user', 'ventilationDestinataires.document',
-            'dossier', 'structure', 'structureDestinataire', 'structureExpediteur',
+            'dossier', 'structure', 'structureDestinataire', 'structureExpediteur', 'serviceDemandeurStructure',
             'courrierParent', 'courrierDepartSource', 'courrierArriveeLie', 'reponsesDepart.documents', 'reponsesDepart.statutCourrier',
             'circuit', 'circuitEtapeActuelle', 'circuitHistoriques.etape', 'circuitHistoriques.user',
             'documentReponse', 'reponseStructureDestinataire', 'destinataireAgent', 'agentConfie', 'suiviPaiement',
@@ -667,7 +673,7 @@ class CourrierController extends Controller
             'origine' => $courrier->estOrigineInterne() ? Courrier::ORIGINE_INTERNE : Courrier::ORIGINE_EXTERNE,
             'courrier_parent_id' => $courrier->id,
             'date_courrier' => now()->toDateString(),
-            'objet' => $request->input('objet') ?: ('Réponse — '.$courrier->objet),
+            'objet' => $courrier->objetReponseDepartParDefaut(),
             'structure_destinataire_id' => $structureDestinataireId,
             'destinataire_agent_id' => $agentDestinataireId,
             'destinataire_libelle' => $destinataireLibelle,
@@ -732,7 +738,7 @@ class CourrierController extends Controller
             'origine' => $courrier->estOrigineInterne() ? Courrier::ORIGINE_INTERNE : Courrier::ORIGINE_EXTERNE,
             'courrier_parent_id' => $courrier->id,
             'date_courrier' => now()->toDateString(),
-            'objet' => $request->objet ?? ('Réponse — '.$courrier->objet),
+            'objet' => $courrier->objetReponseDepartParDefaut(),
             'structure_destinataire_id' => $destinataire->id,
             'destinataire_libelle' => $destinataire->nom,
             'createur_id' => auth()->id(),

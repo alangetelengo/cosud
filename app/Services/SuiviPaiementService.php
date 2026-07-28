@@ -36,6 +36,7 @@ class SuiviPaiementService
             'typeCourrier',
             'structure',
             'structureDestinataire',
+            'serviceDemandeurStructure',
             'structureExpediteur',
             'agentConfie',
             'createur',
@@ -57,8 +58,9 @@ class SuiviPaiementService
                 ->lockForUpdate()
                 ->max('numero_ligne') + 1;
 
-            $serviceDemandeur = $courrier->structureDestinataire?->libelle
-                ?? $courrier->structure?->libelle;
+            $serviceDemandeur = $courrier->serviceDemandeurStructure?->nom
+                ?? $courrier->structureDestinataire?->nom
+                ?? $courrier->structure?->nom;
 
             $data = [
                 'courrier_id' => $courrier->id,
@@ -84,6 +86,21 @@ class SuiviPaiementService
 
             return SuiviPaiement::query()->create($data);
         });
+    }
+
+    /**
+     * Enregistre l’observation FSP lors du dépôt de la preuve de paiement.
+     */
+    public function enregistrerObservation(Courrier $courrier, ?string $observation): void
+    {
+        $texte = trim((string) $observation);
+        if ($texte === '') {
+            return;
+        }
+
+        SuiviPaiement::query()
+            ->where('courrier_id', $courrier->id)
+            ->update(['observation' => $texte]);
     }
 
     /**

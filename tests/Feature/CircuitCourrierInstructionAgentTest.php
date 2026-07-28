@@ -239,6 +239,35 @@ class CircuitCourrierInstructionAgentTest extends TestCase
         Notification::assertSentTo($particuliereAc, CourrierWorkflowNotification::class);
     }
 
+    public function test_ac_peut_envoyer_cheque_avec_montant_avec_espaces(): void
+    {
+        Notification::fake();
+
+        $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+
+        $moteur = app(CircuitCourrierMoteurService::class);
+        $courrier = $moteur->instruire(
+            $this->demarrerFacture($dg),
+            $dg,
+            'Bon pour accord.',
+            $ac->id,
+        );
+
+        $this->actingAs($ac)
+            ->post(route('courriers.circuit.envoyer-cheque', $courrier, absolute: false), [
+                'message' => 'Chèque établi, prêt pour signature.',
+                'montant' => '1 949 700',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('suivi_paiements', [
+            'courrier_id' => $courrier->id,
+            'montant' => 1949700,
+        ]);
+    }
+
     public function test_ac_etablit_cheque_notifie_responsable_suivi_depenses_et_cree_fsp(): void
     {
         Notification::fake();
@@ -346,6 +375,39 @@ class CircuitCourrierInstructionAgentTest extends TestCase
         );
     }
 
+    public function test_progression_affiche_uniquement_les_etapes_manuelles(): void
+    {
+        $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+
+        $moteur = app(CircuitCourrierMoteurService::class);
+        $courrier = $moteur->instruire($this->demarrerFacture($dg), $dg, 'Établir le chèque.', $ac->id);
+        $courrier = $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque prêt.', 1500000);
+        $courrier = $moteur->signerChequeDg($courrier, $dg, 'Signé.', false);
+
+        $this->assertSame('preuve_paiement', $courrier->circuitEtapeActuelle->code);
+
+        $progression = $moteur->etapesPourAffichage($courrier->fresh(['circuit', 'circuitEtapeActuelle', 'agentConfie']));
+        $codes = collect($progression)->map(fn (array $item) => $item['etape']->code)->all();
+
+        $this->assertSame([
+            'instructions_dg',
+            'ac_etablit_cheque',
+            'dg_signe_cheque',
+            'preuve_paiement',
+        ], $codes);
+        $this->assertCount(4, $progression);
+        $this->assertSame(3, collect($progression)->where('statut', 'terminee')->count());
+        $this->assertSame('en_cours', collect($progression)->firstWhere(fn (array $i) => $i['etape']->code === 'preuve_paiement')['statut']);
+
+        $this->assertNotContains('enregistrement', $codes);
+        $this->assertNotContains('traitement_dossiers_vers_ac', $codes);
+        $this->assertNotContains('ac_vers_caissiers', $codes);
+        $this->assertNotContains('retour_caisse_depenses', $codes);
+        $this->assertNotContains('cloture_depenses', $codes);
+    }
+
     public function test_preuve_paiement_cloture_le_dossier(): void
     {
         $dg = $this->creerDg();
@@ -364,6 +426,7 @@ class CircuitCourrierInstructionAgentTest extends TestCase
             ->post(route('courriers.circuit.deposer-preuve-paiement', $courrier, absolute: false), [
                 'preuve_paiement' => UploadedFile::fake()->create('preuve.pdf', 20, 'application/pdf'),
                 'message' => 'Payé le 25/07.',
+                'observation' => 'Virement ref. VRT-2026-0425',
             ])
             ->assertRedirect();
 
@@ -373,6 +436,10 @@ class CircuitCourrierInstructionAgentTest extends TestCase
         $this->assertDatabaseHas('circuit_courrier_historiques', [
             'courrier_id' => $courrier->id,
             'evenement' => 'cloture_circuit',
+        ]);
+        $this->assertDatabaseHas('suivi_paiements', [
+            'courrier_id' => $courrier->id,
+            'observation' => 'Virement ref. VRT-2026-0425',
         ]);
     }
 
@@ -461,6 +528,9 @@ class CircuitCourrierInstructionAgentTest extends TestCase
             'objet' => 'Facture test agent confié',
             'createur_id' => $user->id,
             'structure_id' => Structure::where('code', 'SEC-DIR')->value('id'),
+            'service_demandeur_structure_id' => in_array($typeCode, ['facture', 'mad'], true)
+                ? Structure::where('code', 'DAF')->value('id')
+                : null,
         ]);
     }
 }

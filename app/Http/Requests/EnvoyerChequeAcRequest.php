@@ -43,6 +43,15 @@ class EnvoyerChequeAcRequest extends FormRequest
         ];
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('montant')) {
+            $this->merge([
+                'montant' => preg_replace('/\s+/', '', (string) $this->input('montant')),
+            ]);
+        }
+    }
+
     /**
      * @return array<string, string>
      */

@@ -29,7 +29,7 @@
             @csrf
             <input type="hidden" name="sens" value="{{ $sensCode }}">
 
-            @include('courriers.partials.form-create-identification', compact('field', 'label', 'types', 'priorites', 'sensCode'))
+            @include('courriers.partials.form-create-identification', compact('field', 'label', 'types', 'priorites', 'sensCode', 'directions'))
 
             @if($sensCode === 'arrivee')
             <section class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
@@ -189,12 +189,27 @@
 document.addEventListener('DOMContentLoaded', function () {
     var typeSelect = document.getElementById('type_courrier_id');
     var circuitInfo = document.getElementById('circuit-du-type');
+    var blocService = document.getElementById('bloc-service-demandeur');
+    var selectService = document.getElementById('service_demandeur_structure_id');
     if (!typeSelect || !circuitInfo) return;
+
     function afficherCircuitDuType() {
         var opt = typeSelect.options[typeSelect.selectedIndex];
         var libelle = opt ? opt.getAttribute('data-circuit-libelle') : '';
         circuitInfo.textContent = libelle ? 'Circuit de traitement : ' + libelle : '';
+
+        var necessite = opt && opt.getAttribute('data-service-demandeur') === '1';
+        if (blocService) {
+            blocService.classList.toggle('hidden', !necessite);
+            if (selectService) {
+                selectService.required = !!necessite;
+                if (!necessite) {
+                    selectService.value = '';
+                }
+            }
+        }
     }
+
     typeSelect.addEventListener('change', afficherCircuitDuType);
     afficherCircuitDuType();
 });

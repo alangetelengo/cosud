@@ -413,7 +413,7 @@ class CircuitCourrierMoteurService
     /**
      * Dépôt de la preuve de paiement puis clôture automatique du dossier facture.
      */
-    public function deposerPreuvePaiement(Courrier $courrier, User $acteur, ?string $message = null): Courrier
+    public function deposerPreuvePaiement(Courrier $courrier, User $acteur, ?string $message = null, ?string $observation = null): Courrier
     {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->code !== 'preuve_paiement') {
@@ -423,6 +423,8 @@ class CircuitCourrierMoteurService
         if (! $this->peutAgir($courrier, $acteur)) {
             throw new InvalidArgumentException('Vous n’êtes pas autorisé à déposer la preuve de paiement.');
         }
+
+        $this->suiviPaiements->enregistrerObservation($courrier, $observation);
 
         $commentaire = $message ?: 'Preuve de paiement enregistrée.';
 
@@ -780,7 +782,7 @@ class CircuitCourrierMoteurService
      * - relais facture : dossiers → AC, AC → caissiers, retour caisse.
      * Exception : agent confié hors rôle AC sur « Traitement dossiers » (override).
      */
-    protected function etapeEstAutomatique(Courrier $courrier, CircuitCourrierEtape $etape): bool
+    public function etapeEstAutomatique(Courrier $courrier, CircuitCourrierEtape $etape): bool
     {
         if ($etape->action === CircuitCourrierEtape::ACTION_NOTIFIER) {
             return true;
@@ -805,6 +807,29 @@ class CircuitCourrierMoteurService
         }
 
         return false;
+    }
+
+    /**
+     * Étapes à compter dans la barre de progression UI : uniquement celles
+     * qui exigent une action humaine (hors relais auto, enregistrement initial, clôture auto).
+     */
+    public function etapeCompteDansProgression(Courrier $courrier, CircuitCourrierEtape $etape): bool
+    {
+        if ($this->etapeEstAutomatique($courrier, $etape)) {
+            return false;
+        }
+
+        if ($etape->action === CircuitCourrierEtape::ACTION_ENREGISTRER
+            || $etape->code === 'enregistrement') {
+            return false;
+        }
+
+        // Clôture enchaînée automatiquement après le dépôt de la preuve de paiement.
+        if ($etape->code === 'cloture_depenses') {
+            return false;
+        }
+
+        return true;
     }
 
     public function notifierEtapeCourante(Courrier $courrier, User $acteur): void
@@ -885,31 +910,41 @@ class CircuitCourrierMoteurService
         $this->notifications->notifierRoles($roles, $courrier, $acteur, $type, $detail);
     }
 
+    /**
+     * Étapes pour la barre de progression : actions manuelles uniquement
+     * (les relais automatiques du système sont exclus du décompte).
+     *
+     * @return list<array{etape: CircuitCourrierEtape, statut: string}>
+     */
     public function etapesPourAffichage(Courrier $courrier): array
     {
         if (! $courrier->circuit_courrier_id) {
             return [];
         }
 
-        $courrier->loadMissing(['circuit.etapesActives', 'circuitEtapeActuelle']);
+        $courrier->loadMissing(['circuit.etapesActives', 'circuitEtapeActuelle', 'agentConfie']);
         $actuelleId = $courrier->circuit_etape_actuelle_id;
         $actuelleOrdre = $courrier->circuitEtapeActuelle?->ordre;
 
-        return $courrier->circuit->etapesActives->map(function (CircuitCourrierEtape $etape) use ($actuelleId, $actuelleOrdre) {
-            $statut = 'a_venir';
-            if ($actuelleId === null && $actuelleOrdre === null) {
-                $statut = 'terminee';
-            } elseif ((int) $etape->id === (int) $actuelleId) {
-                $statut = 'en_cours';
-            } elseif ($actuelleOrdre !== null && $etape->ordre < $actuelleOrdre) {
-                $statut = 'terminee';
-            }
+        return $courrier->circuit->etapesActives
+            ->filter(fn (CircuitCourrierEtape $etape) => $this->etapeCompteDansProgression($courrier, $etape))
+            ->values()
+            ->map(function (CircuitCourrierEtape $etape) use ($actuelleId, $actuelleOrdre) {
+                $statut = 'a_venir';
+                if ($actuelleId === null && $actuelleOrdre === null) {
+                    $statut = 'terminee';
+                } elseif ((int) $etape->id === (int) $actuelleId) {
+                    $statut = 'en_cours';
+                } elseif ($actuelleOrdre !== null && $etape->ordre < $actuelleOrdre) {
+                    $statut = 'terminee';
+                }
 
-            return [
-                'etape' => $etape,
-                'statut' => $statut,
-            ];
-        })->all();
+                return [
+                    'etape' => $etape,
+                    'statut' => $statut,
+                ];
+            })
+            ->all();
     }
 
     /**

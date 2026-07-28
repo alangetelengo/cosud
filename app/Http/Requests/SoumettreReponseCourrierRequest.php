@@ -35,7 +35,8 @@ class SoumettreReponseCourrierRequest extends FormRequest
     {
         return [
             'document_reponse' => ['required', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:10240'],
-            'objet' => ['nullable', 'string', 'max:500'],
+            // Objet du départ = « Réponse — {objet arrivée} » (forcé côté serveur).
+            'objet' => ['prohibited'],
             'structure_destinataire_id' => ['prohibited'],
             'reponse_confidentielle' => ['prohibited'],
             'destinataire_agent_id' => ['prohibited'],

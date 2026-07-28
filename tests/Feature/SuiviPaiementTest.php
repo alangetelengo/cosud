@@ -12,11 +12,13 @@ use App\Models\SuiviPaiement;
 use App\Models\TypeCourrier;
 use App\Models\User;
 use App\Services\CircuitCourrierMoteurService;
+use App\Services\SuiviPaiementService;
 use Database\Seeders\CircuitCourrierSeeder;
 use Database\Seeders\CourrierReferentielSeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Database\Seeders\StructureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class SuiviPaiementTest extends TestCase
@@ -69,8 +71,59 @@ class SuiviPaiementTest extends TestCase
         $content = $response->streamedContent();
         $this->assertStringContainsString('Fournisseur', $content);
         $this->assertStringContainsString('Service demandeur', $content);
+        $this->assertStringContainsString('DIRECTION ADMINISTRATIVE ET FINANCIERE', $content);
         $this->assertStringContainsString('1 949 700', $content);
         $this->assertStringContainsString('Total', $content);
+    }
+
+    public function test_enregistrement_facture_exige_service_demandeur_et_alimente_fsp(): void
+    {
+        $secretaire = User::factory()->create([
+            'structure_id' => Structure::where('code', 'SEC-DIR')->value('id'),
+        ]);
+        $secretaire->assignRole('secretaire_direction');
+
+        $type = TypeCourrier::where('code', 'facture')->firstOrFail();
+        $daf = Structure::where('code', 'DAF')->firstOrFail();
+
+        $this->actingAs($secretaire)
+            ->post(route('courriers.store', absolute: false), [
+                'sens' => 'arrivee',
+                'objet' => 'Facture avec service demandeur',
+                'expediteur_libelle' => 'ETS KOMBO',
+                'date_reception' => now()->toDateString(),
+                'type_courrier_id' => $type->id,
+                'fichier' => UploadedFile::fake()->create('f.pdf', 20, 'application/pdf'),
+            ])
+            ->assertSessionHasErrors('service_demandeur_structure_id');
+
+        $this->actingAs($secretaire)
+            ->post(route('courriers.store', absolute: false), [
+                'sens' => 'arrivee',
+                'objet' => 'Facture avec service demandeur',
+                'expediteur_libelle' => 'ETS KOMBO',
+                'date_reception' => now()->toDateString(),
+                'type_courrier_id' => $type->id,
+                'service_demandeur_structure_id' => $daf->id,
+                'fichier' => UploadedFile::fake()->create('f.pdf', 20, 'application/pdf'),
+            ])
+            ->assertRedirect();
+
+        $courrier = Courrier::where('objet', 'Facture avec service demandeur')->firstOrFail();
+        $this->assertSame($daf->id, (int) $courrier->service_demandeur_structure_id);
+
+        $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+        $moteur = app(CircuitCourrierMoteurService::class);
+        $courrier = $moteur->instruire($courrier->fresh(), $dg, 'Bon pour accord.', $ac->id);
+        $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque établi.', 500000);
+
+        $this->assertDatabaseHas('suivi_paiements', [
+            'courrier_id' => $courrier->id,
+            'service_demandeur_libelle' => $daf->nom,
+            'montant' => 500000,
+        ]);
     }
 
     public function test_onglet_fsp_mad_affiche_les_colonnes_specifiques(): void
@@ -108,9 +161,36 @@ class SuiviPaiementTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Une fiche de suivi existe déjà pour ce courrier.');
 
-        app(\App\Services\SuiviPaiementService::class)->creerDepuisEntreeCheque($courrier, $ac, 600000);
+        app(SuiviPaiementService::class)->creerDepuisEntreeCheque($courrier, $ac, 600000);
 
         $this->assertSame(1, SuiviPaiement::query()->where('courrier_id', $courrier->id)->count());
+    }
+
+    public function test_enregistrer_observation_alimente_fsp(): void
+    {
+        $ligne = $this->creerLigneFspFacture();
+        $courrier = Courrier::query()->findOrFail($ligne->courrier_id);
+
+        $this->assertNull($ligne->fresh()->observation);
+
+        app(SuiviPaiementService::class)->enregistrerObservation(
+            $courrier,
+            '  Chèque encaissé le 28/07/2026  '
+        );
+
+        $this->assertSame('Chèque encaissé le 28/07/2026', $ligne->fresh()->observation);
+    }
+
+    public function test_enregistrer_observation_ignore_vide(): void
+    {
+        $ligne = $this->creerLigneFspFacture();
+
+        app(SuiviPaiementService::class)->enregistrerObservation(
+            Courrier::query()->findOrFail($ligne->courrier_id),
+            '   '
+        );
+
+        $this->assertNull($ligne->fresh()->observation);
     }
 
     public function test_utilisateur_sans_permission_ne_peut_pas_acceder_au_suivi(): void
@@ -166,6 +246,9 @@ class SuiviPaiementTest extends TestCase
             'expediteur_libelle' => 'ETS KOMBO',
             'createur_id' => $user->id,
             'structure_id' => Structure::where('code', 'SEC-DIR')->value('id'),
+            'service_demandeur_structure_id' => in_array($typeCode, ['facture', 'mad'], true)
+                ? Structure::where('code', 'DAF')->value('id')
+                : null,
         ]);
     }
 }

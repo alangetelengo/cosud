@@ -62,7 +62,7 @@
 
     // Formulaire de soumission ouvert d’emblée pour l’actrice attendue.
     $ouvrirFormulaireSoumettreReponse = $peutSoumettreReponse
-        && ($estActeurCircuitActuel || $errors->hasAny(['document_reponse', 'objet']));
+        && ($estActeurCircuitActuel || $errors->has('document_reponse'));
     $formInitial = $ouvrirFormulaireSoumettreReponse
         ? 'soumettre-reponse'
         : ($errors->has('motif_rejet') ? 'rejeter-reponse' : null);
@@ -109,6 +109,12 @@
                             <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">N° fulgurant</dt>
                             <dd class="mt-0.5 text-slate-700 dark:text-slate-200">{{ $courrier->numero_fulgurant ?? '—' }}</dd>
                         </div>
+                        @if($courrier->serviceDemandeurStructure)
+                        <div>
+                            <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Service demandeur</dt>
+                            <dd class="mt-0.5 text-slate-700 dark:text-slate-200">{{ $courrier->serviceDemandeurStructure->nom }}</dd>
+                        </div>
+                        @endif
                         <div>
                             <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Date réception</dt>
                             <dd class="mt-0.5 text-slate-700 dark:text-slate-200">{{ $courrier->date_reception?->format('d/m/Y') ?? '—' }}</dd>
@@ -416,7 +422,11 @@
                                 <input type="file" name="document_reponse" required accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white file:font-semibold file:text-xs">
                                 @error('document_reponse')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                             </div>
-                            <input type="text" name="objet" value="{{ old('objet', 'Réponse — '.$courrier->objet) }}" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Objet du courrier départ">
+                            <div class="rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 px-2.5 py-2">
+                                <p class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Objet du courrier départ</p>
+                                <p class="text-xs text-slate-800 dark:text-slate-100 mt-0.5 leading-snug">{{ $courrier->objetReponseDepartParDefaut() }}</p>
+                                <p class="text-[10px] text-slate-500 mt-1 leading-snug">Dérivé automatiquement de l’arrivée — visible dans le registre départ.</p>
+                            </div>
                             <p class="text-[11px] text-slate-500 leading-snug">
                                 Le document devient le courrier de départ en attente de signature du DG. Le destinataire se choisit à l’expédition.
                                 @if($courrier->est_confidentiel)
@@ -484,9 +494,35 @@
                             @endif
                             <form method="post" action="{{ route('courriers.circuit.envoyer-cheque', $courrier) }}" enctype="multipart/form-data" class="space-y-2">
                                 @csrf
+                                @php
+                                    $montantChequeAffiche = old('montant') !== null && old('montant') !== ''
+                                        ? number_format((float) preg_replace('/\s+/', '', (string) old('montant')), 0, ',', ' ')
+                                        : '';
+                                @endphp
                                 <div>
                                     <label class="block text-[11px] font-semibold mb-1">Montant du chèque (FCFA) <span class="text-red-500">*</span></label>
-                                    <input type="number" name="montant" required min="1" step="1" value="{{ old('montant') }}" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : 1949700">
+                                    <div
+                                        x-data="{
+                                            montant: @js($montantChequeAffiche),
+                                            formatMontant(v) {
+                                                const chiffres = String(v ?? '').replace(/\D/g, '');
+                                                if (!chiffres) return '';
+                                                return chiffres.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+                                            }
+                                        }"
+                                    >
+                                        <input
+                                            type="text"
+                                            name="montant"
+                                            x-model="montant"
+                                            @input="montant = formatMontant($event.target.value)"
+                                            inputmode="numeric"
+                                            autocomplete="off"
+                                            required
+                                            class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900"
+                                            placeholder="Ex. : 1 949 700"
+                                        >
+                                    </div>
                                     @error('montant')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
                                 <div>
@@ -554,8 +590,13 @@
                                     @error('preuve_paiement')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
                                 <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Commentaire <span class="font-normal text-slate-400">(facultatif)</span></label>
-                                    <textarea name="message" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Référence, date de paiement…">{{ old('message') }}</textarea>
+                                    <label class="block text-[11px] font-semibold mb-1">Observation FSP <span class="font-normal text-slate-400">(facultatif)</span></label>
+                                    <textarea name="observation" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Référence, date de paiement, remarque comptable…">{{ old('observation') }}</textarea>
+                                    @error('observation')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Commentaire circuit <span class="font-normal text-slate-400">(facultatif)</span></label>
+                                    <textarea name="message" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Note interne sur le dossier…">{{ old('message') }}</textarea>
                                     @error('message')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
                                 <button type="button"
@@ -842,7 +883,10 @@
                             @foreach($secretariats as $s)<option value="{{ $s->id }}">{{ $s->nom }}</option>@endforeach
                         </select>
                         @endif
-                        <input type="text" name="objet" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Objet (optionnel)">
+                        <div class="rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 px-2.5 py-2">
+                            <p class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Objet du courrier départ</p>
+                            <p class="text-xs text-slate-800 dark:text-slate-100 mt-0.5 leading-snug">{{ $courrier->objetReponseDepartParDefaut() }}</p>
+                        </div>
                         <button type="button"
                                 onclick="flashAlert('Confirmer la création du courrier départ en réponse ?', this.closest('form'), {icon:'✉️', danger:false, confirmText:'Créer', title:'Courrier réponse'})"
                                 class="w-full px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold">
@@ -871,7 +915,10 @@
                             <input type="file" name="document_reponse" required accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-700 file:text-white file:font-semibold file:text-xs">
                             @error('document_reponse')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                         </div>
-                        <input type="text" name="objet" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Objet (optionnel)">
+                        <div class="rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 px-2.5 py-2">
+                            <p class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Objet du courrier départ</p>
+                            <p class="text-xs text-slate-800 dark:text-slate-100 mt-0.5 leading-snug">{{ $courrier->objetReponseDepartParDefaut() }}</p>
+                        </div>
                         <label class="flex items-center gap-2 text-xs"><input type="checkbox" name="reponse_confidentielle" value="1" x-model="confidentiel"> Réponse confidentielle (destinataire = un collaborateur)</label>
                         <template x-if="! confidentiel">
                             <div>

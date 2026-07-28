@@ -80,6 +80,7 @@
         </div>
         <p class="text-[10px] text-slate-400">
             {{ collect($etapesCircuit)->where('statut', 'terminee')->count() }}/{{ count($etapesCircuit) }} étapes
+            <span class="text-slate-300 dark:text-slate-500">· actions manuelles</span>
         </p>
 
         @if($peutAvancerCircuit && $etapeExigeInstructions)

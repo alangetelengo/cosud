@@ -40,6 +40,7 @@ class Courrier extends Model
         'est_expediteur_externe',
         'structure_expediteur_id',
         'structure_destinataire_id',
+        'service_demandeur_structure_id',
         'objet',
         'est_confidentiel',
         'orientation_mode',
@@ -159,6 +160,14 @@ class Courrier extends Model
     public function structureDestinataire(): BelongsTo
     {
         return $this->belongsTo(Structure::class, 'structure_destinataire_id');
+    }
+
+    /**
+     * Direction / service demandeur (factures et MAD) — référentiel structures type direction.
+     */
+    public function serviceDemandeurStructure(): BelongsTo
+    {
+        return $this->belongsTo(Structure::class, 'service_demandeur_structure_id');
     }
 
     public function dossier(): BelongsTo
@@ -286,6 +295,17 @@ class Courrier extends Model
     public function numeroRegistreComplet(): string
     {
         return sprintf('%d/%d', $this->numero_registre, $this->numero_registre_annee);
+    }
+
+    /**
+     * Objet du courrier départ créé en réponse à cette arrivée (registre).
+     * Toujours dérivé de l’objet d’arrivée — pas de saisie libre à la création.
+     */
+    public function objetReponseDepartParDefaut(): string
+    {
+        $objet = trim((string) $this->objet);
+
+        return $objet !== '' ? 'Réponse — '.$objet : 'Réponse';
     }
 
     /**
