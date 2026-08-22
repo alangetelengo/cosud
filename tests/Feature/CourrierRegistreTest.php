@@ -54,7 +54,9 @@ class CourrierRegistreTest extends TestCase
             ->assertSee('registre-cloture-face', false)
             ->assertSee('registre-feuille-face', false)
             ->assertSee('registre-livret-shell', false)
-            ->assertDontSee('>Filtrer<', false)
+            ->assertSee('Mois — tous', false)
+            ->assertSee('Trimestre — tous', false)
+            ->assertSee('Appliquer', false)
             ->assertDontSee('lignes / page', false);
     }
 
@@ -75,7 +77,8 @@ class CourrierRegistreTest extends TestCase
             ->assertSee('Page de garde', false)
             ->assertSee('arrêtons et clôturons', false)
             ->assertSee(Structure::where('code', 'SEC-DIR')->value('nom'), false)
-            ->assertDontSee('Filtrer', false);
+            ->assertSee('Mois — tous', false)
+            ->assertSee('Trimestre — tous', false);
     }
 
     public function test_page_impression_registre_arrivee(): void
@@ -100,6 +103,47 @@ class CourrierRegistreTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_filtre_mois_registre_arrivee(): void
+    {
+        $user = $this->creerSecretaire();
+        $enJanvier = $this->creerCourrierArrivee($user, now()->setMonth(1)->setDay(15));
+        $enJuin = $this->creerCourrierArrivee($user, now()->setMonth(6)->setDay(10), 2);
+
+        $this->actingAs($user)
+            ->get(route('courriers.registres.arrivee', ['mois' => 1], absolute: false))
+            ->assertOk()
+            ->assertSee('Entreprise NETPLUS SARL', false)
+            ->assertDontSee('Entreprise JUIN SARL', false);
+
+        $this->actingAs($user)
+            ->get(route('courriers.registres.arrivee', ['mois' => 6], absolute: false))
+            ->assertOk()
+            ->assertSee('Entreprise JUIN SARL', false)
+            ->assertDontSee('Entreprise NETPLUS SARL', false);
+
+        $this->assertSame(1, $enJanvier->numero_registre);
+        $this->assertSame(2, $enJuin->numero_registre);
+    }
+
+    public function test_filtre_trimestre_registre_arrivee(): void
+    {
+        $user = $this->creerSecretaire();
+        $this->creerCourrierArrivee($user, now()->setMonth(2)->setDay(5));
+        $this->creerCourrierArrivee($user, now()->setMonth(8)->setDay(20), 2);
+
+        $this->actingAs($user)
+            ->get(route('courriers.registres.arrivee', ['trimestre' => 1], absolute: false))
+            ->assertOk()
+            ->assertSee('Entreprise NETPLUS SARL', false)
+            ->assertDontSee('Entreprise JUIN SARL', false);
+
+        $this->actingAs($user)
+            ->get(route('courriers.registres.arrivee', ['trimestre' => 3], absolute: false))
+            ->assertOk()
+            ->assertSee('Entreprise JUIN SARL', false)
+            ->assertDontSee('Entreprise NETPLUS SARL', false);
+    }
+
     private function creerSecretaire(): User
     {
         $secDir = Structure::where('code', 'SEC-DIR')->firstOrFail();
@@ -114,23 +158,24 @@ class CourrierRegistreTest extends TestCase
         return $user;
     }
 
-    private function creerCourrierArrivee(User $user): Courrier
+    private function creerCourrierArrivee(User $user, $dateReception = null, int $numero = 1): Courrier
     {
         $sens = SensCourrier::where('code', SensCourrier::ARRIVEE)->firstOrFail();
         $statut = StatutCourrier::where('sens_courrier_id', $sens->id)->where('code', 'recu')->firstOrFail();
+        $dateReception = $dateReception ?? now();
 
         return Courrier::create([
             'sens_courrier_id' => $sens->id,
             'type_courrier_id' => TypeCourrier::where('code', 'demande')->value('id'),
             'statut_courrier_id' => $statut->id,
             'priorite_courrier_id' => PrioriteCourrier::where('code', 'normale')->value('id'),
-            'numero_registre' => 1,
+            'numero_registre' => $numero,
             'numero_registre_annee' => (int) now()->year,
-            'reference' => 'FAC-2026-0142',
+            'reference' => 'FAC-2026-0'.$numero,
             'origine' => Courrier::ORIGINE_EXTERNE,
-            'date_reception' => now()->toDateString(),
-            'date_courrier' => now()->subDay()->toDateString(),
-            'expediteur_libelle' => 'Entreprise NETPLUS SARL',
+            'date_reception' => $dateReception->toDateString(),
+            'date_courrier' => $dateReception->copy()->subDay()->toDateString(),
+            'expediteur_libelle' => $numero === 2 ? 'Entreprise JUIN SARL' : 'Entreprise NETPLUS SARL',
             'objet' => 'Facture prestations maintenance réseau',
             'nombre_pieces' => 3,
             'createur_id' => $user->id,

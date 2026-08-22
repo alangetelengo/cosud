@@ -66,7 +66,7 @@ return [
      */
     'sms' => [
         'provider' => env('GED_SMS_PROVIDER', 'wirepick'),
-        'sender_id' => env('GED_SMS_SENDER_ID', 'ETAT-CIVIL'),
+        'sender_id' => env('GED_SMS_SENDER_ID', 'ACSI-SMS'),
         'wirepick' => [
             'client' => env('GED_SMS_WIREPICK_CLIENT'),
             'password' => env('GED_SMS_WIREPICK_PASSWORD'),

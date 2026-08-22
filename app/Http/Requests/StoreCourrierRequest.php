@@ -50,11 +50,13 @@ class StoreCourrierRequest extends FormRequest
             ],
             'objet' => ['required', 'string', 'max:500'],
             'fichier' => [
-                Rule::requiredIf($sens === 'arrivee'),
                 'nullable',
                 'file',
+                'mimes:pdf,jpg,jpeg,png',
                 'max:10240',
             ],
+            'fichiers' => ['nullable', 'array', 'max:20'],
+            'fichiers.*' => ['file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'document_ids' => ['nullable', 'array'],
             'document_ids.*' => ['integer', 'exists:documents,id'],
             'nouveau_type_document_id' => [
@@ -74,6 +76,16 @@ class StoreCourrierRequest extends FormRequest
     {
         $validator->after(function (Validator $validator) {
             if ($this->input('sens') === 'arrivee') {
+                $aDesScans = $this->hasFile('fichier')
+                    || collect($this->file('fichiers', []))->filter()->isNotEmpty();
+
+                if (! $aDesScans) {
+                    $validator->errors()->add(
+                        'fichiers',
+                        'Au moins un scan (PDF ou image) est obligatoire pour un courrier arrivée.'
+                    );
+                }
+
                 $service = app(CourrierDoublonService::class);
                 $doublon = $service->trouverDoublonArrivee([
                     'numero_fulgurant' => $this->input('numero_fulgurant'),
@@ -116,7 +128,8 @@ class StoreCourrierRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'fichier.required' => 'Le scan est obligatoire pour un courrier arrivée externe.',
+            'fichier.mimes' => 'Chaque scan doit être un PDF ou une image (jpg, png).',
+            'fichiers.*.mimes' => 'Chaque scan doit être un PDF ou une image (jpg, png).',
             'nouveau_type_document_id.required' => 'Choisissez le type de pièce à déposer dans le parapheur.',
             'service_demandeur_structure_id.required' => 'Le service demandeur (direction) est obligatoire pour une facture ou une MAD.',
             'service_demandeur_structure_id.exists' => 'Choisissez une direction valide dans le référentiel.',

@@ -38,11 +38,17 @@
                    class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold no-underline transition-all {{ ! $isDepart ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 shadow-sm ring-1 ring-emerald-100 dark:ring-emerald-800/40' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white' }}">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
                     Arrivée
+                    @if(($compteursNonLus['arrivee'] ?? 0) > 0)
+                        <span class="inline-flex items-center justify-center min-w-[1.35rem] h-5 px-1.5 rounded-full text-[11px] font-bold {{ ! $isDepart ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200' }}">{{ $compteursNonLus['arrivee'] }}</span>
+                    @endif
                 </a>
                 <a href="{{ route('courriers.index', ['sens' => 'depart']) }}"
                    class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold no-underline transition-all {{ $isDepart ? 'bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-sm ring-1 ring-blue-100 dark:ring-blue-800/40' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white' }}">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 17h-4V7m0 0l-4 4m4-4l4 4"/></svg>
                     Départ
+                    @if(($compteursNonLus['depart'] ?? 0) > 0)
+                        <span class="inline-flex items-center justify-center min-w-[1.35rem] h-5 px-1.5 rounded-full text-[11px] font-bold {{ $isDepart ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200' }}">{{ $compteursNonLus['depart'] }}</span>
+                    @endif
                 </a>
             </div>
             <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">
@@ -106,6 +112,7 @@
                     @forelse($courriers as $c)
                     @php
                         $statutCode = strtolower((string) ($c->statutCourrier?->code ?? ''));
+                        $estNonLu = ! (bool) ($c->est_lu ?? false);
                         $statutClasses = match (true) {
                             str_contains($statutCode, 'recu') || $statutCode === 'enregistre' => 'bg-sky-50 text-sky-800 border-sky-100 dark:bg-sky-900/30 dark:text-sky-200 dark:border-sky-800/50',
                             str_contains($statutCode, 'trait') || str_contains($statutCode, 'cours') => 'bg-amber-50 text-amber-800 border-amber-100 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-800/50',
@@ -114,19 +121,19 @@
                             default => 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-700/40 dark:text-slate-200 dark:border-slate-600',
                         };
                     @endphp
-                    <tr class="group hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors">
+                    <tr class="group transition-colors {{ $loop->odd ? 'bg-emerald-100 hover:bg-emerald-200/80 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/45' : 'bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-900/20 dark:hover:bg-amber-900/35' }}">
                         <td class="px-5 py-3.5 whitespace-nowrap">
-                            <span class="inline-flex items-center font-mono text-xs font-bold text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-700/70 px-2.5 py-1 rounded-lg ring-1 ring-slate-200/80 dark:ring-slate-600/60">
+                            <span class="inline-flex items-center font-mono text-xs {{ $estNonLu ? 'font-bold' : 'font-semibold' }} text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-700/70 px-2.5 py-1 rounded-lg ring-1 ring-slate-200/80 dark:ring-slate-600/60">
                                 {{ $c->numeroRegistreComplet() }}
                             </span>
                         </td>
-                        <td class="px-5 py-3.5 text-slate-600 dark:text-slate-300 whitespace-nowrap tabular-nums">
+                        <td class="px-5 py-3.5 whitespace-nowrap tabular-nums {{ $estNonLu ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-300' }}">
                             {{ $c->date_reception?->format('d/m/Y') ?? $c->date_courrier?->format('d/m/Y') ?? '—' }}
                         </td>
-                        <td class="px-5 py-3.5 text-slate-700 dark:text-slate-200 font-medium max-w-[11rem] truncate" title="{{ $isDepart ? ($c->destinataire_libelle ?? '') : ($c->expediteur_libelle ?? '') }}">
+                        <td class="px-5 py-3.5 max-w-[11rem] truncate {{ $estNonLu ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-700 dark:text-slate-200' }}" title="{{ $isDepart ? ($c->destinataire_libelle ?? '') : ($c->expediteur_libelle ?? '') }}">
                             {{ $isDepart ? ($c->destinataire_libelle ?? '—') : ($c->expediteur_libelle ?? '—') }}
                         </td>
-                        <td class="px-5 py-3.5 text-slate-800 dark:text-slate-100 max-w-md">
+                        <td class="px-5 py-3.5 max-w-md {{ $estNonLu ? 'font-bold text-slate-900 dark:text-white' : 'text-slate-800 dark:text-slate-100' }}">
                             <span class="line-clamp-2 leading-snug" title="{{ $c->objet }}">{{ $c->objet }}</span>
                         </td>
                         <td class="px-5 py-3.5">

@@ -17,8 +17,13 @@ class SuiviPaiement extends Model
         'numero_ligne',
         'numero_annee',
         'date_suivi',
+        'date_decharge',
         'intitule',
         'montant',
+        'numero_piece',
+        'banque',
+        'beneficiaire_libelle',
+        'programmation',
         'fournisseur_libelle',
         'service_demandeur_libelle',
         'demandeur_libelle',
@@ -26,15 +31,19 @@ class SuiviPaiement extends Model
         'instruction_dg',
         'observation',
         'etabli_par_id',
+        'controle_par_id',
+        'controle_at',
     ];
 
     protected function casts(): array
     {
         return [
             'date_suivi' => 'date',
+            'date_decharge' => 'date',
             'montant' => 'decimal:2',
             'numero_ligne' => 'integer',
             'numero_annee' => 'integer',
+            'controle_at' => 'datetime',
         ];
     }
 
@@ -51,6 +60,11 @@ class SuiviPaiement extends Model
     public function etabliPar(): BelongsTo
     {
         return $this->belongsTo(User::class, 'etabli_par_id');
+    }
+
+    public function controlePar(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'controle_par_id');
     }
 
     public function numeroComplet(): string

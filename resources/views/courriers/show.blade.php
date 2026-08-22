@@ -47,18 +47,23 @@
             'instruction_dg',
             'instructions_dg',
         ], true);
-    // AC : envoi du chèque au DG (message + scan optionnel) — avance auto vers signature.
+    // AC : envoi du chèque au DG (message + montant) — avance vers signature DG.
     $peutEnvoyerChequeAc = $etapeCircuitActuelle?->code === 'ac_etablit_cheque'
         && $estActeurCircuitActuel
         && $courrier->statutCourrier->code !== 'cloture';
-    // DG : scan du chèque signé + notif fournisseur — avance auto vers AC/caissiers.
+    // DG : confirme la signature (sans scan) — renvoi à l’AC.
     $peutSignerChequeDg = $etapeCircuitActuelle?->code === 'dg_signe_cheque'
         && $estActeurCircuitActuel
         && $courrier->statutCourrier->code !== 'cloture';
-    // Suivi dépenses : preuve de paiement puis clôture auto.
-    $peutDeposerPreuvePaiement = $etapeCircuitActuelle?->code === 'preuve_paiement'
+    // AC : bordereau + pièces à la décharge bénéficiaire.
+    $peutEnregistrerDechargeAc = $etapeCircuitActuelle?->code === 'preuve_paiement'
         && $estActeurCircuitActuel
         && $courrier->statutCourrier->code !== 'cloture';
+    // Eleni : contrôle + confirmation de clôture.
+    $peutConfirmerControleDepense = $etapeCircuitActuelle?->code === 'cloture_depenses'
+        && $estActeurCircuitActuel
+        && $courrier->statutCourrier->code !== 'cloture';
+    $peutDeposerPreuvePaiement = $peutEnregistrerDechargeAc;
 
     // Formulaire de soumission ouvert d’emblée pour l’actrice attendue.
     $ouvrirFormulaireSoumettreReponse = $peutSoumettreReponse
@@ -185,8 +190,8 @@
                     @if($courrier->instructions_dg)
                     <div class="mt-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 text-sm">
                         <strong>Orientation direction :</strong> {{ $courrier->instructions_dg }}
-                        @if($courrier->agentConfie)
-                            <div class="text-[11px] text-amber-800/80 mt-1">Confié à : <strong>{{ $courrier->agentConfie->name }}</strong></div>
+                        @if($courrier->agentsConfies->isNotEmpty() || $courrier->agentConfie)
+                            <div class="text-[11px] text-amber-800/80 mt-1">Confié à : <strong>{{ implode(', ', $courrier->libellesAgentsConfies()) }}</strong></div>
                         @endif
                         @if($courrier->est_confidentiel)
                             <span class="ml-2 inline-flex px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[10px] font-bold uppercase">Confidentiel</span>
@@ -530,11 +535,6 @@
                                     <textarea name="message" required rows="3" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : Chèque établi, prêt pour signature…">{{ old('message') }}</textarea>
                                     @error('message')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
-                                <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Scan du chèque <span class="font-normal text-slate-400">(facultatif)</span></label>
-                                    <input type="file" name="scan_cheque" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:text-white file:font-semibold file:text-xs">
-                                    @error('scan_cheque')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-                                </div>
                                 <button type="button"
                                         onclick="flashAlert('Transmettre ce chèque au DG pour signature ? Le circuit avancera automatiquement.', this.closest('form'), {icon:'✓', danger:false, confirmText:'Envoyer au DG', title:'Envoi du chèque'})"
                                         class="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold">
@@ -544,17 +544,13 @@
                         </div>
                         @elseif($peutSignerChequeDg)
                         <div class="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-900/20 p-3 space-y-2">
-                            <p class="text-xs font-semibold text-indigo-900 dark:text-indigo-200">Signer le chèque</p>
+                            <p class="text-xs font-semibold text-indigo-900 dark:text-indigo-200">Confirmer la signature du chèque</p>
+                            <p class="text-[11px] text-slate-500 leading-snug">Aucun scan dans le GED : le chèque est signé sur papier. Confirmez pour renvoyer le dossier à l’AC.</p>
                             @if($courrier->message_ac)
                             <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug"><strong>Message AC :</strong> {{ $courrier->message_ac }}</p>
                             @endif
-                            <form method="post" action="{{ route('courriers.circuit.signer-cheque', $courrier) }}" enctype="multipart/form-data" class="space-y-2">
+                            <form method="post" action="{{ route('courriers.circuit.signer-cheque', $courrier) }}" class="space-y-2">
                                 @csrf
-                                <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Scan du chèque signé <span class="text-red-500">*</span></label>
-                                    <input type="file" name="scan_cheque_signe" required accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white file:font-semibold file:text-xs">
-                                    @error('scan_cheque_signe')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-                                </div>
                                 <div>
                                     <label class="block text-[11px] font-semibold mb-1">Message <span class="font-normal text-slate-400">(facultatif)</span></label>
                                     <textarea name="message" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Note pour l’AC / le dossier…">{{ old('message') }}</textarea>
@@ -572,37 +568,113 @@
                                     </span>
                                 </label>
                                 <button type="button"
-                                        onclick="flashAlert('Enregistrer le chèque signé et avancer le circuit ?', this.closest('form'), {icon:'✍️', danger:false, confirmText:'Enregistrer la signature', title:'Signature du chèque'})"
+                                        onclick="flashAlert('Confirmer que le chèque est signé et renvoyer le dossier à l’AC ?', this.closest('form'), {icon:'✍️', danger:false, confirmText:'Confirmer la signature', title:'Signature du chèque'})"
                                         class="w-full px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold">
-                                    Enregistrer le chèque signé
+                                    Chèque signé — renvoyer à l’AC
                                 </button>
                             </form>
                         </div>
-                        @elseif($peutDeposerPreuvePaiement)
+                        @elseif($peutEnregistrerDechargeAc)
+                        @php
+                            $suiviBordereau = $courrier->suiviPaiement;
+                            $montantDechargeAffiche = old('montant', $suiviBordereau?->montant
+                                ? number_format((float) $suiviBordereau->montant, 0, '', ' ')
+                                : '');
+                        @endphp
                         <div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/20 p-3 space-y-2">
-                            <p class="text-xs font-semibold text-emerald-900 dark:text-emerald-200">Preuve de paiement</p>
-                            <p class="text-[11px] text-slate-500 leading-snug">Joignez la preuve de paiement du fournisseur / prestataire pour clôturer le dossier.</p>
+                            <p class="text-xs font-semibold text-emerald-900 dark:text-emerald-200">Bordereau — décharge bénéficiaire</p>
+                            <p class="text-[11px] text-slate-500 leading-snug">Enregistrez le paiement lorsque le bénéficiaire décharge le chèque (comme sur le bordereau de transmission).</p>
                             <form method="post" action="{{ route('courriers.circuit.deposer-preuve-paiement', $courrier) }}" enctype="multipart/form-data" class="space-y-2">
                                 @csrf
-                                <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Preuve de paiement <span class="text-red-500">*</span></label>
-                                    <input type="file" name="preuve_paiement" required accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:text-white file:font-semibold file:text-xs">
-                                    @error('preuve_paiement')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-[11px] font-semibold mb-1">Date <span class="text-red-500">*</span></label>
+                                        <input type="date" name="date_decharge" value="{{ old('date_decharge', now()->toDateString()) }}" required class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900">
+                                        @error('date_decharge')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-semibold mb-1">Banque <span class="text-red-500">*</span></label>
+                                        <input type="text" name="banque" value="{{ old('banque', $suiviBordereau?->banque) }}" required class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : BCH, BOA">
+                                        @error('banque')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                    </div>
                                 </div>
                                 <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Observation FSP <span class="font-normal text-slate-400">(facultatif)</span></label>
-                                    <textarea name="observation" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Référence, date de paiement, remarque comptable…">{{ old('observation') }}</textarea>
+                                    <label class="block text-[11px] font-semibold mb-1">N° pièce <span class="text-red-500">*</span></label>
+                                    <input type="text" name="numero_piece" value="{{ old('numero_piece', $suiviBordereau?->numero_piece) }}" required class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : Chèque N° 0000312">
+                                    @error('numero_piece')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Montant (FCFA) <span class="text-red-500">*</span></label>
+                                    <div x-data="{
+                                        montant: @js($montantDechargeAffiche),
+                                        formatMontant(v) {
+                                            const chiffres = String(v ?? '').replace(/\D/g, '');
+                                            if (!chiffres) return '';
+                                            return chiffres.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+                                        }
+                                    }">
+                                        <input type="text" name="montant" x-model="montant" @input="montant = formatMontant($event.target.value)" inputmode="numeric" required class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : 1 000 000">
+                                    </div>
+                                    @error('montant')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Bénéficiaire <span class="text-red-500">*</span></label>
+                                    <input type="text" name="beneficiaire_libelle" value="{{ old('beneficiaire_libelle', $suiviBordereau?->beneficiaire_libelle ?: $suiviBordereau?->fournisseur_libelle ?: $courrier->expediteur_libelle) }}" required class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900">
+                                    @error('beneficiaire_libelle')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Programmation <span class="font-normal text-slate-400">(facultatif)</span></label>
+                                    <input type="text" name="programmation" value="{{ old('programmation', $suiviBordereau?->programmation) }}" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : du 14 juillet 2026">
+                                    @error('programmation')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Pièces (chèque déchargé, identité…) <span class="text-red-500">*</span></label>
+                                    <input type="file" name="preuves_paiement[]" required accept=".pdf,.jpg,.jpeg,.png" multiple class="block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:text-white file:font-semibold file:text-xs">
+                                    @error('preuves_paiement')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                    @error('preuves_paiement.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Observation <span class="font-normal text-slate-400">(facultatif)</span></label>
+                                    <textarea name="observation" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Remarque sur la décharge…">{{ old('observation') }}</textarea>
                                     @error('observation')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
+                                <button type="button"
+                                        onclick="flashAlert('Enregistrer la décharge et notifier le suivi des dépenses ?', this.closest('form'), {icon:'✓', danger:false, confirmText:'Enregistrer', title:'Décharge bénéficiaire'})"
+                                        class="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold">
+                                    Enregistrer la décharge / le paiement
+                                </button>
+                            </form>
+                        </div>
+                        @elseif($peutConfirmerControleDepense)
+                        <div class="rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50/70 dark:bg-sky-900/20 p-3 space-y-2">
+                            <p class="text-xs font-semibold text-sky-900 dark:text-sky-200">Contrôle de la dépense</p>
+                            <p class="text-[11px] text-slate-500 leading-snug">Vérifiez les éléments saisis par l’AC avec les pièces physiques. Vous pouvez joindre des pièces complémentaires, puis confirmer la clôture.</p>
+                            @if($courrier->suiviPaiement)
+                            <div class="rounded-md bg-white/70 dark:bg-slate-900/40 border border-sky-100 dark:border-sky-900 px-2.5 py-2 text-[11px] text-slate-700 dark:text-slate-200 space-y-0.5">
+                                <p><strong>N° pièce :</strong> {{ $courrier->suiviPaiement->numero_piece ?? '—' }}</p>
+                                <p><strong>Montant :</strong> {{ $courrier->suiviPaiement->montant ? number_format((float) $courrier->suiviPaiement->montant, 0, ',', ' ') : '—' }}</p>
+                                <p><strong>Banque :</strong> {{ $courrier->suiviPaiement->banque ?? '—' }}</p>
+                                <p><strong>Bénéficiaire :</strong> {{ $courrier->suiviPaiement->beneficiaire_libelle ?? '—' }}</p>
+                                <p><strong>Programmation :</strong> {{ $courrier->suiviPaiement->programmation ?? '—' }}</p>
+                            </div>
+                            @endif
+                            <form method="post" action="{{ route('courriers.circuit.confirmer-controle-depense', $courrier) }}" enctype="multipart/form-data" class="space-y-2">
+                                @csrf
                                 <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Commentaire circuit <span class="font-normal text-slate-400">(facultatif)</span></label>
-                                    <textarea name="message" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Note interne sur le dossier…">{{ old('message') }}</textarea>
+                                    <label class="block text-[11px] font-semibold mb-1">Pièces complémentaires <span class="font-normal text-slate-400">(facultatif)</span></label>
+                                    <input type="file" name="pieces_complementaires[]" accept=".pdf,.jpg,.jpeg,.png" multiple class="block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-sky-600 file:text-white file:font-semibold file:text-xs">
+                                    @error('pieces_complementaires')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                    @error('pieces_complementaires.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Commentaire <span class="font-normal text-slate-400">(facultatif)</span></label>
+                                    <textarea name="message" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Résultat du contrôle…">{{ old('message') }}</textarea>
                                     @error('message')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
                                 <button type="button"
-                                        onclick="flashAlert('Enregistrer la preuve de paiement et clôturer le dossier ?', this.closest('form'), {icon:'✓', danger:false, confirmText:'Clôturer', title:'Preuve de paiement'})"
-                                        class="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold">
-                                    Enregistrer la preuve et clôturer
+                                        onclick="flashAlert('Confirmer le contrôle et clôturer le dossier ?', this.closest('form'), {icon:'✓', danger:false, confirmText:'Confirmer la clôture', title:'Contrôle dépense'})"
+                                        class="w-full px-3 py-2 rounded-lg bg-sky-600 text-white text-xs font-semibold">
+                                    Confirmer le contrôle et clôturer
                                 </button>
                             </form>
                         </div>
@@ -860,7 +932,7 @@
                             <div class="text-[11px] font-medium truncate">{{ $doc->nom_original }}</div>
                             <select name="ventilations[{{ $i }}][user_id]" class="w-full rounded-lg border px-2 py-1 text-xs dark:bg-slate-800">
                                 <option value="">— Destinataire —</option>
-                                @foreach($utilisateursVentilation as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
+                                @foreach($utilisateursVentilation as $u)<option value="{{ $u->id }}" title="{{ $u->name }}">{{ $u->libelleDestinataireCourrier() }}</option>@endforeach
                             </select>
                         </div>
                         @endforeach
@@ -937,7 +1009,7 @@
                             <div>
                                 <select name="destinataire_agent_id" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900">
                                     <option value="">Collaborateur destinataire</option>
-                                    @foreach($agentsOrientation as $ag)<option value="{{ $ag->id }}">{{ $ag->name }}</option>@endforeach
+                                    @foreach($agentsOrientation as $ag)<option value="{{ $ag->id }}" title="{{ $ag->name }}">{{ $ag->libelleDestinataireCourrier() }}</option>@endforeach
                                 </select>
                                 @error('destinataire_agent_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                             </div>

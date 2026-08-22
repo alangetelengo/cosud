@@ -78,7 +78,10 @@
             <li>
                 <a href="{{ route('courriers.index') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->is('courriers') || (request()->is('courriers/*') && ! request()->is('courriers-a-recevoir')) ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
                     <span class="text-lg flex-shrink-0">✉️</span>
-                    <span class="nav-text">Courriers</span>
+                    <span class="nav-text flex-1">Courriers</span>
+                    @if(($courriersNonLusTotal ?? 0) > 0)
+                        <span class="nav-text inline-flex items-center justify-center min-w-[1.35rem] h-5 px-1.5 rounded-full bg-emerald-400 text-[#0b1f17] text-[11px] font-bold">{{ $courriersNonLusTotal }}</span>
+                    @endif
                 </a>
             </li>
             <li>
@@ -101,6 +104,14 @@
                 </a>
             </li>
             @endcan
+            @if(auth()->user()->hasRole('responsable_dossiers_prestataires') || auth()->user()->aAccesTotal() || auth()->user()->hasRole('dg') || auth()->user()->hasRole('particulier_dg'))
+            <li>
+                <a href="{{ route('suivi-factures-fournisseurs.index') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->routeIs('suivi-factures-fournisseurs.*') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
+                    <span class="text-lg flex-shrink-0">📁</span>
+                    <span class="nav-text">Factures fournisseurs</span>
+                </a>
+            </li>
+            @endif
             @if(auth()->user()->gereCourrierSecretariat())
             <li>
                 <a href="{{ route('courriers.a-recevoir') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->is('courriers-a-recevoir') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">

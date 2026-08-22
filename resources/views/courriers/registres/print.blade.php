@@ -82,7 +82,8 @@
         .registre-table { width: 100%; border-collapse: collapse; }
         .registre-th {
             border: 1px solid #1e293b;
-            background: {{ $sensCode === 'depart' ? '#dbeafe' : '#e2e8f0' }};
+            background: #334155;
+            color: #fff;
             padding: 6px 4px;
             text-align: center;
             font-weight: 700;
@@ -97,8 +98,10 @@
             vertical-align: top;
             font-size: 11px;
             line-height: 1.35;
+            background: #d1fae5;
         }
-        .registre-row:nth-child(even) .registre-td { background: #faf7f0; }
+        .registre-row:nth-child(odd) .registre-td { background: #d1fae5; }
+        .registre-row:nth-child(even) .registre-td { background: #fffbeb; }
         .footer {
             margin-top: 10px;
             display: flex;
@@ -140,6 +143,11 @@
             </div>
             <div class="meta">
                 <div>Année {{ $annee }}</div>
+                @if(! empty($mois))
+                    <div>Mois {{ $mois }}</div>
+                @elseif(! empty($trimestre))
+                    <div>Trimestre {{ $trimestre }}</div>
+                @endif
                 <div>{{ $courriers->count() }} entrée(s)</div>
                 <div>Édité le {{ now()->format('d/m/Y H:i') }}</div>
             </div>

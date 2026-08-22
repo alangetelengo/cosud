@@ -56,13 +56,17 @@ class CourrierController extends Controller
     {
         $this->authorize('viewAny', Courrier::class);
 
+        $user = auth()->user();
         $sensCode = $request->get('sens', 'arrivee');
         $sens = SensCourrier::where('code', $sensCode)->firstOrFail();
 
         $query = Courrier::query()
-            ->visibleBy(auth()->user())
+            ->visibleBy($user)
             ->where('sens_courrier_id', $sens->id)
             ->with(['statutCourrier', 'typeCourrier', 'prioriteCourrier', 'createur', 'structureDestinataire'])
+            ->withExists([
+                'lectures as est_lu' => fn ($q) => $q->where('user_id', $user->id),
+            ])
             ->latest();
 
         if ($request->filled('q')) {
@@ -78,7 +82,35 @@ class CourrierController extends Controller
 
         $courriers = $query->paginate(20)->withQueryString();
 
-        return view('courriers.index', compact('courriers', 'sens', 'sensCode'));
+        $compteursNonLus = $this->compteursCourriersNonLus($user);
+
+        return view('courriers.index', compact('courriers', 'sens', 'sensCode', 'compteursNonLus'));
+    }
+
+    /**
+     * @return array{arrivee: int, depart: int}
+     */
+    protected function compteursCourriersNonLus($user): array
+    {
+        $arriveeId = SensCourrier::query()->where('code', SensCourrier::ARRIVEE)->value('id');
+        $departId = SensCourrier::query()->where('code', SensCourrier::DEPART)->value('id');
+
+        $compter = function (?int $sensId) use ($user): int {
+            if (! $sensId) {
+                return 0;
+            }
+
+            return Courrier::query()
+                ->visibleBy($user)
+                ->where('sens_courrier_id', $sensId)
+                ->whereDoesntHave('lectures', fn ($q) => $q->where('user_id', $user->id))
+                ->count();
+        };
+
+        return [
+            'arrivee' => $compter($arriveeId ? (int) $arriveeId : null),
+            'depart' => $compter($departId ? (int) $departId : null),
+        ];
     }
 
     public function aRecevoir(Request $request)
@@ -164,8 +196,11 @@ class CourrierController extends Controller
             'structure_id' => auth()->user()->structure_id,
         ]);
 
-        if ($sens->code === SensCourrier::ARRIVEE && $request->hasFile('fichier')) {
-            $this->attacherDocument($courrier, $request->file('fichier'), $sens->code, true);
+        if ($sens->code === SensCourrier::ARRIVEE) {
+            $scans = $this->collecterFichiersUpload($request, 'fichiers', 'fichier');
+            foreach ($scans as $index => $scan) {
+                $this->attacherDocument($courrier, $scan, $sens->code, $index === 0);
+            }
         }
 
         if ($sens->code === SensCourrier::DEPART) {
@@ -191,6 +226,13 @@ class CourrierController extends Controller
             $courrier = $this->circuitMoteur->assurerEtapesAutomatiques($courrier, auth()->user());
         }
 
+        if (auth()->user()) {
+            $courrier->marquerLuPar(auth()->user());
+            auth()->user()->unreadNotifications
+                ->filter(fn ($n) => (int) data_get($n->data, 'courrier_id') === (int) $courrier->id)
+                ->each->markAsRead();
+        }
+
         $courrier->load([
             'sensCourrier', 'statutCourrier', 'typeCourrier', 'prioriteCourrier', 'parapheur',
             'createur', 'signataire', 'directeurEnAttente', 'rejetePar',
@@ -201,7 +243,7 @@ class CourrierController extends Controller
             'dossier', 'structure', 'structureDestinataire', 'structureExpediteur', 'serviceDemandeurStructure',
             'courrierParent', 'courrierDepartSource', 'courrierArriveeLie', 'reponsesDepart.documents', 'reponsesDepart.statutCourrier',
             'circuit', 'circuitEtapeActuelle', 'circuitHistoriques.etape', 'circuitHistoriques.user',
-            'documentReponse', 'reponseStructureDestinataire', 'destinataireAgent', 'agentConfie', 'suiviPaiement',
+            'documentReponse', 'reponseStructureDestinataire', 'destinataireAgent', 'agentConfie', 'agentsConfies.structure', 'suiviPaiement',
         ]);
         $structures = Structure::where('actif', true)->orderBy('nom')->get();
         $directions = Structure::query()
@@ -222,14 +264,16 @@ class CourrierController extends Controller
         }
         $utilisateursVentilation = User::query()
             ->where('actif', true)
+            ->with(['structure', 'roles'])
             ->orderBy('name')
             ->limit(200)
-            ->get(['id', 'name']);
+            ->get();
         $agentsOrientation = User::query()
             ->where('actif', true)
+            ->with(['structure', 'roles'])
             ->orderBy('name')
             ->limit(300)
-            ->get(['id', 'name', 'email']);
+            ->get();
 
         $directeurValidation = null;
         $directionEmettrice = null;
@@ -847,6 +891,28 @@ class CourrierController extends Controller
                 $courrier->documents()->attach($document->id, ['est_principal' => false]);
             }
         }
+    }
+
+    /**
+     * @return list<UploadedFile>
+     */
+    private function collecterFichiersUpload(Request $request, string $cleMultiple, string $cleUnique): array
+    {
+        $fichiers = [];
+
+        if ($request->hasFile($cleMultiple)) {
+            foreach ((array) $request->file($cleMultiple) as $fichier) {
+                if ($fichier) {
+                    $fichiers[] = $fichier;
+                }
+            }
+        }
+
+        if ($request->hasFile($cleUnique)) {
+            $fichiers[] = $request->file($cleUnique);
+        }
+
+        return $fichiers;
     }
 
     private function attacherDocument(Courrier $courrier, UploadedFile $file, string $sensCode, bool $principal = false): void

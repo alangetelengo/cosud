@@ -7,8 +7,7 @@ use App\Services\CircuitCourrierMoteurService;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * L’Agent comptable envoie le chèque au DG : message obligatoire, scan facultatif.
- * Avance le circuit vers la signature DG sans créer de courrier départ.
+ * L’Agent comptable envoie le chèque au DG : message obligatoire, scans facultatifs (un ou plusieurs).
  */
 class EnvoyerChequeAcRequest extends FormRequest
 {
@@ -40,6 +39,8 @@ class EnvoyerChequeAcRequest extends FormRequest
             'message' => ['required', 'string', 'max:2000'],
             'montant' => ['required', 'numeric', 'min:1'],
             'scan_cheque' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'scans_cheque' => ['nullable', 'array', 'max:20'],
+            'scans_cheque.*' => ['file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ];
     }
 
@@ -62,7 +63,8 @@ class EnvoyerChequeAcRequest extends FormRequest
             'montant.required' => 'Le montant du chèque est obligatoire.',
             'montant.numeric' => 'Le montant doit être un nombre.',
             'montant.min' => 'Le montant doit être supérieur à zéro.',
-            'scan_cheque.mimes' => 'Le scan du chèque doit être un PDF ou une image (jpg, png).',
+            'scan_cheque.mimes' => 'Chaque scan du chèque doit être un PDF ou une image (jpg, png).',
+            'scans_cheque.*.mimes' => 'Chaque scan du chèque doit être un PDF ou une image (jpg, png).',
         ];
     }
 }

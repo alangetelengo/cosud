@@ -13,22 +13,23 @@
     $etapeTraiteeViaExpeditionReponse = ($etapeCourante?->code === 'expedition_reponse');
     // « AC établit le chèque » se termine via l’envoi au DG dans Actions.
     $etapeTraiteeViaEnvoiChequeAc = ($etapeCourante?->code === 'ac_etablit_cheque');
-    // « DG signe le chèque » se termine via le scan signé dans Actions.
+    // « DG signe le chèque » se termine via confirmation dans Actions (sans scan).
     $etapeTraiteeViaSignatureChequeDg = ($etapeCourante?->code === 'dg_signe_cheque');
-    // « Preuve de paiement » se termine via le dépôt dans Actions.
+    // « Décharge AC » se termine via le bordereau dans Actions.
     $etapeTraiteeViaPreuvePaiement = ($etapeCourante?->code === 'preuve_paiement');
+    // « Contrôle Eleni » se termine via confirmation dans Actions.
+    $etapeTraiteeViaControleDepense = ($etapeCourante?->code === 'cloture_depenses');
     // Ne pas présenter « création courrier réponse » pour les étapes facture dédiées
     // ni pour la préparation particulière (gérée via transmission pour signature).
     $etapeCompleteeParReponse = ($etapeCourante?->meneVersCreationDepart() ?? false)
-        && ! in_array($etapeCourante?->code, ['dg_signe_cheque', 'traitement_dossiers_vers_ac', 'traitement_particuliere'], true);
+        && ! in_array($etapeCourante?->code, ['dg_signe_cheque', 'traitement_particuliere'], true);
     // Relais facture validés automatiquement (pas de « Valider l’étape »).
-    // Exception : agent confié hors rôle AC sur « Traitement dossiers » (override).
     $etapeRelaisFactureAuto = in_array($etapeCourante?->code, [
         'ac_vers_caissiers',
         'retour_caisse_depenses',
-    ], true) || (($etapeCourante?->code === 'traitement_dossiers_vers_ac') && ! $courrier->agent_confie_id);
+    ], true);
     $placeholderInstructions = match ($courrier->circuit?->code) {
-        'facture_prestataire' => 'Ex. : À payer avant le 30 du mois, transmettre à l’Agent Comptable…',
+        'facture_prestataire' => 'Ex. : Bon pour accord — à payer avant le 30 du mois…',
         default => 'Ex. : Répondre favorablement, préparer un projet de note…',
     };
 @endphp
@@ -62,8 +63,11 @@
             @if($courrier->instructions_dg)
             <p class="text-[11px] text-amber-950 mt-1.5 leading-snug"><strong>Instructions :</strong> {{ $courrier->instructions_dg }}</p>
             @endif
-            @if($courrier->agentConfie)
-            <p class="text-[11px] text-amber-950 mt-1 leading-snug"><strong>Confié à :</strong> {{ $courrier->agentConfie->name }}</p>
+            @if($courrier->agentsConfies->isNotEmpty() || $courrier->agentConfie)
+            <p class="text-[11px] text-amber-950 mt-1 leading-snug">
+                <strong>Confié à :</strong>
+                {{ implode(', ', $courrier->libellesAgentsConfies()) }}
+            </p>
             @endif
         </div>
         @endif
@@ -91,14 +95,142 @@
             <textarea name="instructions" required rows="3" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="{{ $placeholderInstructions }}">{{ old('instructions') }}</textarea>
             @error('instructions')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
             <div>
-                <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">Confier à un collaborateur <span class="font-normal text-slate-400">(facultatif)</span></label>
-                <select name="agent_confie_id" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900">
-                    <option value="">— Suite normale du circuit —</option>
-                    @foreach(($agentsOrientation ?? collect()) as $ag)
-                    <option value="{{ $ag->id }}" @selected((string) old('agent_confie_id') === (string) $ag->id)>{{ $ag->name }}</option>
-                    @endforeach
-                </select>
-                @error('agent_confie_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">Envoyer / confier à <span class="font-normal text-slate-400">(facultatif)</span></label>
+                @php
+                    $agentsConfieCandidats = ($agentsOrientation ?? collect())
+                        ->filter(fn ($ag) => $ag->hasRole('directeur'))
+                        ->values();
+                    $agentsConfieOptions = $agentsConfieCandidats->map(fn ($ag) => [
+                        'value' => (string) $ag->id,
+                        'label' => $ag->libelleDestinataireCourrier(),
+                        'search' => trim($ag->name.' '.($ag->email ?? '')),
+                    ])->values()->all();
+                    $agentsConfieSelected = collect(old('agent_confie_ids', []))
+                        ->map(fn ($id) => (string) $id)
+                        ->values()
+                        ->all();
+                @endphp
+                <script>
+                    window.__agentsConfieSelect = {
+                        options: @json($agentsConfieOptions),
+                        selected: @json($agentsConfieSelected),
+                        name: 'agent_confie_ids[]',
+                        placeholder: 'Ajouter un directeur…',
+                        searchPlaceholder: 'Directeur, structure…'
+                    };
+                    window.searchableMultiSelect = window.searchableMultiSelect || function (config) {
+                        var cfg = config || {};
+                        return {
+                            options: cfg.options || [],
+                            selectedValues: (cfg.selected || []).map(function (v) { return String(v); }),
+                            search: '',
+                            isOpen: false,
+                            name: cfg.name || 'ids[]',
+                            placeholder: cfg.placeholder || 'Ajouter des destinataires…',
+                            searchPlaceholder: cfg.searchPlaceholder || 'Rechercher…',
+                            selectedOptions: function () {
+                                var map = {};
+                                this.options.forEach(function (o) { map[String(o.value)] = o; });
+                                return this.selectedValues.map(function (v) { return map[String(v)]; }).filter(Boolean);
+                            },
+                            filteredOptions: function () {
+                                var selected = {};
+                                this.selectedValues.forEach(function (v) { selected[String(v)] = true; });
+                                var raw = String(this.search || '').trim().toLowerCase();
+                                var tokens = raw ? raw.split(/\s+/).filter(Boolean) : [];
+                                return this.options.filter(function (o) {
+                                    if (selected[String(o.value)]) return false;
+                                    if (!tokens.length) return true;
+                                    var hay = (String(o.label || '') + ' ' + String(o.search || '')).toLowerCase();
+                                    return tokens.every(function (t) { return hay.indexOf(t) >= 0; });
+                                });
+                            },
+                            add: function (option) {
+                                var value = String(option.value ?? '');
+                                if (!value || this.selectedValues.indexOf(value) >= 0) return;
+                                this.selectedValues.push(value);
+                                this.search = '';
+                                this.isOpen = true;
+                                var self = this;
+                                this.$nextTick(function () { if (self.$refs.searchInput) self.$refs.searchInput.focus(); });
+                            },
+                            remove: function (value) {
+                                var v = String(value);
+                                this.selectedValues = this.selectedValues.filter(function (x) { return x !== v; });
+                                var self = this;
+                                this.$nextTick(function () { if (self.$refs.searchInput) self.$refs.searchInput.focus(); });
+                            },
+                            onKeydown: function (event) {
+                                if (event.key === 'Backspace' && !String(this.search || '') && this.selectedValues.length) {
+                                    this.selectedValues.pop();
+                                    return;
+                                }
+                                if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    var first = this.filteredOptions()[0];
+                                    if (first) this.add(first);
+                                }
+                                if (event.key === 'Escape') this.isOpen = false;
+                            }
+                        };
+                    };
+                </script>
+                <div
+                    class="relative"
+                    x-data="window.searchableMultiSelect(window.__agentsConfieSelect)"
+                    @click.outside="isOpen = false"
+                >
+                    <template x-for="val in selectedValues" :key="'hid-'+val">
+                        <input type="hidden" :name="name" :value="val">
+                    </template>
+                    <div
+                        @click="isOpen = true; $nextTick(() => $refs.searchInput?.focus())"
+                        class="min-h-[2.5rem] w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2 py-1.5 flex flex-wrap items-center gap-1.5 cursor-text focus-within:ring-2 focus-within:ring-emerald-500/30 focus-within:border-emerald-500 transition"
+                    >
+                        <template x-for="opt in selectedOptions()" :key="'chip-'+opt.value">
+                            <span class="inline-flex items-center gap-1 max-w-full rounded-full bg-emerald-50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200/80 dark:border-emerald-800/60 pl-2.5 pr-1 py-0.5 text-[11px] font-semibold">
+                                <span class="truncate" x-text="opt.label" :title="opt.search || opt.label"></span>
+                                <button type="button" @click.stop="remove(opt.value)" class="flex-shrink-0 w-4 h-4 rounded-full hover:bg-emerald-200/70 dark:hover:bg-emerald-800/60 flex items-center justify-center text-[10px] leading-none" title="Retirer">×</button>
+                            </span>
+                        </template>
+                        <input
+                            type="text"
+                            x-ref="searchInput"
+                            x-model="search"
+                            @focus="isOpen = true"
+                            @keydown="onKeydown($event)"
+                            :placeholder="selectedValues.length ? '' : placeholder"
+                            class="flex-1 min-w-[8rem] border-0 bg-transparent p-1 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-0 focus:outline-none"
+                            autocomplete="off"
+                        >
+                    </div>
+                    <div
+                        x-show="isOpen"
+                        x-cloak
+                        x-transition
+                        class="absolute z-30 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-xl max-h-56 overflow-hidden flex flex-col"
+                    >
+                        <div class="px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-700 text-[10px] text-slate-500 dark:text-slate-400" x-text="searchPlaceholder"></div>
+                        <div class="overflow-y-auto flex-1 p-1 max-h-48">
+                            <template x-if="filteredOptions().length === 0">
+                                <p class="px-3 py-2 text-xs text-slate-500">Aucun destinataire trouvé.</p>
+                            </template>
+                            <template x-for="opt in filteredOptions()" :key="'opt-'+opt.value">
+                                <button
+                                    type="button"
+                                    @click.stop="add(opt)"
+                                    class="w-full text-left px-2.5 py-1.5 rounded text-xs text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
+                                >
+                                    <span class="font-semibold block truncate" x-text="opt.label"></span>
+                                    <span class="text-[10px] text-slate-400 truncate block" x-text="opt.search" x-show="opt.search"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-500 mt-1">Uniquement les <strong>directeurs</strong>. Tapez pour rechercher, cliquez pour ajouter. Vide = suite normale du circuit.</p>
+                @error('agent_confie_ids')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                @error('agent_confie_ids.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
             </div>
             <button type="button"
                     onclick="flashAlert('Enregistrer ces instructions et transmettre pour traitement ?', this.closest('form'), {icon:'📝', danger:false, confirmText:'Enregistrer', title:'Instructions'})"
@@ -128,11 +260,15 @@
         </p>
         @elseif($peutAvancerCircuit && $etapeTraiteeViaSignatureChequeDg)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
-            Cette étape se termine en enregistrant le scan du chèque signé (voir « Actions » ci-dessous).
+            Confirmez la signature du chèque (sans scan) via « Actions » ci-dessous — le dossier revient à l’AC.
         </p>
         @elseif($peutAvancerCircuit && $etapeTraiteeViaPreuvePaiement)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
-            Cette étape se termine en déposant la preuve de paiement (voir « Actions » ci-dessous) — le dossier sera clôturé.
+            Enregistrez le bordereau et les pièces de décharge via « Actions » — le suivi des dépenses sera notifié.
+        </p>
+        @elseif($peutAvancerCircuit && $etapeTraiteeViaControleDepense)
+        <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
+            Contrôlez les éléments et confirmez la clôture via « Actions » ci-dessous.
         </p>
         @elseif($etapeRelaisFactureAuto)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">

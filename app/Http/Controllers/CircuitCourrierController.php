@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\DeposerPreuvePaiementRequest;
+use App\Http\Requests\ConfirmerControleDepenseRequest;
+use App\Http\Requests\EnregistrerDechargeAcRequest;
 use App\Http\Requests\EnvoyerChequeAcRequest;
 use App\Http\Requests\InstruireCircuitCourrierRequest;
 use App\Http\Requests\RejeterReponseCourrierRequest;
@@ -53,7 +54,8 @@ class CircuitCourrierController extends Controller
                 'courriers.circuit.rejeter-reponse',
                 'courriers.circuit.envoyer-cheque',
                 'courriers.circuit.signer-cheque',
-                'courriers.circuit.deposer-preuve-paiement'
+                'courriers.circuit.deposer-preuve-paiement',
+                'courriers.circuit.confirmer-controle-depense'
             )) {
                 return $next($request);
             }
@@ -185,6 +187,7 @@ class CircuitCourrierController extends Controller
                 $request->validated('agent_confie_id') !== null
                     ? (int) $request->validated('agent_confie_id')
                     : null,
+                $request->validated('agent_confie_ids') ?? [],
             );
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());
@@ -195,8 +198,8 @@ class CircuitCourrierController extends Controller
 
     public function envoyerCheque(EnvoyerChequeAcRequest $request, Courrier $courrier): RedirectResponse
     {
-        if ($request->hasFile('scan_cheque')) {
-            $this->attacherScanCheque($courrier, $request->file('scan_cheque'));
+        foreach ($this->collecterFichiersUpload($request, 'scans_cheque', 'scan_cheque') as $scan) {
+            $this->attacherScanCheque($courrier, $scan);
         }
 
         try {
@@ -215,13 +218,6 @@ class CircuitCourrierController extends Controller
 
     public function signerCheque(SignerChequeDgRequest $request, Courrier $courrier): RedirectResponse
     {
-        $this->attacherPieceCourrier(
-            $courrier,
-            $request->file('scan_cheque_signe'),
-            'Scan chèque signé',
-            'Chèque signé par le DG'
-        );
-
         try {
             $this->moteur->signerChequeDg(
                 $courrier->fresh(),
@@ -233,30 +229,64 @@ class CircuitCourrierController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Chèque signé enregistré. Le fournisseur a été notifié pour le recouvrement si demandé.');
+        return back()->with('success', 'Signature du chèque confirmée. L’AC peut enregistrer la décharge du bénéficiaire.');
     }
 
-    public function deposerPreuvePaiement(DeposerPreuvePaiementRequest $request, Courrier $courrier): RedirectResponse
+    public function deposerPreuvePaiement(EnregistrerDechargeAcRequest $request, Courrier $courrier): RedirectResponse
     {
-        $this->attacherPieceCourrier(
-            $courrier,
-            $request->file('preuve_paiement'),
-            'Preuve de paiement',
-            'Preuve de paiement fournisseur / prestataire'
-        );
+        foreach ($this->collecterFichiersUpload($request, 'preuves_paiement', 'preuve_paiement') as $preuve) {
+            $this->attacherPieceCourrier(
+                $courrier,
+                $preuve,
+                'Pièce de décharge / paiement',
+                'Chèque déchargé / pièce d’identité / justificatif de paiement'
+            );
+        }
 
         try {
-            $this->moteur->deposerPreuvePaiement(
+            $this->moteur->enregistrerDechargeAc(
                 $courrier->fresh(),
                 $request->user(),
+                [
+                    'date_decharge' => $request->validated('date_decharge'),
+                    'numero_piece' => $request->validated('numero_piece'),
+                    'montant' => $request->validated('montant'),
+                    'banque' => $request->validated('banque'),
+                    'beneficiaire_libelle' => $request->validated('beneficiaire_libelle'),
+                    'programmation' => $request->validated('programmation'),
+                    'observation' => $request->validated('observation'),
+                ],
                 $request->validated('message'),
-                $request->validated('observation'),
             );
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Preuve de paiement enregistrée — dossier clôturé.');
+        return back()->with('success', 'Décharge / paiement enregistré — suivi des dépenses notifié pour contrôle.');
+    }
+
+    public function confirmerControleDepense(ConfirmerControleDepenseRequest $request, Courrier $courrier): RedirectResponse
+    {
+        foreach ($this->collecterFichiersUpload($request, 'pieces_complementaires', 'piece_complementaire') as $piece) {
+            $this->attacherPieceCourrier(
+                $courrier,
+                $piece,
+                'Pièce complémentaire (contrôle)',
+                'Pièce jointe lors du contrôle suivi des dépenses'
+            );
+        }
+
+        try {
+            $this->moteur->confirmerControleDepense(
+                $courrier->fresh(),
+                $request->user(),
+                $request->validated('message'),
+            );
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Contrôle confirmé — dossier clôturé.');
     }
 
     public function soumettreReponse(SoumettreReponseCourrierRequest $request, Courrier $courrier): RedirectResponse
@@ -528,6 +558,28 @@ class CircuitCourrierController extends Controller
     private function attacherScanCheque(Courrier $courrier, UploadedFile $file): void
     {
         $this->attacherPieceCourrier($courrier, $file, 'Scan chèque', 'Scan du chèque transmis au DG');
+    }
+
+    /**
+     * @return list<UploadedFile>
+     */
+    private function collecterFichiersUpload(Request $request, string $cleMultiple, string $cleUnique): array
+    {
+        $fichiers = [];
+
+        if ($request->hasFile($cleMultiple)) {
+            foreach ((array) $request->file($cleMultiple) as $fichier) {
+                if ($fichier) {
+                    $fichiers[] = $fichier;
+                }
+            }
+        }
+
+        if ($request->hasFile($cleUnique)) {
+            $fichiers[] = $request->file($cleUnique);
+        }
+
+        return $fichiers;
     }
 
     private function attacherPieceCourrier(Courrier $courrier, UploadedFile $file, string $titre, string $description): void

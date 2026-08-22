@@ -2,10 +2,12 @@
  * Livret registre courriers GED — type SIFEC (BookBlock + double page + spirale).
  */
 .ged-registre-livret {
-    --ged-registre-accent: #0f766e;
-    --ged-registre-accent-soft: #14b8a6;
+    --ged-registre-accent: #334155;
+    --ged-registre-accent-soft: #475569;
     --ged-registre-paper: #fffef9;
     --ged-registre-paper-alt: #f7f4ea;
+    --ged-registre-row-odd: #d1fae5;
+    --ged-registre-row-even: #fffbeb;
     --ged-registre-ink: #0f172a;
     --ged-registre-rule: #c5b896;
     --ged-page-height: 640px;
@@ -17,8 +19,8 @@
 }
 
 .ged-registre-livret.is-depart {
-    --ged-registre-accent: #1d4ed8;
-    --ged-registre-accent-soft: #3b82f6;
+    --ged-registre-accent: #1e293b;
+    --ged-registre-accent-soft: #334155;
 }
 
 .ged-registre-livret.is-fullscreen {
@@ -541,8 +543,8 @@
 }
 
 .ged-registre-livret .registre-th {
-    border: 1px solid #334155;
-    background: linear-gradient(90deg, var(--ged-registre-accent) 0%, var(--ged-registre-accent-soft) 100%);
+    border: 1px solid #1e293b;
+    background: var(--ged-registre-accent);
     padding: 0.45rem 0.3rem;
     text-align: center;
     font-weight: 700;
@@ -558,13 +560,17 @@
     padding: 0.35rem 0.3rem;
     vertical-align: top;
     color: #0f172a;
-    background: #fffefb;
+    background: var(--ged-registre-row-odd);
     font-size: 0.7rem;
     line-height: 1.3;
 }
 
+.ged-registre-livret .registre-row:nth-child(odd) .registre-td {
+    background: var(--ged-registre-row-odd);
+}
+
 .ged-registre-livret .registre-row:nth-child(even) .registre-td {
-    background: #faf7f0;
+    background: var(--ged-registre-row-even);
 }
 
 .ged-registre-livret .registre-livret-footer {

@@ -7,7 +7,7 @@ use App\Services\CircuitCourrierMoteurService;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * Le DG enregistre la signature du chèque (scan obligatoire) et peut notifier le fournisseur.
+ * Le DG confirme que le chèque est signé (sans scan) et renvoie le dossier à l’AC.
  */
 class SignerChequeDgRequest extends FormRequest
 {
@@ -36,20 +36,8 @@ class SignerChequeDgRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'scan_cheque_signe' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'message' => ['nullable', 'string', 'max:2000'],
             'notifier_fournisseur' => ['nullable', 'boolean'],
-        ];
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    public function messages(): array
-    {
-        return [
-            'scan_cheque_signe.required' => 'Merci de joindre le scan du chèque signé.',
-            'scan_cheque_signe.mimes' => 'Le scan doit être un PDF ou une image (jpg, png).',
         ];
     }
 }

@@ -17,6 +17,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RechercheController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\StructureController;
+use App\Http\Controllers\SuiviFacturesFournisseursController;
 use App\Http\Controllers\SuiviPaiementController;
 use App\Http\Controllers\TypeCourrierController;
 use App\Http\Controllers\TypeDocumentController;
@@ -148,6 +149,8 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::get('/registres/courriers/depart/imprimer', [CourrierRegistreController::class, 'printDepart'])->name('courriers.registres.print-depart');
     Route::get('/suivi-paiements', [SuiviPaiementController::class, 'index'])->name('suivi-paiements.index');
     Route::get('/suivi-paiements/export', [SuiviPaiementController::class, 'export'])->name('suivi-paiements.export');
+    Route::get('/suivi-factures-fournisseurs', [SuiviFacturesFournisseursController::class, 'index'])->name('suivi-factures-fournisseurs.index');
+    Route::get('/suivi-factures-fournisseurs/export', [SuiviFacturesFournisseursController::class, 'export'])->name('suivi-factures-fournisseurs.export');
     Route::get('/courriers', [CourrierController::class, 'index'])->name('courriers.index');
     Route::get('/courriers/create', [CourrierController::class, 'create'])->name('courriers.create');
     Route::post('/courriers', [CourrierController::class, 'store'])->name('courriers.store');
@@ -177,6 +180,7 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::post('/courriers/{courrier}/circuit/envoyer-cheque', [CircuitCourrierController::class, 'envoyerCheque'])->name('courriers.circuit.envoyer-cheque');
     Route::post('/courriers/{courrier}/circuit/signer-cheque', [CircuitCourrierController::class, 'signerCheque'])->name('courriers.circuit.signer-cheque');
     Route::post('/courriers/{courrier}/circuit/deposer-preuve-paiement', [CircuitCourrierController::class, 'deposerPreuvePaiement'])->name('courriers.circuit.deposer-preuve-paiement');
+    Route::post('/courriers/{courrier}/circuit/confirmer-controle-depense', [CircuitCourrierController::class, 'confirmerControleDepense'])->name('courriers.circuit.confirmer-controle-depense');
 
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');

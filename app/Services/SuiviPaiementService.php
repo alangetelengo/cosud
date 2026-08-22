@@ -89,6 +89,53 @@ class SuiviPaiementService
     }
 
     /**
+     * Complète la fiche FSP avec le bordereau de transmission (décharge bénéficiaire).
+     *
+     * @param  array{
+     *     date_decharge: string,
+     *     numero_piece: string,
+     *     montant: float|int|string,
+     *     banque: string,
+     *     beneficiaire_libelle: string,
+     *     programmation?: ?string,
+     *     observation?: ?string
+     * }  $donnees
+     */
+    public function enregistrerDechargeBordereau(Courrier $courrier, array $donnees): SuiviPaiement
+    {
+        $suivi = SuiviPaiement::query()->where('courrier_id', $courrier->id)->first();
+
+        if (! $suivi) {
+            throw new InvalidArgumentException('Aucune fiche de suivi des paiements pour ce courrier.');
+        }
+
+        $observation = trim((string) ($donnees['observation'] ?? ''));
+
+        $suivi->update([
+            'date_decharge' => $donnees['date_decharge'],
+            'date_suivi' => $donnees['date_decharge'],
+            'numero_piece' => $donnees['numero_piece'],
+            'montant' => $donnees['montant'],
+            'banque' => $donnees['banque'],
+            'beneficiaire_libelle' => $donnees['beneficiaire_libelle'],
+            'programmation' => $donnees['programmation'] ?? null,
+            'observation' => $observation !== '' ? $observation : $suivi->observation,
+        ]);
+
+        return $suivi->fresh();
+    }
+
+    public function marquerControleEffectue(Courrier $courrier, User $acteur): void
+    {
+        SuiviPaiement::query()
+            ->where('courrier_id', $courrier->id)
+            ->update([
+                'controle_par_id' => $acteur->id,
+                'controle_at' => now(),
+            ]);
+    }
+
+    /**
      * Enregistre l’observation FSP lors du dépôt de la preuve de paiement.
      */
     public function enregistrerObservation(Courrier $courrier, ?string $observation): void

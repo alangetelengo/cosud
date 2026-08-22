@@ -50,7 +50,7 @@
                     </div>
 
                     <div>
-                        <label class="{{ $label }}">Expéditeur externe</label>
+                        <label class="{{ $label }}">Expéditeur</label>
                         <input type="text" name="expediteur_libelle" value="{{ old('expediteur_libelle') }}" class="{{ $field }}" placeholder="Organisme ou personne émettrice">
                         @error('expediteur_libelle')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                     </div>
@@ -63,7 +63,7 @@
                             @error('expediteur_email')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                         </div>
                         <div>
-                            <label class="{{ $label }}">Téléphone expéditeur <span class="text-slate-400 normal-case tracking-normal font-medium">(optionnel, SMS)</span></label>
+                            <label class="{{ $label }}">Téléphone expéditeur <span class="text-slate-400 normal-case tracking-normal font-medium"></span></label>
                             <input type="text" name="expediteur_telephone" value="{{ old('expediteur_telephone') }}" class="{{ $field }}" placeholder="+24206…">
                             @error('expediteur_telephone')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                         </div>
@@ -77,7 +77,7 @@
                             @error('numero_fulgurant')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                         </div>
                         <div>
-                            <label class="{{ $label }}">Référence</label>
+                            <label class="{{ $label }}">Référence document</label>
                             <input type="text" name="reference" value="{{ old('reference') }}" class="{{ $field }}">
                             @error('reference')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                         </div>
@@ -87,18 +87,20 @@
 
             <section class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
                 <div class="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40">
-                    <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Scan du courrier</h2>
-                    <p class="text-xs text-slate-500 mt-0.5">PDF ou image — obligatoire pour une arrivée externe</p>
+                    <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Scans du courrier</h2>
+                    <p class="text-xs text-slate-500 mt-0.5">Un ou plusieurs PDF / images — obligatoire pour une arrivée externe</p>
                 </div>
                 <div class="p-5">
                     <label class="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-900/30 px-4 py-8 cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-colors">
                         <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                        <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">Choisir un fichier <span class="text-red-500">*</span></span>
-                        <span class="text-xs text-slate-500">PDF, JPG, PNG — max. 10 Mo</span>
-                        <input type="file" name="fichier" accept=".pdf,.jpg,.jpeg,.png" required class="sr-only" id="fichier-scan"
-                               onchange="document.getElementById('fichier-scan-name').textContent = this.files[0]?.name || 'Aucun fichier choisi'">
+                        <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">Choisir un ou plusieurs fichiers <span class="text-red-500">*</span></span>
+                        <span class="text-xs text-slate-500">PDF, JPG, PNG — max. 10 Mo par fichier</span>
+                        <input type="file" name="fichiers[]" accept=".pdf,.jpg,.jpeg,.png" multiple required class="sr-only" id="fichier-scan"
+                               onchange="(function(input){var n=input.files?.length||0;document.getElementById('fichier-scan-name').textContent=n===0?'Aucun fichier choisi':(n===1?input.files[0].name:(n+' fichiers sélectionnés'));})(this)">
                     </label>
                     <p id="fichier-scan-name" class="mt-2 text-xs text-slate-500 text-center">Aucun fichier choisi</p>
+                    @error('fichiers')<p class="text-sm text-red-600 mt-2 text-center">{{ $message }}</p>@enderror
+                    @error('fichiers.*')<p class="text-sm text-red-600 mt-2 text-center">{{ $message }}</p>@enderror
                     @error('fichier')<p class="text-sm text-red-600 mt-2 text-center">{{ $message }}</p>@enderror
                 </div>
             </section>

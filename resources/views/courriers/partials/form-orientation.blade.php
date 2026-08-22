@@ -66,7 +66,7 @@
             <label class="{{ $label }}">Agents à notifier <span class="text-red-500 normal-case tracking-normal">*</span></label>
             <select name="notify_user_ids[]" multiple class="{{ $field }} min-h-[100px]">
                 @foreach($agentsOrientation as $u)
-                <option value="{{ $u->id }}" @selected(collect(old('notify_user_ids', []))->contains($u->id))>{{ $u->name }}</option>
+                <option value="{{ $u->id }}" title="{{ $u->name }}" @selected(collect(old('notify_user_ids', []))->contains($u->id))>{{ $u->libelleDestinataireCourrier() }}</option>
                 @endforeach
             </select>
             <p class="{{ $hintSize }} text-slate-500 mt-1.5">En confidentiel, vous choisissez librement qui notifier.</p>

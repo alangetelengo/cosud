@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Listeners\EnsureMesDossiersRacineExists;
+use App\Models\Courrier;
 use App\Notifications\Channels\GedSmsChannel;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Registered;
@@ -38,6 +39,17 @@ class AppServiceProvider extends ServiceProvider
                 ? auth()->user()->unreadNotifications()->count()
                 : 0;
             $view->with('unreadNotificationsCount', $unreadCount);
+        });
+
+        View::composer('partials.sidebar', function ($view) {
+            $total = 0;
+            if (auth()->check() && auth()->user()->can('courriers.view')) {
+                $total = Courrier::query()
+                    ->visibleBy(auth()->user())
+                    ->whereDoesntHave('lectures', fn ($q) => $q->where('user_id', auth()->id()))
+                    ->count();
+            }
+            $view->with('courriersNonLusTotal', $total);
         });
 
         Notification::extend('ged_sms', fn ($app) => $app->make(GedSmsChannel::class));

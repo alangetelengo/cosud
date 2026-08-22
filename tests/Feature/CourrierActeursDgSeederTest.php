@@ -111,6 +111,34 @@ class CourrierActeursDgSeederTest extends TestCase
         $this->assertSame($directeur->id, $ddsait->titulaireValidationActuel()?->id);
     }
 
+    public function test_seed_affecte_directeurs_ding_dinfra_dsupport_dcom(): void
+    {
+        $this->seed([
+            RoleAndPermissionSeeder::class,
+            StructureSeeder::class,
+            ACSIFonctionsSeeder::class,
+            CourrierReferentielSeeder::class,
+            CircuitCourrierSeeder::class,
+            CourrierActeursDgSeeder::class,
+        ]);
+
+        $attendus = [
+            '003012y@acsi.cg' => 'DING-SI',
+            '001966m@acsi.cg' => 'DINFRA',
+            '001957c@acsi.cg' => 'DSUPPORT',
+            '003330u@acsi.cg' => 'DCOM',
+        ];
+
+        foreach ($attendus as $email => $codeStructure) {
+            $structure = Structure::where('code', $codeStructure)->firstOrFail();
+            $directeur = User::where('email', $email)->firstOrFail();
+
+            $this->assertTrue($directeur->hasRole('directeur'), $email);
+            $this->assertSame($structure->id, (int) $directeur->structure_id, $email);
+            $this->assertSame($directeur->id, $structure->titulaireValidationActuel()?->id, $email);
+        }
+    }
+
     public function test_circuit_seeder_ne_retire_pas_documents_et_dossiers(): void
     {
         $this->seed([

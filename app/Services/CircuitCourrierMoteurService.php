@@ -127,8 +127,8 @@ class CircuitCourrierMoteurService
 
     public function userCorrespondActeur(User $user, CircuitCourrierEtape $etape, ?Courrier $courrier = null): bool
     {
-        if ($courrier?->agent_confie_id) {
-            return (int) $user->id === (int) $courrier->agent_confie_id;
+        if ($courrier && $this->idsAgentsConfies($courrier) !== []) {
+            return in_array((int) $user->id, $this->idsAgentsConfies($courrier), true);
         }
 
         return $this->userCorrespondActeurParRole($user, $etape, $courrier);
@@ -177,20 +177,62 @@ class CircuitCourrierMoteurService
      */
     public function libelleActeurPour(Courrier $courrier, CircuitCourrierEtape $etape): string
     {
-        if ($courrier->agent_confie_id) {
-            $courrier->loadMissing('agentConfie');
-            $nom = $courrier->agentConfie?->name;
-
-            return $nom ? 'Collaborateur confié — '.$nom : 'Collaborateur confié';
+        $libelles = $courrier->libellesAgentsConfies();
+        if ($libelles !== []) {
+            return 'Confié à — '.implode(', ', $libelles);
         }
 
         if ($etape->acteur_type === CircuitCourrierEtape::ACTEUR_DIRECTEUR_DESTINATAIRE) {
             $directeur = $this->resoudreActeurDirecteur($courrier);
 
-            return $directeur ? 'Directeur — '.$directeur->name : $etape->libelleActeur();
+            return $directeur
+                ? 'Directeur — '.$directeur->libelleDestinataireCourrier()
+                : $etape->libelleActeur();
         }
 
         return $etape->libelleActeur();
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function idsAgentsConfies(Courrier $courrier): array
+    {
+        $courrier->loadMissing('agentsConfies');
+
+        $ids = $courrier->agentsConfies->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        if ($courrier->agent_confie_id) {
+            $ids[] = (int) $courrier->agent_confie_id;
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * @param  list<int>  $agentConfieIds
+     */
+    public function synchroniserAgentsConfies(Courrier $courrier, array $agentConfieIds): void
+    {
+        $ids = collect($agentConfieIds)
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $courrier->agentsConfies()->sync($ids);
+        $courrier->forceFill([
+            'agent_confie_id' => $ids[0] ?? null,
+        ])->save();
+    }
+
+    public function viderAgentsConfies(Courrier $courrier): void
+    {
+        $courrier->agentsConfies()->detach();
+        if ($courrier->agent_confie_id !== null) {
+            $courrier->forceFill(['agent_confie_id' => null])->save();
+        }
     }
 
     protected function userAFonction(User $user, string $valeur): bool
@@ -247,42 +289,95 @@ class CircuitCourrierMoteurService
      * Enregistre les instructions de l’acteur sur l’étape courante (type « instruire »),
      * les conserve sur le courrier (`instructions_dg`) puis fait avancer le circuit.
      *
-     * Si un agent est désigné (facultatif), il devient le prochain acteur (A2) :
-     * on saute à la première étape suivante dont le rôle lui correspond, sinon on avance
-     * d’une étape avec override `agent_confie_id` jusqu’à ce qu’il valide.
+     * Si un ou plusieurs agents sont désignés (facultatif), ils deviennent les destinataires
+     * du dossier : notification à chacun, et le premier agent dont le rôle correspond à une
+     * étape ultérieure déclenche le saut (sinon avance d’une étape avec override multi).
+     *
+     * @param  list<int>|null  $agentConfieIds
      */
-    public function instruire(Courrier $courrier, User $acteur, string $instructions, ?int $agentConfieId = null): Courrier
-    {
+    public function instruire(
+        Courrier $courrier,
+        User $acteur,
+        string $instructions,
+        ?int $agentConfieId = null,
+        ?array $agentConfieIds = null,
+    ): Courrier {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->action !== CircuitCourrierEtape::ACTION_INSTRUIRE) {
             throw new InvalidArgumentException('Aucune étape d’instruction en cours sur ce courrier.');
         }
 
-        $agent = null;
-        if ($agentConfieId !== null) {
-            $agent = User::query()->where('actif', true)->find($agentConfieId);
-            if (! $agent) {
-                throw new InvalidArgumentException('Le collaborateur confié est introuvable ou inactif.');
-            }
+        $ids = collect($agentConfieIds ?? [])
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->when($agentConfieId !== null, fn ($c) => $c->prepend((int) $agentConfieId))
+            ->unique()
+            ->values();
+
+        $agents = $ids->isEmpty()
+            ? collect()
+            : User::query()->where('actif', true)->whereIn('id', $ids->all())->get();
+
+        if ($ids->isNotEmpty() && $agents->count() !== $ids->count()) {
+            throw new InvalidArgumentException('Un ou plusieurs destinataires sont introuvables ou inactifs.');
         }
 
         $courrier->update([
             'instructions_dg' => $instructions,
             'date_orientation' => now(),
-            'agent_confie_id' => $agent?->id,
         ]);
+        $this->synchroniserAgentsConfies($courrier, $agents->pluck('id')->all());
 
-        $courrier = $courrier->fresh(['circuitEtapeActuelle', 'circuit.etapesActives', 'agentConfie']);
+        $courrier = $courrier->fresh(['circuitEtapeActuelle', 'circuit.etapesActives', 'agentConfie', 'agentsConfies']);
         $etape = $courrier->circuitEtapeActuelle;
 
-        if ($agent && $etape) {
-            $cible = $this->trouverProchaineEtapePourAgent($courrier, $agent, $etape);
-            if ($cible && (int) $cible->id !== (int) $etape->id) {
-                return $this->sauterVersEtapeApresInstruction($courrier, $acteur, $etape, $cible, $instructions);
+        if ($agents->isNotEmpty() && $etape) {
+            $cible = null;
+            $agentPourSaut = null;
+            foreach ($agents as $agent) {
+                $candidate = $this->trouverProchaineEtapePourAgent($courrier, $agent, $etape);
+                if ($candidate && ($cible === null || $candidate->ordre < $cible->ordre)) {
+                    $cible = $candidate;
+                    $agentPourSaut = $agent;
+                }
             }
+
+            if ($cible && $agentPourSaut && (int) $cible->id !== (int) $etape->id) {
+                $courrier = $this->sauterVersEtapeApresInstruction($courrier, $acteur, $etape, $cible, $instructions);
+            } else {
+                $courrier = $this->avancer($courrier, $acteur, $instructions);
+            }
+        } else {
+            $courrier = $this->avancer($courrier, $acteur, $instructions);
         }
 
-        return $this->avancer($courrier, $acteur, $instructions);
+        $this->notifierSuiviParalleleDossiersPrestataires($courrier, $acteur);
+
+        return $courrier;
+    }
+
+    /**
+     * Après Bon pour accord DG : informer la responsable dossiers (suivi parallèle,
+     * sans étape de transmission vers l’AC).
+     */
+    protected function notifierSuiviParalleleDossiersPrestataires(Courrier $courrier, User $acteur): void
+    {
+        $courrier->loadMissing('circuit');
+
+        if ($courrier->circuit?->code !== 'facture_prestataire') {
+            return;
+        }
+
+        $detail = 'Bon pour accord DG — classer la facture dans le dossier fournisseur et suivre le paiement.'
+            .($courrier->instructions_dg ? ' | Instructions : '.$courrier->instructions_dg : '');
+
+        $this->notifications->notifierRoles(
+            ['responsable_dossiers_prestataires'],
+            $courrier,
+            $acteur,
+            CourrierNotificationService::ETAPE_CIRCUIT,
+            $detail
+        );
     }
 
     /**
@@ -325,7 +420,7 @@ class CircuitCourrierMoteurService
                 $cible,
                 $acteur,
                 'etape_suivante',
-                'Confié à '.$courrier->agentConfie?->name.' — passage à : '.$cible->nom
+                'Confié à '.implode(', ', $courrier->libellesAgentsConfies()).' — passage à : '.$cible->nom
             );
 
             JournalAudit::log('courrier.circuit.instruire', 'courriers', [
@@ -334,10 +429,11 @@ class CircuitCourrierMoteurService
                     'etape' => $depuis->code,
                     'suivante' => $cible->code,
                     'agent_confie_id' => $courrier->agent_confie_id,
+                    'agent_confie_ids' => $this->idsAgentsConfies($courrier),
                 ]),
             ]);
 
-            $courrier = $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'agentConfie']);
+            $courrier = $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'agentConfie', 'agentsConfies']);
             $this->notifierEtapeCourante($courrier, $acteur);
 
             return $courrier;
@@ -381,8 +477,8 @@ class CircuitCourrierMoteurService
     }
 
     /**
-     * Le DG enregistre le scan du chèque signé, notifie éventuellement le fournisseur
-     * pour recouvrement, puis avance vers l’AC / caissiers.
+     * Le DG confirme la signature du chèque (sans scan dans le GED), notifie éventuellement
+     * le fournisseur pour recouvrement, puis renvoie le dossier à l’AC pour la décharge.
      */
     public function signerChequeDg(Courrier $courrier, User $acteur, ?string $message = null, bool $notifierFournisseur = true): Courrier
     {
@@ -392,41 +488,55 @@ class CircuitCourrierMoteurService
         }
 
         if (! $this->peutAgir($courrier, $acteur)) {
-            throw new InvalidArgumentException('Vous n’êtes pas autorisé à enregistrer la signature du chèque.');
+            throw new InvalidArgumentException('Vous n’êtes pas autorisé à confirmer la signature du chèque.');
         }
 
-        $commentaire = $message ?: 'Chèque signé par le DG.';
+        $commentaire = $message ?: 'Chèque signé par le DG — dossier renvoyé à l’AC pour décharge bénéficiaire.';
 
         $courrier = $this->avancer(
             $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
             $acteur,
             $commentaire
         );
+
+        // L’étape suivante (décharge AC) est nominative par rôle : ne pas bloquer sur d’anciens destinataires confiés.
+        $this->viderAgentsConfies($courrier);
 
         if ($notifierFournisseur) {
             $this->notifications->notifierFournisseurRecouvrement($courrier->fresh());
         }
 
-        return $courrier;
+        return $courrier->fresh(['circuitEtapeActuelle', 'agentConfie', 'agentsConfies']);
     }
 
     /**
-     * Dépôt de la preuve de paiement puis clôture automatique du dossier facture.
+     * L’AC enregistre le bordereau + pièces à la décharge du bénéficiaire,
+     * puis notifie le suivi des dépenses pour contrôle.
+     *
+     * @param  array{
+     *     date_decharge: string,
+     *     numero_piece: string,
+     *     montant: float|int|string,
+     *     banque: string,
+     *     beneficiaire_libelle: string,
+     *     programmation?: ?string,
+     *     observation?: ?string
+     * }  $bordereau
      */
-    public function deposerPreuvePaiement(Courrier $courrier, User $acteur, ?string $message = null, ?string $observation = null): Courrier
+    public function enregistrerDechargeAc(Courrier $courrier, User $acteur, array $bordereau, ?string $message = null): Courrier
     {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->code !== 'preuve_paiement') {
-            throw new InvalidArgumentException('Aucune étape « preuve de paiement » en cours sur ce courrier.');
+            throw new InvalidArgumentException('Aucune étape d’enregistrement de décharge en cours sur ce courrier.');
         }
 
         if (! $this->peutAgir($courrier, $acteur)) {
-            throw new InvalidArgumentException('Vous n’êtes pas autorisé à déposer la preuve de paiement.');
+            throw new InvalidArgumentException('Vous n’êtes pas autorisé à enregistrer la décharge / le paiement.');
         }
 
-        $this->suiviPaiements->enregistrerObservation($courrier, $observation);
+        $this->suiviPaiements->enregistrerDechargeBordereau($courrier, $bordereau);
 
-        $commentaire = $message ?: 'Preuve de paiement enregistrée.';
+        $commentaire = $message ?: 'Décharge bénéficiaire enregistrée (bordereau + pièces).';
 
         $courrier = $this->avancer(
             $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
@@ -434,17 +544,55 @@ class CircuitCourrierMoteurService
             $commentaire
         );
 
-        // Clôture automatique si l’étape suivante est la clôture finale.
-        if ($courrier->circuitEtapeActuelle?->code === 'cloture_depenses'
-            && $this->peutAgir($courrier, $acteur)) {
-            $courrier = $this->avancer(
-                $courrier,
-                $acteur,
-                'Clôture du dossier après preuve de paiement.'
-            );
+        $this->viderAgentsConfies($courrier);
+
+        return $courrier->fresh(['circuitEtapeActuelle', 'agentConfie', 'agentsConfies', 'suiviPaiement']);
+    }
+
+    /**
+     * Mme Eleni contrôle les éléments saisis par l’AC et confirme la clôture du dossier.
+     */
+    public function confirmerControleDepense(Courrier $courrier, User $acteur, ?string $message = null): Courrier
+    {
+        $etape = $courrier->circuitEtapeActuelle;
+        if (! $etape || $etape->code !== 'cloture_depenses') {
+            throw new InvalidArgumentException('Aucune étape de contrôle / clôture en cours sur ce courrier.');
         }
 
-        return $courrier;
+        if (! $this->peutAgir($courrier, $acteur)) {
+            throw new InvalidArgumentException('Vous n’êtes pas autorisé à confirmer le contrôle de cette dépense.');
+        }
+
+        $this->suiviPaiements->marquerControleEffectue($courrier, $acteur);
+
+        $commentaire = $message ?: 'Contrôle effectué — clôture du dossier confirmée.';
+
+        return $this->avancer(
+            $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
+            $acteur,
+            $commentaire
+        );
+    }
+
+    /**
+     * @deprecated Conservé pour les tests historiques — préférer enregistrerDechargeAc.
+     */
+    public function deposerPreuvePaiement(Courrier $courrier, User $acteur, ?string $message = null, ?string $observation = null): Courrier
+    {
+        $courrier->loadMissing('suiviPaiement');
+        $suivi = $courrier->suiviPaiement;
+
+        return $this->enregistrerDechargeAc($courrier, $acteur, [
+            'date_decharge' => now()->toDateString(),
+            'numero_piece' => $suivi?->numero_piece ?: 'Chèque',
+            'montant' => (float) ($suivi?->montant ?: 1),
+            'banque' => $suivi?->banque ?: 'N/A',
+            'beneficiaire_libelle' => $suivi?->beneficiaire_libelle
+                ?: $suivi?->fournisseur_libelle
+                ?: ($courrier->expediteur_libelle ?: 'Bénéficiaire'),
+            'programmation' => $suivi?->programmation,
+            'observation' => $observation,
+        ], $message);
     }
 
     /**
@@ -691,10 +839,10 @@ class CircuitCourrierMoteurService
                 $commentaire ?: ('Étape validée : '.$etape->nom)
             );
 
-            // L’agent confié est désigné à la sortie de l’étape d’instruction : on ne
-            // l’efface qu’après qu’il a traité « son » étape (pas au moment de l’instruction).
+            // Les destinataires confiés sont désignés à la sortie de l’étape d’instruction :
+            // on ne les efface qu’après qu’ils ont traité « leur » étape (pas au moment de l’instruction).
             if ($etape->action !== CircuitCourrierEtape::ACTION_INSTRUIRE) {
-                $courrier->agent_confie_id = null;
+                $this->viderAgentsConfies($courrier);
             }
 
             if ($etape->est_finale) {
@@ -779,8 +927,7 @@ class CircuitCourrierMoteurService
     /**
      * Étapes sans action métier dédiée (pas de « Valider l’étape ») :
      * - notification pure ;
-     * - relais facture : dossiers → AC, AC → caissiers, retour caisse.
-     * Exception : agent confié hors rôle AC sur « Traitement dossiers » (override).
+     * - relais facture : AC → caissiers, retour caisse.
      */
     public function etapeEstAutomatique(Courrier $courrier, CircuitCourrierEtape $etape): bool
     {
@@ -788,25 +935,10 @@ class CircuitCourrierMoteurService
             return true;
         }
 
-        if (in_array($etape->code, [
+        return in_array($etape->code, [
             'ac_vers_caissiers',
             'retour_caisse_depenses',
-        ], true)) {
-            return true;
-        }
-
-        if ($etape->code === 'traitement_dossiers_vers_ac') {
-            $courrier->loadMissing('agentConfie');
-
-            // Agent confié qui ne correspond pas au rôle AC : il agit sur cette étape.
-            if ($courrier->agent_confie_id) {
-                return false;
-            }
-
-            return true;
-        }
-
-        return false;
+        ], true);
     }
 
     /**
@@ -821,11 +953,6 @@ class CircuitCourrierMoteurService
 
         if ($etape->action === CircuitCourrierEtape::ACTION_ENREGISTRER
             || $etape->code === 'enregistrement') {
-            return false;
-        }
-
-        // Clôture enchaînée automatiquement après le dépôt de la preuve de paiement.
-        if ($etape->code === 'cloture_depenses') {
             return false;
         }
 
@@ -844,15 +971,21 @@ class CircuitCourrierMoteurService
             $detail .= ' | Instructions : '.$courrier->instructions_dg;
         }
 
-        $courrier->loadMissing('agentConfie');
-        if ($courrier->agentConfie) {
-            $this->notifications->notifier(
-                $courrier->agentConfie,
-                $courrier,
-                $acteur,
-                CourrierNotificationService::DOSSIER_CONFIE,
-                $detail
-            );
+        $courrier->loadMissing(['agentConfie', 'agentsConfies']);
+        $agentsConfies = $courrier->agentsConfies->isNotEmpty()
+            ? $courrier->agentsConfies
+            : collect($courrier->agentConfie ? [$courrier->agentConfie] : []);
+
+        if ($agentsConfies->isNotEmpty()) {
+            foreach ($agentsConfies as $agent) {
+                $this->notifications->notifier(
+                    $agent,
+                    $courrier,
+                    $acteur,
+                    CourrierNotificationService::DOSSIER_CONFIE,
+                    $detail
+                );
+            }
 
             if (! $courrier->est_confidentiel) {
                 $this->notifications->notifierRoles(

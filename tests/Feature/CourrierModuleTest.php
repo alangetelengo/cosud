@@ -69,7 +69,30 @@ class CourrierModuleTest extends TestCase
                 'sens' => 'arrivee',
                 'objet' => 'Demande sans scan',
             ])
-            ->assertSessionHasErrors('fichier');
+            ->assertSessionHasErrors('fichiers');
+    }
+
+    public function test_creation_courrier_arrivee_avec_plusieurs_scans(): void
+    {
+        Storage::fake('public');
+        $user = $this->creerSecretaire();
+
+        $this->actingAs($user)
+            ->post(route('courriers.store', absolute: false), [
+                'sens' => 'arrivee',
+                'objet' => 'Facture multi-pièces',
+                'expediteur_libelle' => 'AF.COM',
+                'date_reception' => now()->toDateString(),
+                'fichiers' => [
+                    UploadedFile::fake()->create('facture.pdf', 80, 'application/pdf'),
+                    UploadedFile::fake()->create('annexe.pdf', 40, 'application/pdf'),
+                ],
+            ])
+            ->assertRedirect();
+
+        $courrier = Courrier::query()->where('objet', 'Facture multi-pièces')->firstOrFail();
+        $this->assertCount(2, $courrier->documents);
+        $this->assertSame(1, $courrier->documents()->wherePivot('est_principal', true)->count());
     }
 
     public function test_creation_courrier_arrivee_avec_scan(): void

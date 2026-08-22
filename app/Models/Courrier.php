@@ -196,11 +196,72 @@ class Courrier extends Model
     }
 
     /**
-     * Agent à qui le DG a confié le dossier lors de l’instruction (option A du circuit).
+     * Agent principal à qui le DG a confié le dossier lors de l’instruction (compat. mono).
      */
     public function agentConfie(): BelongsTo
     {
         return $this->belongsTo(User::class, 'agent_confie_id');
+    }
+
+    /**
+     * Destinataires auxquels le DG a confié / envoyé le dossier (multi-select).
+     */
+    public function agentsConfies(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'courrier_agents_confies')
+            ->withTimestamps();
+    }
+
+    /**
+     * Lectures par utilisateur (logique type Gmail : gras tant que non ouvert).
+     */
+    public function lectures(): HasMany
+    {
+        return $this->hasMany(CourrierLecture::class);
+    }
+
+    public function aEteLuPar(?User $user): bool
+    {
+        if (! $user) {
+            return true;
+        }
+
+        if ($this->relationLoaded('lectures')) {
+            return $this->lectures->contains(fn (CourrierLecture $l) => (int) $l->user_id === (int) $user->id);
+        }
+
+        return $this->lectures()->where('user_id', $user->id)->exists();
+    }
+
+    public function marquerLuPar(User $user): void
+    {
+        CourrierLecture::query()->updateOrCreate(
+            [
+                'courrier_id' => $this->id,
+                'user_id' => $user->id,
+            ],
+            [
+                'lu_at' => now(),
+            ]
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function libellesAgentsConfies(): array
+    {
+        $this->loadMissing(['agentsConfies.structure', 'agentConfie.structure']);
+
+        $agents = $this->agentsConfies->isNotEmpty()
+            ? $this->agentsConfies
+            : collect($this->agentConfie ? [$this->agentConfie] : []);
+
+        return $agents
+            ->map(fn (User $u) => $u->libelleDestinataireCourrier())
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function courrierParent(): BelongsTo

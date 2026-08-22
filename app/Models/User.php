@@ -335,4 +335,59 @@ class User extends Authenticatable
             ->where('user_structure.role', 'like', '%Directeur%')
             ->exists();
     }
+
+    /**
+     * Libellé destinataire pour les listes courrier : fonction (et structure) plutôt que le nom.
+     * Le nom reste disponible en attribut title côté UI pour lever les ambiguïtés.
+     */
+    public function libelleDestinataireCourrier(): string
+    {
+        $affectation = DB::table('user_structure')
+            ->leftJoin('fonctions', 'fonctions.id', '=', 'user_structure.fonction_id')
+            ->leftJoin('structures', 'structures.id', '=', 'user_structure.structure_id')
+            ->where('user_structure.user_id', $this->id)
+            ->whereNull('user_structure.date_fin')
+            ->orderByRaw('CASE WHEN fonctions.id IS NOT NULL THEN 0 ELSE 1 END')
+            ->orderBy('structures.nom')
+            ->select([
+                'fonctions.libelle as fonction_libelle',
+                'structures.nom as structure_nom',
+                'user_structure.role as pivot_role',
+            ])
+            ->first();
+
+        $fonction = trim((string) ($affectation->fonction_libelle ?? ''));
+        $structure = trim((string) ($affectation->structure_nom ?? $this->structure?->nom ?? ''));
+        $pivotRole = trim((string) ($affectation->pivot_role ?? ''));
+
+        if ($fonction === '') {
+            $fonction = match (true) {
+                $this->hasRole('dg') => 'Directeur Général',
+                $this->hasRole('directeur') => 'Directeur',
+                $this->hasRole('chef_service') => 'Chef de service',
+                $this->hasRole('agent_comptable') => 'Agent comptable',
+                $this->hasRole('particulier_dg') => 'Particulière DG',
+                $this->hasRole('particulier_ac') => 'Particulière AC',
+                $this->hasRole('responsable_dossiers_prestataires') => 'Responsable dossiers prestataires',
+                $this->hasRole('responsable_suivi_depenses') => 'Responsable suivi des dépenses',
+                $this->hasRole('secretaire_direction') => 'Secrétaire de direction',
+                $pivotRole !== '' => $pivotRole,
+                default => '',
+            };
+        }
+
+        if ($fonction !== '' && $structure !== '') {
+            return $fonction.' — '.$structure;
+        }
+
+        if ($fonction !== '') {
+            return $fonction;
+        }
+
+        if ($structure !== '') {
+            return $structure;
+        }
+
+        return $this->name;
+    }
 }
