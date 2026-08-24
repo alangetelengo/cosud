@@ -1,50 +1,76 @@
-Digitalisation de la gestion des courriers
-Direction Générale — Résumé du processus métier
-Document de synthèse — GED ACSI
+FICHES TECHNIQUES MÉTIER
+Secrétariat général — Dossiers fournisseurs (Taty) et suivi des dépenses (Eleni)
+Agence Congolaise des Systèmes d’Information (ACSI)
+Document de validation métier — août 2026
+Version : 1.1 — périmètre Eleni élargi ; classement facture = Taty seule ; MAD hors classement dossier
+Principes communs
+Tous les secrétaires / acteurs secrétariat peuvent enregistrer un courrier arrivée (facture, MAD, demande, etc.).
+Seule la responsable de la tâche agit ensuite : classement dossier (Taty) ou contrôle / clôture et suivi financier (Eleni).
+Sur facture ou MAD : le DG instruit uniquement via le panneau « Circuit métier » (Bon pour accord). Pas de « Répondre moi-même » qui clôturerait le circuit paiement.
+Le N° fulgurant n’est plus saisi à l’enregistrement (recherche legacy éventuelle uniquement).
+Enchaînement après Bon pour accord (facture / MAD)
+Le DG donne son Bon pour accord (instructions ± confier à un directeur).
+L’Agent comptable établit le chèque et l’envoie au DG (papier).
+Le DG signe le chèque sur papier, puis confirme dans l’outil « Chèque signé — renvoyer à l’AC » (sans scan).
+Lorsque le bénéficiaire décharge le chèque, l’AC enregistre le bordereau (date, n° pièce, montant, banque, bénéficiaire, programmation) et joint les pièces (chèque déchargé, pièce d’identité, etc.).
+Mme Eleni Ossebi est notifiée : elle contrôle les éléments saisis avec les pièces physiques, peut ajouter des pièces complémentaires, puis confirme la clôture.
+En parallèle dès le Bon pour accord (uniquement pour une FACTURE) : Mme Taty classe la facture dans le dossier fournisseur et suit le paiement — elle n’envoie pas le dossier à l’AC. Une MAD n’ouvre pas l’action « Classer dans un dossier ».
+FICHE 1 — Mme ANNE LETHICIA TATY-TCHICAYA
+Rôle GED : responsable_dossiers_prestataires
+Responsable des dossiers fournisseurs / prestataires
 1. Objectif
-Digitaliser les registres physiques (Arrivée / Départ) du secrétariat DG, avec des circuits métier distincts selon le type de document.
-2. Acteurs
-3. Circuit A — Factures (prestataires / fournisseurs)
-Deux vagues d'arrivée, reliées au même dossier métier.
-Vague 1 — Facture/Divers courriers 
-Enregistrement Courrier arrivée
-Notification / traitement DG (instructions)
-La responsable des dossiers (secrétariat DG) traite le dossier → envoie à l’AC
-Vague 2 — Chèque
-AC établi le Chèque → envoi au DG pour signature
-DG signe (paiement) et envoi à l’AC
-AC envoi au caissiers pour l’approvisionnement
-AC envoi le retour de caisse de banque à la Responsable de suivi des dépendes (Secrétariat DG)
-le responsable du suivi des dépenses clôture le dossier
-4. Circuit B — Lettres / notes / instructions du DG
-Enregistrement Courrier arrivée
-Notification DG et la particulière
-Instruction DG
-Traitement du dossier par la particulière du DG
-Transmission vers département, prestataire, fournisseur ou tiers
-5. Lien avec les registres papier
-Registre Arrivée
-Date et n° d'arrivée
-Date et n° de la correspondance (pièce reçue)
-Expéditeur
-Objet
-Date et n° de la réponse
-Registre Départ
-N° d'ordre
-Nombre de pieces  
-Date du départ
-Destinataire
-Objet
-N° archives
-Observations
-Note : la colonne « Date et N° de la réponse » du registre arrivée correspond au lien vers le courrier départ associé.
----TABLES---
-Table 0:
-Rôle || Fonction
-Secrétariat DG || Enregistre tout ce qui arrive
-DG || Oriente, donne des instructions, valide, signe
-Particulière du DG || Pilote le secrétariat, traitement courriers entrants et sortants
-Responsable des dossiers prestataires / fournisseurs || Au secrétariat DG : traite les dossiers des prestataires et fournisseurs
-Responsable du suivi des dépenses || Au secrétariat DG : suit toutes les dépenses jusqu'à clôture
-DAF || Prépare le chèque
-AC (Agent comptable) || Effectue le paiement
+Classer les factures approuvées dans le dossier GED du fournisseur, suivre ponctuellement les paiements factures, et produire un rapport chaque vendredi à la demande du DG (périmètre factures fournisseurs).
+2. Périmètre
+Factures prestataires / fournisseurs uniquement.
+Hors périmètre classement : MAD, demandes générales, autres courriers.
+Peut enregistrer des courriers comme les autres acteurs secrétariat ; le classement dossier reste sa responsabilité exclusive (hors admin).
+3. Déclencheur
+Bon pour accord du DG sur une facture (notification / suivi parallèle).
+4. Actions dans le GED
+Prendre connaissance de la facture approuvée.
+Classer la facture (et ses pièces) dans un dossier fournisseur existant ou créer le dossier sous « Mes dossiers ».
+Suivre l’avancement du paiement (page Factures fournisseurs).
+Chaque vendredi : exporter / produire le rapport de suivi pour le DG.
+5. Ce qu’elle ne fait pas
+Elle n’envoie pas le dossier à l’Agent comptable.
+Elle ne bloque pas le paiement.
+Elle n’enregistre pas la décharge ni ne clôture la dépense (rôle Eleni / AC).
+Elle ne classe pas une MAD dans un dossier fournisseur.
+FICHE 2 — Mme ASTRIDE ELENI OSSEBI
+Rôle GED : responsable_suivi_depenses
+Responsable du suivi des dépenses — périmètre finances
+1. Objectif
+Assurer le suivi de tout ce qui concerne les finances placées sous sa responsabilité : contrôler les dépenses enregistrées, tenir les fiches de suivi, et produire chaque semaine un rapport selon la demande du DG.
+2. Périmètre métier (validation Eleni — août 2026)
+Au-delà du suivi des factures / MAD déjà dans le circuit paiement :
+Paiement des éléments liés à la paie — exemples : pharmacie AFCOM, remboursement de frais médicaux, achat de lunettes et assimilés.
+Les commissions.
+La TTF.
+Toute autre dépense dont le DG lui remet les copies pour suivi financier.
+Canal physique : à la sortie du bureau du DG, les copies lui sont remises personnellement, sans intermédiaire, pour qu’elle suive ce genre de dépenses.
+3. Déclencheurs
+Circuit facture / MAD : notification après que l’AC a enregistré la décharge (bordereau + pièces) — contrôle puis clôture.
+Autres dépenses (paie, commissions, TTF…) : remise directe des copies par le DG (à formaliser dans le GED : types / fiches / dépôt dédié — à implémenter).
+4. Actions — circuit facture / MAD (déjà en place)
+Consulter le bordereau saisi par l’AC (date, n° pièce, montant, banque, bénéficiaire, programmation).
+Comparer avec les pièces physiques en sa possession.
+Joindre éventuellement des pièces complémentaires.
+Confirmer le contrôle → clôture du dossier.
+Consulter / exporter les fiches de suivi des paiements (FSP facture, FSP MAD).
+5. Actions — hors factures (à couvrir dans le GED)
+Enregistrer / rattacher les copies remises par le DG (paie, commissions, TTF…).
+Suivre l’état de chaque dépense jusqu’à clôture / contrôle.
+Chaque semaine : rapport consolidé au DG (toutes les lignes de son périmètre finances, pas seulement les factures fournisseurs de Taty).
+6. Ce qu’elle ne fait pas
+Elle n’enregistre pas la décharge à la place de l’AC (circuit facture/MAD).
+Elle ne signe pas les chèques.
+Le DG ne lui envoie pas de scan de chèque signé (confirmation GED sans scan).
+Elle ne classe pas les factures dans les dossiers fournisseurs (rôle Taty).
+Rôle de l’Agent comptable (rappel)
+Bordereau de transmission (données à saisir)
+Synthèse des responsabilités
+Évolutions GED prévues (suite à validation)
+Formaliser dans l’outil les catégories hors facture (éléments de paie, commissions, TTF).
+Canal DG → Eleni (remise des copies) traçable sans intermédiaire obligatoire.
+Rapport hebdomadaire consolidé du périmètre Eleni (au-delà de la page Factures fournisseurs).
+Document établi pour validation métier — Secrétariat général / ACSI — août 2026 (v1.1). À valider avec Mme Taty et Mme Eleni avant poursuite d’implémentation.

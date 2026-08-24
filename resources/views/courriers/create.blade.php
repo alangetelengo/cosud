@@ -35,7 +35,7 @@
             <section class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
                 <div class="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40">
                     <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Correspondance</h2>
-                    <p class="text-xs text-slate-500 mt-0.5">Dates, expéditeur et références</p>
+                    <p id="correspondance-sous-titre" class="text-xs text-slate-500 mt-0.5">Dates, expéditeur et références</p>
                 </div>
                 <div class="p-5 space-y-4">
                     <div class="grid sm:grid-cols-2 gap-4">
@@ -50,37 +50,42 @@
                     </div>
 
                     <div>
-                        <label class="{{ $label }}">Expéditeur</label>
-                        <input type="text" name="expediteur_libelle" value="{{ old('expediteur_libelle') }}" class="{{ $field }}" placeholder="Organisme ou personne émettrice">
+                        <label class="{{ $label }}" id="label-expediteur">Expéditeur</label>
+                        <input type="text" name="expediteur_libelle" id="input-expediteur" value="{{ old('expediteur_libelle') }}" class="{{ $field }}" placeholder="Organisme ou personne émettrice">
                         @error('expediteur_libelle')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                     </div>
 
-                    <div class="grid sm:grid-cols-2 gap-4">
+                    <div id="bloc-contacts-expediteur" class="grid sm:grid-cols-2 gap-4">
                         <div>
                             <label class="{{ $label }}">E-mail expéditeur <span class="text-slate-400 normal-case tracking-normal font-medium">(optionnel)</span></label>
-                            <input type="email" name="expediteur_email" value="{{ old('expediteur_email') }}" class="{{ $field }}" placeholder="contact@exemple.cg">
-                            <p class="text-xs text-slate-500 mt-1.5">Pour informer l’expéditeur à la clôture du dossier.</p>
+                            <input type="email" name="expediteur_email" id="input-expediteur-email" value="{{ old('expediteur_email') }}" class="{{ $field }}" placeholder="contact@exemple.cg">
+                            <p class="text-xs text-slate-500 mt-1.5">Pour informer l’expéditeur à la validation / clôture.</p>
                             @error('expediteur_email')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                         </div>
                         <div>
-                            <label class="{{ $label }}">Téléphone expéditeur <span class="text-slate-400 normal-case tracking-normal font-medium"></span></label>
-                            <input type="text" name="expediteur_telephone" value="{{ old('expediteur_telephone') }}" class="{{ $field }}" placeholder="+24206…">
+                            <label class="{{ $label }}">
+                                Téléphone expéditeur
+                                <span id="asterisque-telephone" class="text-red-500 normal-case tracking-normal hidden">*</span>
+                                <span id="hint-telephone-optionnel" class="text-slate-400 normal-case tracking-normal font-medium">(optionnel)</span>
+                            </label>
+                            <input type="text" name="expediteur_telephone" id="input-expediteur-telephone" value="{{ old('expediteur_telephone') }}" class="{{ $field }}" placeholder="+24206…">
+                            <p id="aide-telephone" class="text-xs text-slate-500 mt-1.5">SMS / notification à la validation ou signature DG.</p>
                             @error('expediteur_telephone')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                         </div>
                     </div>
 
-                    <div class="grid sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="{{ $label }}">N° fulgurant <span class="text-emerald-600 normal-case tracking-normal font-medium">(recommandé)</span></label>
-                            <input type="text" name="numero_fulgurant" value="{{ old('numero_fulgurant') }}" class="{{ $field }}" placeholder="N° de la correspondance">
-                            <p class="text-xs text-slate-500 mt-1.5">Anti-doublon : un même n° ne peut être enregistré deux fois.</p>
-                            @error('numero_fulgurant')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
-                        </div>
-                        <div>
-                            <label class="{{ $label }}">Référence document</label>
-                            <input type="text" name="reference" value="{{ old('reference') }}" class="{{ $field }}">
-                            @error('reference')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
-                        </div>
+                    <div>
+                        <label class="{{ $label }}">N° registre <span class="text-red-500 normal-case tracking-normal">*</span></label>
+                        <input type="text" name="numero_fulgurant" id="input-numero-registre" value="{{ old('numero_fulgurant') }}" required class="{{ $field }}" placeholder="Ex. 45/2026 ou 192/2026/DAF/SAGP">
+                        <p class="text-xs text-slate-500 mt-1.5">Numéro porté au registre papier du secrétariat (saisie libre).</p>
+                        @error('numero_fulgurant')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
+                    </div>
+
+                    <div>
+                        <label class="{{ $label }}" id="label-reference">Référence document</label>
+                        <input type="text" name="reference" id="input-reference" value="{{ old('reference') }}" class="{{ $field }}" placeholder="">
+                        <p id="aide-reference" class="text-xs text-slate-500 mt-1.5"></p>
+                        @error('reference')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                     </div>
                 </div>
             </section>
@@ -193,10 +198,83 @@ document.addEventListener('DOMContentLoaded', function () {
     var circuitInfo = document.getElementById('circuit-du-type');
     var blocService = document.getElementById('bloc-service-demandeur');
     var selectService = document.getElementById('service_demandeur_structure_id');
+    var blocContacts = document.getElementById('bloc-contacts-expediteur');
+    var labelExpediteur = document.getElementById('label-expediteur');
+    var inputExpediteur = document.getElementById('input-expediteur');
+    var labelReference = document.getElementById('label-reference');
+    var inputReference = document.getElementById('input-reference');
+    var aideReference = document.getElementById('aide-reference');
+    var sousTitre = document.getElementById('correspondance-sous-titre');
+    var aideDefaut = document.getElementById('aide-arrivee-defaut');
+    var aideFacture = document.getElementById('aide-arrivee-facture');
+    var aideMad = document.getElementById('aide-arrivee-mad');
+    var inputTelephone = document.getElementById('input-expediteur-telephone');
+    var asterisqueTel = document.getElementById('asterisque-telephone');
+    var hintTelOptionnel = document.getElementById('hint-telephone-optionnel');
+
     if (!typeSelect || !circuitInfo) return;
+
+    function setBlocVisible(bloc, visible) {
+        if (!bloc) return;
+        bloc.classList.toggle('hidden', !visible);
+        bloc.querySelectorAll('input, select, textarea').forEach(function (el) {
+            el.disabled = !visible;
+            if (!visible && el.type !== 'file') {
+                el.value = '';
+            }
+        });
+    }
+
+    function profilPour(code) {
+        if (code === 'mad') {
+            return {
+                sousTitre: 'Dates, émetteur et référence de la MAD / état de besoins',
+                labelExpediteur: 'Émetteur',
+                placeholderExpediteur: 'Ex. DAF / SAGP ou Direction départementale',
+                labelReference: 'Référence document',
+                placeholderReference: 'Ex. n° état de besoins si différent du n° registre',
+                aideReference: 'Optionnel si le n° registre suffit (ex. 192/2026/DAF/SAGP saisi ci-dessus).',
+            };
+        }
+        if (code === 'facture') {
+            return {
+                sousTitre: 'Dates, fournisseur et références de la facture',
+                labelExpediteur: 'Fournisseur / prestataire',
+                placeholderExpediteur: 'Raison sociale du fournisseur',
+                labelReference: 'Référence facture',
+                placeholderReference: 'N° facture fournisseur',
+                aideReference: 'Numéro figurant sur la facture (distinct du n° registre secrétariat).',
+            };
+        }
+        if (code === 'demande') {
+            return {
+                sousTitre: 'Dates, demandeur et références',
+                labelExpediteur: 'Demandeur',
+                placeholderExpediteur: 'Nom / organisme du demandeur',
+                labelReference: 'Référence document',
+                placeholderReference: '',
+                aideReference: '',
+            };
+        }
+        return {
+            sousTitre: 'Dates, expéditeur et références',
+            labelExpediteur: 'Expéditeur',
+            placeholderExpediteur: 'Organisme ou personne émettrice',
+            labelReference: 'Référence document',
+            placeholderReference: '',
+            aideReference: '',
+        };
+    }
+
+    function afficherAide(code) {
+        if (aideDefaut) aideDefaut.classList.toggle('hidden', code === 'facture' || code === 'mad');
+        if (aideFacture) aideFacture.classList.toggle('hidden', code !== 'facture');
+        if (aideMad) aideMad.classList.toggle('hidden', code !== 'mad');
+    }
 
     function afficherCircuitDuType() {
         var opt = typeSelect.options[typeSelect.selectedIndex];
+        var code = opt ? (opt.getAttribute('data-code') || '') : '';
         var libelle = opt ? opt.getAttribute('data-circuit-libelle') : '';
         circuitInfo.textContent = libelle ? 'Circuit de traitement : ' + libelle : '';
 
@@ -205,11 +283,40 @@ document.addEventListener('DOMContentLoaded', function () {
             blocService.classList.toggle('hidden', !necessite);
             if (selectService) {
                 selectService.required = !!necessite;
+                selectService.disabled = !necessite;
                 if (!necessite) {
                     selectService.value = '';
                 }
             }
         }
+
+        var contacts = !opt || opt.getAttribute('data-contacts') !== '0';
+        var telRequis = opt && opt.getAttribute('data-telephone-requis') === '1';
+        if (!code) {
+            contacts = true;
+            telRequis = false;
+        }
+        setBlocVisible(blocContacts, contacts);
+
+        if (inputTelephone) {
+            inputTelephone.required = !!(contacts && telRequis);
+        }
+        if (asterisqueTel) {
+            asterisqueTel.classList.toggle('hidden', !(contacts && telRequis));
+        }
+        if (hintTelOptionnel) {
+            hintTelOptionnel.classList.toggle('hidden', !!(contacts && telRequis));
+        }
+
+        var profil = profilPour(code);
+        if (sousTitre) sousTitre.textContent = profil.sousTitre;
+        if (labelExpediteur) labelExpediteur.textContent = profil.labelExpediteur;
+        if (inputExpediteur) inputExpediteur.placeholder = profil.placeholderExpediteur;
+        if (labelReference) labelReference.textContent = profil.labelReference;
+        if (inputReference) inputReference.placeholder = profil.placeholderReference;
+        if (aideReference) aideReference.textContent = profil.aideReference;
+
+        afficherAide(code);
     }
 
     typeSelect.addEventListener('change', afficherCircuitDuType);

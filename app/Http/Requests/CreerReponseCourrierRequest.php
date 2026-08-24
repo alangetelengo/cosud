@@ -30,7 +30,11 @@ class CreerReponseCourrierRequest extends FormRequest
 
         $etape = $courrier->circuitEtapeActuelle;
 
-        // Chemin B uniquement : DG / admin à l’étape d’instructions.
+        // Chemin B uniquement : DG / admin à l’étape d’instructions (hors circuit facture/MAD).
+        if ($courrier->circuit?->code === 'facture_prestataire') {
+            return false;
+        }
+
         return $this->boolean('signer_immediatement')
             && ($this->user()->aAccesTotal() || $this->user()->hasRole('admin'))
             && in_array($etape?->code, ['instruction_dg', 'instructions_dg'], true);
@@ -102,6 +106,14 @@ class CreerReponseCourrierRequest extends FormRequest
 
             if ($signerImmediatement && ! ($this->user()->aAccesTotal() || $this->user()->hasRole('admin'))) {
                 $validator->errors()->add('signer_immediatement', 'Seuls le DG / l\'administrateur peuvent signer immédiatement.');
+            }
+
+            if ($signerImmediatement
+                && $courrier->circuit?->code === 'facture_prestataire') {
+                $validator->errors()->add(
+                    'signer_immediatement',
+                    'Sur une facture ou une MAD, utilisez le panneau Circuit métier pour donner le Bon pour accord.'
+                );
             }
 
             if ($signerImmediatement

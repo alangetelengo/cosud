@@ -51,13 +51,22 @@ def add_para(doc: Document, text: str, *, bold=False, italic=False, size=11):
 def add_bullet(doc: Document, text: str):
     p = doc.add_paragraph(style="List Bullet")
     p.paragraph_format.space_after = Pt(3)
-    set_run_font(p.add_run(text))
+    # Clear default run then style
+    if p.runs:
+        p.runs[0].text = text
+        set_run_font(p.runs[0])
+    else:
+        set_run_font(p.add_run(text))
 
 
 def add_numbered(doc: Document, text: str):
     p = doc.add_paragraph(style="List Number")
     p.paragraph_format.space_after = Pt(3)
-    set_run_font(p.add_run(text))
+    if p.runs:
+        p.runs[0].text = text
+        set_run_font(p.runs[0])
+    else:
+        set_run_font(p.add_run(text))
 
 
 def set_cell_shading(cell, hex_color: str):
@@ -101,7 +110,10 @@ def build() -> None:
 
     subt = doc.add_paragraph()
     subt.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    set_run_font(subt.add_run("Secrétariat général — Suivi fournisseurs et suivi des dépenses"), size=13)
+    set_run_font(
+        subt.add_run("Secrétariat général — Dossiers fournisseurs (Taty) et suivi des dépenses (Eleni)"),
+        size=13,
+    )
 
     meta = doc.add_paragraph()
     meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -110,17 +122,43 @@ def build() -> None:
         meta.add_run(
             "Agence Congolaise des Systèmes d’Information (ACSI)\n"
             "Document de validation métier — août 2026\n"
-            "Version : option A — DG sans scan ; décharge = AC ; contrôle = Eleni"
+            "Version : 1.1 — périmètre Eleni élargi ; classement facture = Taty seule ; MAD hors classement dossier"
         ),
         size=10,
         color=GRAY,
         italic=True,
     )
 
-    add_heading_custom(doc, "Enchaînement après Bon pour accord", 1)
-    add_numbered(doc, "Le DG donne son Bon pour accord.")
+    # --- Principes ---
+    add_heading_custom(doc, "Principes communs", 1)
+    add_bullet(
+        doc,
+        "Tous les secrétaires / acteurs secrétariat peuvent enregistrer un courrier arrivée "
+        "(facture, MAD, demande, etc.).",
+    )
+    add_bullet(
+        doc,
+        "Seule la responsable de la tâche agit ensuite : classement dossier (Taty) ou "
+        "contrôle / clôture et suivi financier (Eleni).",
+    )
+    add_bullet(
+        doc,
+        "Sur facture ou MAD : le DG instruit uniquement via le panneau « Circuit métier » "
+        "(Bon pour accord). Pas de « Répondre moi-même » qui clôturerait le circuit paiement.",
+    )
+    add_bullet(
+        doc,
+        "Le N° fulgurant n’est plus saisi à l’enregistrement (recherche legacy éventuelle uniquement).",
+    )
+
+    add_heading_custom(doc, "Enchaînement après Bon pour accord (facture / MAD)", 1)
+    add_numbered(doc, "Le DG donne son Bon pour accord (instructions ± confier à un directeur).")
     add_numbered(doc, "L’Agent comptable établit le chèque et l’envoie au DG (papier).")
-    add_numbered(doc, "Le DG signe le chèque sur papier, puis confirme dans l’outil « Chèque signé — renvoyer à l’AC » (sans scan).")
+    add_numbered(
+        doc,
+        "Le DG signe le chèque sur papier, puis confirme dans l’outil "
+        "« Chèque signé — renvoyer à l’AC » (sans scan).",
+    )
     add_numbered(
         doc,
         "Lorsque le bénéficiaire décharge le chèque, l’AC enregistre le bordereau "
@@ -129,70 +167,132 @@ def build() -> None:
     )
     add_numbered(
         doc,
-        "Mme Ossebi est notifiée : elle contrôle les éléments saisis avec les pièces physiques, "
-        "peut ajouter des pièces complémentaires, puis confirme la clôture.",
+        "Mme Eleni Ossebi est notifiée : elle contrôle les éléments saisis avec les pièces "
+        "physiques, peut ajouter des pièces complémentaires, puis confirme la clôture.",
     )
     add_para(
         doc,
-        "En parallèle dès le Bon pour accord : Mme Taty classifie la facture, suit le paiement "
-        "et prépare le rapport du vendredi — elle n’envoie pas le dossier à l’AC.",
+        "En parallèle dès le Bon pour accord (uniquement pour une FACTURE) : Mme Taty "
+        "classe la facture dans le dossier fournisseur et suit le paiement — elle n’envoie "
+        "pas le dossier à l’AC. Une MAD n’ouvre pas l’action « Classer dans un dossier ».",
         italic=True,
     )
 
+    # --- Taty ---
     doc.add_page_break()
     add_heading_custom(doc, "FICHE 1 — Mme ANNE LETHICIA TATY-TCHICAYA", 1)
+    add_para(doc, "Rôle GED : responsable_dossiers_prestataires", bold=True)
     add_para(doc, "Responsable des dossiers fournisseurs / prestataires", bold=True)
 
     add_heading_custom(doc, "1. Objectif", 2)
     add_para(
         doc,
-        "Classer les factures approuvées, suivre ponctuellement les paiements, "
-        "et produire un rapport chaque vendredi à la demande du DG.",
+        "Classer les factures approuvées dans le dossier GED du fournisseur, suivre "
+        "ponctuellement les paiements factures, et produire un rapport chaque vendredi "
+        "à la demande du DG (périmètre factures fournisseurs).",
     )
 
-    add_heading_custom(doc, "2. Déclencheur", 2)
-    add_para(doc, "Bon pour accord du DG sur une facture.")
+    add_heading_custom(doc, "2. Périmètre", 2)
+    add_bullet(doc, "Factures prestataires / fournisseurs uniquement.")
+    add_bullet(doc, "Hors périmètre classement : MAD, demandes générales, autres courriers.")
+    add_bullet(
+        doc,
+        "Peut enregistrer des courriers comme les autres acteurs secrétariat ; "
+        "le classement dossier reste sa responsabilité exclusive (hors admin).",
+    )
 
-    add_heading_custom(doc, "3. Actions", 2)
+    add_heading_custom(doc, "3. Déclencheur", 2)
+    add_para(doc, "Bon pour accord du DG sur une facture (notification / suivi parallèle).")
+
+    add_heading_custom(doc, "4. Actions dans le GED", 2)
     add_numbered(doc, "Prendre connaissance de la facture approuvée.")
-    add_numbered(doc, "Classer la facture dans le dossier du fournisseur.")
-    add_numbered(doc, "Suivre l’avancement du paiement (chèque en cours, déchargé, contrôlé).")
-    add_numbered(doc, "Chaque vendredi : rapport de suivi pour le DG.")
+    add_numbered(
+        doc,
+        "Classer la facture (et ses pièces) dans un dossier fournisseur existant "
+        "ou créer le dossier sous « Mes dossiers ».",
+    )
+    add_numbered(doc, "Suivre l’avancement du paiement (page Factures fournisseurs).")
+    add_numbered(doc, "Chaque vendredi : exporter / produire le rapport de suivi pour le DG.")
 
-    add_heading_custom(doc, "4. Ce qu’elle ne fait pas", 2)
+    add_heading_custom(doc, "5. Ce qu’elle ne fait pas", 2)
     add_bullet(doc, "Elle n’envoie pas le dossier à l’Agent comptable.")
     add_bullet(doc, "Elle ne bloque pas le paiement.")
-    add_bullet(doc, "Elle n’enregistre pas la décharge ni ne clôture la dépense.")
+    add_bullet(doc, "Elle n’enregistre pas la décharge ni ne clôture la dépense (rôle Eleni / AC).")
+    add_bullet(doc, "Elle ne classe pas une MAD dans un dossier fournisseur.")
 
+    # --- Eleni ---
     doc.add_page_break()
     add_heading_custom(doc, "FICHE 2 — Mme ASTRIDE ELENI OSSEBI", 1)
-    add_para(doc, "Responsable du suivi des dépenses", bold=True)
+    add_para(doc, "Rôle GED : responsable_suivi_depenses", bold=True)
+    add_para(doc, "Responsable du suivi des dépenses — périmètre finances", bold=True)
 
     add_heading_custom(doc, "1. Objectif", 2)
     add_para(
         doc,
-        "Contrôler que la dépense enregistrée par l’AC correspond aux pièces physiques, "
-        "puis confirmer la clôture du dossier.",
+        "Assurer le suivi de tout ce qui concerne les finances placées sous sa "
+        "responsabilité : contrôler les dépenses enregistrées, tenir les fiches de suivi, "
+        "et produire chaque semaine un rapport selon la demande du DG.",
     )
 
-    add_heading_custom(doc, "2. Déclencheur", 2)
+    add_heading_custom(doc, "2. Périmètre métier (validation Eleni — août 2026)", 2)
+    add_para(doc, "Au-delà du suivi des factures / MAD déjà dans le circuit paiement :", italic=True)
+    add_bullet(
+        doc,
+        "Paiement des éléments liés à la paie — exemples : pharmacie AFCOM, "
+        "remboursement de frais médicaux, achat de lunettes et assimilés.",
+    )
+    add_bullet(doc, "Les commissions.")
+    add_bullet(doc, "La TTF.")
+    add_bullet(
+        doc,
+        "Toute autre dépense dont le DG lui remet les copies pour suivi financier.",
+    )
     add_para(
         doc,
-        "Notification après que l’AC a enregistré la décharge du bénéficiaire "
-        "(bordereau + pièces).",
+        "Canal physique : à la sortie du bureau du DG, les copies lui sont remises "
+        "personnellement, sans intermédiaire, pour qu’elle suive ce genre de dépenses.",
+        italic=True,
     )
 
-    add_heading_custom(doc, "3. Actions", 2)
-    add_numbered(doc, "Consulter le bordereau saisi par l’AC (date, n° pièce, montant, banque, bénéficiaire, programmation).")
+    add_heading_custom(doc, "3. Déclencheurs", 2)
+    add_bullet(
+        doc,
+        "Circuit facture / MAD : notification après que l’AC a enregistré la décharge "
+        "(bordereau + pièces) — contrôle puis clôture.",
+    )
+    add_bullet(
+        doc,
+        "Autres dépenses (paie, commissions, TTF…) : remise directe des copies par le DG "
+        "(à formaliser dans le GED : types / fiches / dépôt dédié — à implémenter).",
+    )
+
+    add_heading_custom(doc, "4. Actions — circuit facture / MAD (déjà en place)", 2)
+    add_numbered(
+        doc,
+        "Consulter le bordereau saisi par l’AC (date, n° pièce, montant, banque, "
+        "bénéficiaire, programmation).",
+    )
     add_numbered(doc, "Comparer avec les pièces physiques en sa possession.")
     add_numbered(doc, "Joindre éventuellement des pièces complémentaires.")
     add_numbered(doc, "Confirmer le contrôle → clôture du dossier.")
+    add_numbered(doc, "Consulter / exporter les fiches de suivi des paiements (FSP facture, FSP MAD).")
 
-    add_heading_custom(doc, "4. Ce qu’elle ne fait pas", 2)
-    add_bullet(doc, "Elle n’enregistre pas la décharge à la place de l’AC.")
+    add_heading_custom(doc, "5. Actions — hors factures (à couvrir dans le GED)", 2)
+    add_numbered(doc, "Enregistrer / rattacher les copies remises par le DG (paie, commissions, TTF…).")
+    add_numbered(doc, "Suivre l’état de chaque dépense jusqu’à clôture / contrôle.")
+    add_numbered(
+        doc,
+        "Chaque semaine : rapport consolidé au DG (toutes les lignes de son périmètre "
+        "finances, pas seulement les factures fournisseurs de Taty).",
+    )
+
+    add_heading_custom(doc, "6. Ce qu’elle ne fait pas", 2)
+    add_bullet(doc, "Elle n’enregistre pas la décharge à la place de l’AC (circuit facture/MAD).")
     add_bullet(doc, "Elle ne signe pas les chèques.")
-    add_bullet(doc, "Le DG ne lui envoie pas de scan de chèque signé.")
+    add_bullet(doc, "Le DG ne lui envoie pas de scan de chèque signé (confirmation GED sans scan).")
+    add_bullet(doc, "Elle ne classe pas les factures dans les dossiers fournisseurs (rôle Taty).")
 
+    # --- AC ---
     doc.add_page_break()
     add_heading_custom(doc, "Rôle de l’Agent comptable (rappel)", 1)
     add_table(
@@ -204,7 +304,7 @@ def build() -> None:
             [
                 "À la décharge",
                 "Saisit le bordereau + joint chèque déchargé, identité, etc. "
-                "(c’est l’enregistrement de la preuve de paiement)",
+                "(enregistrement de la preuve de paiement)",
             ],
         ],
     )
@@ -224,26 +324,60 @@ def build() -> None:
         ],
     )
 
-    add_heading_custom(doc, "Synthèse", 1)
+    add_heading_custom(doc, "Synthèse des responsabilités", 1)
     add_table(
         doc,
-        ["", "Mme Taty", "Agent comptable", "Mme Ossebi"],
+        ["", "Mme Taty", "Agent comptable", "Mme Eleni"],
         [
-            ["Déclencheur", "BPA DG", "BPA puis chèque signé", "Décharge enregistrée par l’AC"],
+            [
+                "Périmètre",
+                "Dossiers + suivi factures fournisseurs",
+                "Chèque + décharge (circuit paiement)",
+                "Finances : factures/MAD + paie + commissions + TTF + autres dépenses DG",
+            ],
+            [
+                "Déclencheur",
+                "BPA DG sur facture",
+                "BPA puis chèque signé",
+                "Décharge AC (circuit) ou copies remises par le DG",
+            ],
             [
                 "Action clé",
-                "Classer + rapport vendredi",
+                "Classer dossier + rapport vendredi factures",
                 "Bordereau + pièces à la décharge",
-                "Contrôle + confirmation clôture",
+                "Contrôle / clôture + FSP + rapport hebdo finances",
+            ],
+            [
+                "MAD",
+                "Pas de classement dossier fournisseur",
+                "Comme facture si circuit paiement",
+                "Suivi / contrôle (et FSP MAD)",
             ],
             ["Scan chèque signé DG", "—", "Non (à la décharge seulement)", "Contrôle des pièces AC"],
         ],
     )
 
+    add_heading_custom(doc, "Évolutions GED prévues (suite à validation)", 1)
+    add_bullet(
+        doc,
+        "Formaliser dans l’outil les catégories hors facture (éléments de paie, commissions, TTF).",
+    )
+    add_bullet(
+        doc,
+        "Canal DG → Eleni (remise des copies) traçable sans intermédiaire obligatoire.",
+    )
+    add_bullet(
+        doc,
+        "Rapport hebdomadaire consolidé du périmètre Eleni (au-delà de la page Factures fournisseurs).",
+    )
+
     note = doc.add_paragraph()
     note.paragraph_format.space_before = Pt(18)
     set_run_font(
-        note.add_run("Document établi pour validation métier — Secrétariat général / ACSI — août 2026."),
+        note.add_run(
+            "Document établi pour validation métier — Secrétariat général / ACSI — août 2026 "
+            "(v1.1). À valider avec Mme Taty et Mme Eleni avant poursuite d’implémentation."
+        ),
         size=9,
         italic=True,
         color=GRAY,

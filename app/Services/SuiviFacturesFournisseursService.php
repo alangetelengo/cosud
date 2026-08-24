@@ -45,6 +45,14 @@ class SuiviFacturesFournisseursService
     public function statutPour(Courrier $courrier): string
     {
         if (! $courrier->circuit_etape_actuelle_id) {
+            $suivi = $courrier->relationLoaded('suiviPaiement')
+                ? $courrier->suiviPaiement
+                : $courrier->suiviPaiement()->first();
+
+            if ($suivi && $suivi->date_decharge && $suivi->controle_at === null) {
+                return self::STATUT_CONTROLE;
+            }
+
             return self::STATUT_CLOTURE;
         }
 
@@ -52,7 +60,6 @@ class SuiviFacturesFournisseursService
             'ac_etablit_cheque' => self::STATUT_CHEQUE,
             'dg_signe_cheque' => self::STATUT_SIGNATURE_DG,
             'preuve_paiement' => self::STATUT_DECHARGE,
-            'cloture_depenses' => self::STATUT_CONTROLE,
             'instructions_dg', 'enregistrement' => self::STATUT_ATTENTE_AC,
             default => self::STATUT_ATTENTE_AC,
         };
@@ -98,7 +105,10 @@ class SuiviFacturesFournisseursService
 
         if ($request->get('periode') === 'semaine') {
             [$debut, $fin] = $this->bornesSemaineCourante();
-            $query->whereBetween('date_orientation', [$debut->toDateString(), $fin->toDateString()]);
+            $query->whereBetween('date_orientation', [
+                $debut->copy()->startOfDay(),
+                $fin->copy()->endOfDay(),
+            ]);
         } elseif ($request->filled('annee')) {
             $query->whereYear('date_orientation', (int) $request->get('annee'));
         }

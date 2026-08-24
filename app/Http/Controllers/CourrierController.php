@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\AnnulerCourrierDepartRequest;
 use App\Http\Requests\ArchiverCourrierRequest;
+use App\Http\Requests\ClasserCourrierDossierRequest;
 use App\Http\Requests\CreerReponseCourrierRequest;
 use App\Http\Requests\ExpedierCourrierDepartRequest;
 use App\Http\Requests\OrienterCourrierRequest;
@@ -29,6 +30,7 @@ use App\Models\TypeCourrier;
 use App\Models\TypeDocument;
 use App\Models\User;
 use App\Services\CircuitCourrierMoteurService;
+use App\Services\CourrierClassementDossierService;
 use App\Services\CourrierFilService;
 use App\Services\CourrierNotificationService;
 use App\Services\CourrierNumeroRegistreService;
@@ -50,6 +52,7 @@ class CourrierController extends Controller
         private readonly CourrierFilService $filService,
         private readonly CircuitCourrierMoteurService $circuitMoteur,
         private readonly CourrierOrientationService $orientationService,
+        private readonly CourrierClassementDossierService $classementDossierService,
     ) {}
 
     public function index(Request $request)
@@ -141,11 +144,7 @@ class CourrierController extends Controller
         $types = TypeCourrier::where('actif', true)->with('circuit')->orderBy('libelle')->get();
         $priorites = PrioriteCourrier::where('actif', true)->orderBy('ordre')->get();
         $secretariats = Structure::secretariatsDirections()->get();
-        $directions = Structure::query()
-            ->where('actif', true)
-            ->where('type', 'direction')
-            ->orderBy('nom')
-            ->get();
+        $directions = Structure::servicesDemandeurs()->get();
         $documentsParapheur = $sensCode === 'depart'
             ? $this->parapheurDepartService->queryEligiblePour(auth()->user())->limit(100)->get()
             : collect();
@@ -182,7 +181,9 @@ class CourrierController extends Controller
             'origine' => $sens->code === SensCourrier::ARRIVEE ? Courrier::ORIGINE_EXTERNE : Courrier::ORIGINE_INTERNE,
             'date_reception' => $request->date_reception ?? ($sens->code === SensCourrier::ARRIVEE ? now()->toDateString() : null),
             'date_courrier' => $request->date_courrier,
-            'numero_fulgurant' => $request->numero_fulgurant,
+            'numero_fulgurant' => $sens->code === SensCourrier::ARRIVEE
+                ? trim((string) $request->numero_fulgurant)
+                : null,
             'expediteur_libelle' => $request->expediteur_libelle,
             'expediteur_email' => $request->expediteur_email,
             'expediteur_telephone' => $request->expediteur_telephone,
@@ -246,11 +247,7 @@ class CourrierController extends Controller
             'documentReponse', 'reponseStructureDestinataire', 'destinataireAgent', 'agentConfie', 'agentsConfies.structure', 'suiviPaiement',
         ]);
         $structures = Structure::where('actif', true)->orderBy('nom')->get();
-        $directions = Structure::query()
-            ->where('actif', true)
-            ->where('type', 'direction')
-            ->orderBy('nom')
-            ->get();
+        $directions = Structure::directionsOrientation()->get();
         $secretariats = Structure::secretariatsDirections()->get();
         $structureEmettriceId = (int) ($courrier->structure_id
             ?? auth()->user()->structurePourValidationHierarchique()?->id
@@ -287,10 +284,21 @@ class CourrierController extends Controller
         $filCourriers = $this->filService->courriersDuFil($courrier);
         $filHistorique = $this->filService->construireHistorique($courrier);
 
+        $dossiersClassement = collect();
+        $dossierSuggere = null;
+        if (auth()->user()?->can('classerDossier', $courrier)) {
+            $dossiersClassement = $this->classementDossierService->dossiersCiblesPour(
+                auth()->user(),
+                $courrier->expediteur_libelle
+            );
+            $dossierSuggere = $this->classementDossierService->suggererDossier(auth()->user(), $courrier);
+        }
+
         return view('courriers.show', compact(
             'courrier', 'structures', 'directions', 'secretariats', 'utilisateursVentilation', 'agentsOrientation',
             'directeurValidation', 'directionEmettrice',
             'filRacine', 'filCourriers', 'filHistorique',
+            'dossiersClassement', 'dossierSuggere',
         ));
     }
 
@@ -300,8 +308,11 @@ class CourrierController extends Controller
 
         $types = TypeCourrier::where('actif', true)->orderBy('libelle')->get();
         $priorites = PrioriteCourrier::where('actif', true)->orderBy('ordre')->get();
+        $directions = $courrier->estArrivee()
+            ? Structure::servicesDemandeurs()->get()
+            : collect();
 
-        return view('courriers.edit', compact('courrier', 'types', 'priorites'));
+        return view('courriers.edit', compact('courrier', 'types', 'priorites', 'directions'));
     }
 
     public function update(Courrier $courrier)
@@ -326,11 +337,12 @@ class CourrierController extends Controller
             'expediteur_libelle' => $request->expediteur_libelle,
             'expediteur_email' => $request->expediteur_email,
             'expediteur_telephone' => $request->expediteur_telephone,
-            'numero_fulgurant' => $request->numero_fulgurant,
+            'numero_fulgurant' => trim((string) $request->numero_fulgurant),
             'reference' => $request->reference,
             'nombre_pieces' => $request->nombre_pieces,
             'numero_archives' => $request->numero_archives,
             'observations' => $request->observations,
+            'service_demandeur_structure_id' => $request->service_demandeur_structure_id,
         ]);
 
         $this->auditerCourrier('courrier.update', $courrier->fresh(), [
@@ -827,6 +839,20 @@ class CourrierController extends Controller
         }
 
         return back()->with('success', 'Courrier archivé. Les informations du registre ont été mises à jour.');
+    }
+
+    public function classerDossier(ClasserCourrierDossierRequest $request, Courrier $courrier)
+    {
+        $dossier = $this->classementDossierService->classer(
+            $courrier,
+            $request->user(),
+            $request->validated()
+        );
+
+        return back()->with(
+            'success',
+            'Facture classée dans le dossier « '.$dossier->chemin_complet.' ».'
+        );
     }
 
     public function transmettre(TransmettreCourrierRequest $request, Courrier $courrier)

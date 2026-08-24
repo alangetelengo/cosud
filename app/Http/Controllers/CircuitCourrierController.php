@@ -208,6 +208,12 @@ class CircuitCourrierController extends Controller
                 $request->user(),
                 $request->validated('message'),
                 (float) $request->validated('montant'),
+                [
+                    'numero_piece' => $request->validated('numero_piece'),
+                    'banque' => $request->validated('banque'),
+                    'beneficiaire_libelle' => $request->validated('beneficiaire_libelle'),
+                    'programmation' => $request->validated('programmation'),
+                ],
             );
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());
@@ -249,11 +255,6 @@ class CircuitCourrierController extends Controller
                 $request->user(),
                 [
                     'date_decharge' => $request->validated('date_decharge'),
-                    'numero_piece' => $request->validated('numero_piece'),
-                    'montant' => $request->validated('montant'),
-                    'banque' => $request->validated('banque'),
-                    'beneficiaire_libelle' => $request->validated('beneficiaire_libelle'),
-                    'programmation' => $request->validated('programmation'),
                     'observation' => $request->validated('observation'),
                 ],
                 $request->validated('message'),
@@ -262,7 +263,7 @@ class CircuitCourrierController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Décharge / paiement enregistré — suivi des dépenses notifié pour contrôle.');
+        return back()->with('success', 'Décharge / paiement enregistré — circuit clôturé. Suivi des dépenses notifié pour contrôle des pièces.');
     }
 
     public function confirmerControleDepense(ConfirmerControleDepenseRequest $request, Courrier $courrier): RedirectResponse
@@ -286,7 +287,7 @@ class CircuitCourrierController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Contrôle confirmé — dossier clôturé.');
+        return back()->with('success', 'Contrôle des pièces confirmé.');
     }
 
     public function soumettreReponse(SoumettreReponseCourrierRequest $request, Courrier $courrier): RedirectResponse

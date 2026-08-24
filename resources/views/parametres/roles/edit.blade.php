@@ -23,8 +23,10 @@
         'Recherche' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'recherche.')),
         'Corbeille' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'corbeille.')),
         'Dossiers' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'dossiers.')),
-        'Courriers' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'courriers.')),
-        'Utilisateurs' => array_filter($permissions->pluck('name')->toArray(), fn($p) => str_starts_with($p, 'utilisateurs.')),
+        'Courriers' => array_filter($permissions->pluck('name')->toArray(), fn ($p) => str_starts_with($p, 'courriers.')),
+        'Suivi paiements / factures' => array_filter($permissions->pluck('name')->toArray(), fn ($p) => str_starts_with($p, 'suivi-') || str_starts_with($p, 'bordereau-')),
+        'Menus GED' => array_filter($permissions->pluck('name')->toArray(), fn ($p) => in_array($p, ['dashboard.view', 'organigramme.view'], true) || str_starts_with($p, 'parametres.')),
+        'Utilisateurs' => array_filter($permissions->pluck('name')->toArray(), fn ($p) => str_starts_with($p, 'utilisateurs.')),
     ];
     $allGrouped = collect($groups)->flatten()->toArray();
     $others = array_values(array_diff($permissions->pluck('name')->toArray(), $allGrouped));

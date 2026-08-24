@@ -48,9 +48,21 @@
             <div class="grid sm:grid-cols-2 gap-4">
                 <div>
                     <label class="{{ $label }}">Type</label>
-                    <select name="type_courrier_id" class="{{ $field }}">
+                    <select name="type_courrier_id" id="type_courrier_id" class="{{ $field }}">
                         <option value="">—</option>
-                        @foreach($types as $t)<option value="{{ $t->id }}" @selected(old('type_courrier_id', $courrier->type_courrier_id) == $t->id)>{{ $t->libelle }}</option>@endforeach
+                        @foreach($types as $t)
+                        @php
+                            $necessiteServiceDemandeur = in_array($t->code, ['facture', 'mad'], true);
+                            $telephoneObligatoire = in_array($t->code, ['facture', 'demande'], true);
+                        @endphp
+                        <option
+                            value="{{ $t->id }}"
+                            data-code="{{ $t->code }}"
+                            data-service-demandeur="{{ $necessiteServiceDemandeur ? '1' : '0' }}"
+                            data-telephone-requis="{{ $telephoneObligatoire ? '1' : '0' }}"
+                            @selected(old('type_courrier_id', $courrier->type_courrier_id) == $t->id)
+                        >{{ $t->libelle }}</option>
+                        @endforeach
                     </select>
                 </div>
                 <div>
@@ -63,6 +75,20 @@
             </div>
 
             @if($courrier->estArrivee())
+            @if(isset($directions) && $directions->isNotEmpty())
+            <div id="bloc-service-demandeur" class="hidden">
+                <label class="{{ $label }}">Service demandeur <span class="text-red-500 normal-case tracking-normal">*</span></label>
+                <select name="service_demandeur_structure_id" id="service_demandeur_structure_id" class="{{ $field }}">
+                    <option value="">— Choisir une direction —</option>
+                    @foreach($directions as $direction)
+                    <option value="{{ $direction->id }}" @selected(old('service_demandeur_structure_id', $courrier->service_demandeur_structure_id) == $direction->id)>{{ $direction->nom }}</option>
+                    @endforeach
+                </select>
+                <p class="text-xs text-slate-500 mt-1.5">Direction ou antenne départementale à l’origine de la demande.</p>
+                @error('service_demandeur_structure_id')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
+            </div>
+            @endif
+
             <div class="grid sm:grid-cols-2 gap-4">
                 <div>
                     <label class="{{ $label }}">Date de réception</label>
@@ -89,24 +115,28 @@
                     @error('expediteur_email')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                 </div>
                 <div>
-                    <label class="{{ $label }}">Téléphone expéditeur <span class="text-slate-400 normal-case tracking-normal font-medium">(optionnel, SMS)</span></label>
-                    <input type="text" name="expediteur_telephone" value="{{ old('expediteur_telephone', $courrier->expediteur_telephone) }}" class="{{ $field }}" placeholder="+24206…">
+                    <label class="{{ $label }}" id="label-telephone-expediteur">
+                        Téléphone expéditeur
+                        <span id="asterisque-telephone" class="text-red-500 normal-case tracking-normal hidden">*</span>
+                        <span id="hint-telephone-optionnel" class="text-slate-400 normal-case tracking-normal font-medium">(optionnel, SMS)</span>
+                    </label>
+                    <input type="text" name="expediteur_telephone" id="input-expediteur-telephone" value="{{ old('expediteur_telephone', $courrier->expediteur_telephone) }}" class="{{ $field }}" placeholder="+24206…">
+                    <p id="aide-telephone" class="text-xs text-slate-500 mt-1.5 hidden">Obligatoire pour facture / demande (SMS ou mail à la validation).</p>
                     @error('expediteur_telephone')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                 </div>
             </div>
 
-            <div class="grid sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="{{ $label }}">N° fulgurant <span class="text-emerald-600 normal-case tracking-normal font-medium">(recommandé)</span></label>
-                    <input type="text" name="numero_fulgurant" value="{{ old('numero_fulgurant', $courrier->numero_fulgurant) }}" class="{{ $field }}">
-                    <p class="text-xs text-slate-500 mt-1.5">Un même n° ne peut pas être enregistré deux fois.</p>
-                    @error('numero_fulgurant')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
-                </div>
-                <div>
-                    <label class="{{ $label }}">Référence</label>
-                    <input type="text" name="reference" value="{{ old('reference', $courrier->reference) }}" class="{{ $field }}">
-                    @error('reference')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
-                </div>
+            <div>
+                <label class="{{ $label }}">N° registre <span class="text-red-500 normal-case tracking-normal">*</span></label>
+                <input type="text" name="numero_fulgurant" value="{{ old('numero_fulgurant', $courrier->numero_fulgurant) }}" required class="{{ $field }}" placeholder="Ex. 45/2026 ou 192/2026/DAF/SAGP">
+                <p class="text-xs text-slate-500 mt-1.5">Numéro porté au registre papier du secrétariat.</p>
+                @error('numero_fulgurant')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
+            </div>
+
+            <div>
+                <label class="{{ $label }}">Référence document</label>
+                <input type="text" name="reference" value="{{ old('reference', $courrier->reference) }}" class="{{ $field }}">
+                @error('reference')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
             </div>
 
             <div class="grid sm:grid-cols-2 gap-4">
@@ -145,4 +175,61 @@
         </a>
     </div>
 </form>
+
+@if($courrier->estArrivee())
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var typeSelect = document.getElementById('type_courrier_id');
+    var blocService = document.getElementById('bloc-service-demandeur');
+    var selectService = document.getElementById('service_demandeur_structure_id');
+    var inputTelephone = document.getElementById('input-expediteur-telephone');
+    var asterisqueTel = document.getElementById('asterisque-telephone');
+    var hintTelOptionnel = document.getElementById('hint-telephone-optionnel');
+    var aideTelephone = document.getElementById('aide-telephone');
+
+    if (!typeSelect) return;
+
+    function synchroniserSelonType() {
+        var opt = typeSelect.options[typeSelect.selectedIndex];
+        var code = opt ? (opt.getAttribute('data-code') || '') : '';
+        var necessiteService = opt && opt.getAttribute('data-service-demandeur') === '1';
+        var telRequis = opt && opt.getAttribute('data-telephone-requis') === '1';
+
+        if (!code) {
+            necessiteService = false;
+            telRequis = false;
+        }
+
+        if (blocService) {
+            blocService.classList.toggle('hidden', !necessiteService);
+            if (selectService) {
+                selectService.required = !!necessiteService;
+                selectService.disabled = !necessiteService;
+                if (!necessiteService) {
+                    selectService.value = '';
+                }
+            }
+        }
+
+        if (inputTelephone) {
+            inputTelephone.required = !!telRequis;
+        }
+        if (asterisqueTel) {
+            asterisqueTel.classList.toggle('hidden', !telRequis);
+        }
+        if (hintTelOptionnel) {
+            hintTelOptionnel.classList.toggle('hidden', !!telRequis);
+        }
+        if (aideTelephone) {
+            aideTelephone.classList.toggle('hidden', !telRequis);
+        }
+    }
+
+    typeSelect.addEventListener('change', synchroniserSelonType);
+    synchroniserSelonType();
+});
+</script>
+@endpush
+@endif
 @endsection

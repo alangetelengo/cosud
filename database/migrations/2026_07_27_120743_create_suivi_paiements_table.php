@@ -10,8 +10,9 @@ return new class extends Migration
     {
         Schema::create('suivi_paiements', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('courrier_id')->unique()->constrained('courriers')->cascadeOnDelete();
+            $table->foreignId('courrier_id')->nullable()->unique()->constrained('courriers')->nullOnDelete();
             $table->string('type', 32);
+            $table->string('origine', 32)->default('circuit_cheque');
             $table->unsignedInteger('numero_ligne');
             $table->unsignedSmallInteger('numero_annee');
             $table->date('date_suivi');

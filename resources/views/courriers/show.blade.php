@@ -39,8 +39,11 @@
         ? $courrier->reponseDepartSigneeEnAttenteExpedition()
         : null;
     // Chemin B : le DG peut créer et signer lui-même la réponse uniquement tant qu’il
-    // n’a pas encore instruit le dossier (étape d’instructions).
+    // n’a pas encore instruit le dossier (étape d’instructions) — hors circuit facture/MAD
+    // (BPA → AC → décharge → Eleni ; l’instruction se fait uniquement via « Circuit métier »).
+    $estCircuitFacturePrestataire = $courrier->circuit?->code === 'facture_prestataire';
     $peutCreerReponseDirecte = $hasCircuit
+        && ! $estCircuitFacturePrestataire
         && auth()->user()->aAccesTotal()
         && $courrier->statutCourrier->code !== 'cloture'
         && in_array($etapeCircuitActuelle?->code, [
@@ -59,10 +62,11 @@
     $peutEnregistrerDechargeAc = $etapeCircuitActuelle?->code === 'preuve_paiement'
         && $estActeurCircuitActuel
         && $courrier->statutCourrier->code !== 'cloture';
-    // Eleni : contrôle + confirmation de clôture.
-    $peutConfirmerControleDepense = $etapeCircuitActuelle?->code === 'cloture_depenses'
-        && $estActeurCircuitActuel
-        && $courrier->statutCourrier->code !== 'cloture';
+    // Eleni : contrôle des pièces physiques hors circuit (après décharge AC / clôture).
+    $peutConfirmerControleDepense = $moteurCircuitActions->peutConfirmerControleDepenseHorsCircuit(
+        auth()->user(),
+        $courrier
+    );
     $peutDeposerPreuvePaiement = $peutEnregistrerDechargeAc;
 
     // Formulaire de soumission ouvert d’emblée pour l’actrice attendue.
@@ -70,7 +74,11 @@
         && ($estActeurCircuitActuel || $errors->has('document_reponse'));
     $formInitial = $ouvrirFormulaireSoumettreReponse
         ? 'soumettre-reponse'
-        : ($errors->has('motif_rejet') ? 'rejeter-reponse' : null);
+        : ($errors->has('motif_rejet') ? 'rejeter-reponse' : (
+            $errors->has('dossier_id') || $errors->has('nom_dossier') || $errors->has('mode') || request()->boolean('classer')
+                ? 'classer-dossier'
+                : null
+        ));
 @endphp
 
 @section('content')
@@ -96,6 +104,10 @@
 
                 <div class="p-5">
                     <dl class="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                        <div>
+                            <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">N° registre</dt>
+                            <dd class="font-mono font-semibold text-slate-800 dark:text-slate-100 mt-0.5">{{ $courrier->numeroRegistreComplet() }}</dd>
+                        </div>
                         @if($courrier->estArrivee())
                         <div>
                             <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Expéditeur</dt>
@@ -110,10 +122,6 @@
                             </dd>
                         </div>
                         @endif
-                        <div>
-                            <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">N° fulgurant</dt>
-                            <dd class="mt-0.5 text-slate-700 dark:text-slate-200">{{ $courrier->numero_fulgurant ?? '—' }}</dd>
-                        </div>
                         @if($courrier->serviceDemandeurStructure)
                         <div>
                             <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Service demandeur</dt>
@@ -167,7 +175,7 @@
                         @endif
                         @endif
                         <div>
-                            <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Créé par</dt>
+                            <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Enregistré par</dt>
                             <dd class="mt-0.5 text-slate-700 dark:text-slate-200">{{ $courrier->createur?->name }}</dd>
                         </div>
                         @if($courrier->nombre_pieces)
@@ -351,11 +359,102 @@
         <div class="w-full lg:w-96 shrink-0 space-y-4 lg:sticky lg:top-4 order-1 lg:order-2">
             @include('courriers.partials.circuit-suivi')
 
-            <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
+            <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
                 <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-700/30">
                     <h3 class="font-semibold text-sm text-slate-800 dark:text-slate-100">Actions</h3>
                 </div>
-                <div class="p-3 space-y-2">
+                <div class="p-3 space-y-2 max-h-[min(70vh,40rem)] overflow-y-auto">
+                    @can('classerDossier', $courrier)
+                    <div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/20 p-3 space-y-2"
+                         x-data="{ mode: @js(old('mode', $courrier->dossier_id ? 'existant' : ($dossierSuggere ? 'existant' : 'nouveau'))) }">
+                        <p class="text-xs font-semibold text-emerald-900 dark:text-emerald-200">Dossier fournisseur</p>
+                        @if($courrier->dossier)
+                            <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                                Classé dans
+                                <a href="{{ route('dossiers.show', $courrier->dossier) }}" class="font-semibold text-emerald-700 dark:text-emerald-300 no-underline hover:underline">
+                                    {{ $courrier->dossier->chemin_complet }}
+                                </a>
+                            </p>
+                            <button type="button"
+                                    @click="form = form === 'classer-dossier' ? null : 'classer-dossier'"
+                                    class="w-full px-3 py-2 rounded-lg border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-xs font-semibold">
+                                <span x-text="form === 'classer-dossier' ? 'Fermer' : 'Reclasser'"></span>
+                            </button>
+                        @else
+                            <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug" x-show="form !== 'classer-dossier'">
+                                Non classée — rattachez la facture au dossier du fournisseur (Mes dossiers ou dossier existant).
+                            </p>
+                            <button type="button"
+                                    x-show="form !== 'classer-dossier'"
+                                    @click="form = 'classer-dossier'"
+                                    class="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold">
+                                Classer dans un dossier
+                            </button>
+                        @endif
+
+                        <form x-show="form === 'classer-dossier'" x-cloak method="post" action="{{ route('courriers.classer-dossier', $courrier) }}"
+                              class="space-y-2 pt-2 border-t border-emerald-200 dark:border-emerald-800">
+                            @csrf
+                            <p class="text-[11px] text-slate-500 leading-snug">
+                                Classement hors circuit paiement : la facture et ses pièces sont rattachées au dossier GED du fournisseur.
+                            </p>
+                            <div class="flex flex-col gap-1.5">
+                                <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                    <input type="radio" name="mode" value="existant" x-model="mode" class="rounded border-slate-300 text-emerald-600">
+                                    Dossier existant
+                                </label>
+                                <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                    <input type="radio" name="mode" value="nouveau" x-model="mode" class="rounded border-slate-300 text-emerald-600">
+                                    Créer un nouveau dossier
+                                </label>
+                            </div>
+
+                            <div x-show="mode === 'existant'" class="space-y-1">
+                                <label class="block text-[11px] font-semibold mb-1">Dossier fournisseur</label>
+                                <select name="dossier_id" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900">
+                                    <option value="">— Choisir —</option>
+                                    @foreach(($dossiersClassement ?? collect()) as $d)
+                                        <option value="{{ $d->id }}"
+                                            @selected((int) old('dossier_id', $dossierSuggere?->id ?? $courrier->dossier_id) === (int) $d->id)>
+                                            {{ $d->chemin_complet }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error('dossier_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                @if(($dossiersClassement ?? collect())->isEmpty())
+                                    <p class="text-[11px] text-amber-700 dark:text-amber-300">Aucun dossier accessible en écriture — créez-en un ci-dessous.</p>
+                                @endif
+                            </div>
+
+                            <div x-show="mode === 'nouveau'" class="space-y-2">
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Nom du dossier</label>
+                                    <input type="text" name="nom_dossier"
+                                           value="{{ old('nom_dossier', $courrier->expediteur_libelle) }}"
+                                           class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900"
+                                           placeholder="Ex. AF.COM">
+                                    @error('nom_dossier')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Sous <span class="font-normal text-slate-400">(optionnel)</span></label>
+                                    <select name="parent_id" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900">
+                                        <option value="">Mes dossiers (par défaut)</option>
+                                        @foreach(($dossiersClassement ?? collect()) as $d)
+                                            <option value="{{ $d->id }}" @selected((int) old('parent_id') === (int) $d->id)>{{ $d->chemin_complet }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('parent_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                            </div>
+
+                            <button type="button"
+                                    onclick="flashAlert('Classer cette facture dans le dossier sélectionné ? Les pièces jointes y seront rattachées.', this.closest('form'), {icon:'📁', danger:false, confirmText:'Classer', title:'Classement dossier'})"
+                                    class="w-full px-3 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm border border-emerald-700">
+                                Confirmer le classement
+                            </button>
+                        </form>
+                    </div>
+                    @endcan
                     @if($courrier->estArrivee())
                         @can('update', $courrier)
                         @if($courrier->statutCourrier->code === 'recu' && ! $courrier->circuit_courrier_id)
@@ -484,6 +583,7 @@
                             @endif
                         </div>
                         @elseif(in_array($etapeCircuitActuelle?->code, ['instruction_dg', 'instructions_dg'], true))
+                        @if(! $estCircuitFacturePrestataire)
                         @if($estActeurCircuitActuel)
                         <p class="text-[11px] text-slate-500 italic px-1 leading-snug">
                             <strong>A — Instruire :</strong> utilisez le panneau « Circuit métier » (instructions ± collaborateur, sans pièce).
@@ -491,56 +591,185 @@
                         @else
                         <p class="text-[11px] text-slate-400 italic px-1">En attente des instructions du DG / directeur.</p>
                         @endif
+                        @endif
                         @elseif($peutEnvoyerChequeAc)
-                        <div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/20 p-3 space-y-2">
-                            <p class="text-xs font-semibold text-emerald-900 dark:text-emerald-200">Envoyer le chèque au DG</p>
-                            @if($courrier->instructions_dg)
-                            <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug"><strong>Instructions DG :</strong> {{ $courrier->instructions_dg }}</p>
-                            @endif
-                            <form method="post" action="{{ route('courriers.circuit.envoyer-cheque', $courrier) }}" enctype="multipart/form-data" class="space-y-2">
-                                @csrf
-                                @php
-                                    $montantChequeAffiche = old('montant') !== null && old('montant') !== ''
-                                        ? number_format((float) preg_replace('/\s+/', '', (string) old('montant')), 0, ',', ' ')
-                                        : '';
-                                @endphp
-                                <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Montant du chèque (FCFA) <span class="text-red-500">*</span></label>
-                                    <div
-                                        x-data="{
-                                            montant: @js($montantChequeAffiche),
-                                            formatMontant(v) {
-                                                const chiffres = String(v ?? '').replace(/\D/g, '');
-                                                if (!chiffres) return '';
-                                                return chiffres.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-                                            }
-                                        }"
-                                    >
-                                        <input
-                                            type="text"
-                                            name="montant"
-                                            x-model="montant"
-                                            @input="montant = formatMontant($event.target.value)"
-                                            inputmode="numeric"
-                                            autocomplete="off"
-                                            required
-                                            class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900"
-                                            placeholder="Ex. : 1 949 700"
-                                        >
-                                    </div>
-                                    @error('montant')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                        @php
+                            $erreursCheque = $errors->hasAny(['montant', 'message', 'numero_piece', 'banque', 'beneficiaire_libelle', 'programmation']);
+                            $montantChequeAffiche = old('montant') !== null && old('montant') !== ''
+                                ? number_format((float) preg_replace('/\s+/', '', (string) old('montant')), 0, ',', ' ')
+                                : '';
+                            $beneficiaireChequeDefaut = old('beneficiaire_libelle', $courrier->expediteur_libelle);
+                            $inputChequeClass = 'w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900/80 px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition';
+                        @endphp
+                        <div
+                            class="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-900/40 overflow-hidden"
+                            x-data="{
+                                ouvert: {{ $erreursCheque ? 'true' : 'false' }},
+                                ouvrir() { this.ouvert = true; document.body.classList.add('overflow-hidden'); },
+                                fermer() { this.ouvert = false; document.body.classList.remove('overflow-hidden'); }
+                            }"
+                            x-init="if (ouvert) document.body.classList.add('overflow-hidden')"
+                            @keydown.escape.window="if (ouvert) fermer()"
+                        >
+                            <div class="px-3.5 py-3 border-b border-emerald-100 dark:border-emerald-900/40 bg-gradient-to-r from-emerald-50 to-teal-50/50 dark:from-emerald-900/30 dark:to-slate-900/20">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                                    </span>
+                                    <p class="text-xs font-bold text-emerald-900 dark:text-emerald-100 leading-tight">Envoyer le chèque au DG</p>
                                 </div>
-                                <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Message au DG <span class="text-red-500">*</span></label>
-                                    <textarea name="message" required rows="3" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : Chèque établi, prêt pour signature…">{{ old('message') }}</textarea>
-                                    @error('message')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                            </div>
+                            <div class="p-3.5 space-y-3">
+                                @if($courrier->instructions_dg)
+                                <div class="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200/70 dark:border-amber-800/50 px-3 py-2">
+                                    <p class="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Instructions DG</p>
+                                    <p class="mt-0.5 text-[11px] text-slate-700 dark:text-slate-300 leading-snug">{{ $courrier->instructions_dg }}</p>
                                 </div>
-                                <button type="button"
-                                        onclick="flashAlert('Transmettre ce chèque au DG pour signature ? Le circuit avancera automatiquement.', this.closest('form'), {icon:'✓', danger:false, confirmText:'Envoyer au DG', title:'Envoi du chèque'})"
-                                        class="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold">
-                                    Envoyer le chèque au DG
+                                @endif
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">Saisissez les références (bordereau), puis transmettez pour signature.</p>
+                                <button type="button" @click="ouvrir()"
+                                        class="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-colors">
+                                    <svg class="h-4 w-4 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                    Saisir les références du chèque
                                 </button>
-                            </form>
+                            </div>
+
+                            <template x-teleport="body">
+                                <div
+                                    x-show="ouvert"
+                                    x-cloak
+                                    class="fixed inset-0 flex items-center justify-center p-4"
+                                    style="z-index: 5000;"
+                                    role="dialog"
+                                    aria-modal="true"
+                                    aria-labelledby="modal-cheque-titre"
+                                >
+                                    <div
+                                        x-show="ouvert"
+                                        x-transition:enter="ease-out duration-200"
+                                        x-transition:enter-start="opacity-0"
+                                        x-transition:enter-end="opacity-100"
+                                        x-transition:leave="ease-in duration-150"
+                                        x-transition:leave-start="opacity-100"
+                                        x-transition:leave-end="opacity-0"
+                                        class="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px]"
+                                        style="z-index: 0;"
+                                        @click="fermer()"
+                                    ></div>
+
+                                    <div
+                                        x-show="ouvert"
+                                        x-transition:enter="ease-out duration-200"
+                                        x-transition:enter-start="opacity-0 translate-y-3 scale-95"
+                                        x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                                        x-transition:leave="ease-in duration-150"
+                                        x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                                        x-transition:leave-end="opacity-0 translate-y-3 scale-95"
+                                        class="relative flex flex-col rounded-2xl bg-white dark:bg-slate-800 shadow-2xl border border-slate-200/80 dark:border-slate-600 overflow-hidden"
+                                        style="z-index: 1; width: 100%; max-width: 28rem; max-height: min(88vh, calc(100dvh - 6rem));"
+                                        @click.stop
+                                    >
+                                        <div class="relative shrink-0 px-4 pt-3.5 pb-3 border-b border-emerald-100 dark:border-emerald-900/40 bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-600 text-white">
+                                            <div class="flex items-start gap-2.5">
+                                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
+                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                                                </span>
+                                                <div class="min-w-0 flex-1 pt-0.5">
+                                                    <h3 id="modal-cheque-titre" class="text-sm font-bold tracking-tight">Références du chèque</h3>
+                                                    <p class="mt-0.5 text-[11px] text-emerald-50/90 leading-snug">Transmission au DG — alimente le bordereau.</p>
+                                                </div>
+                                                <button type="button" @click="fermer()"
+                                                        class="shrink-0 flex h-8 w-8 items-center justify-center rounded-lg text-white/80 hover:text-white hover:bg-white/15 transition"
+                                                        aria-label="Fermer">
+                                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <form method="post" action="{{ route('courriers.circuit.envoyer-cheque', $courrier) }}" enctype="multipart/form-data"
+                                              id="form-envoyer-cheque-ac"
+                                              class="flex flex-col flex-1 min-h-0 overflow-hidden">
+                                            @csrf
+                                            <div class="flex-1 overflow-y-auto overscroll-contain px-4 py-3.5 space-y-3.5">
+                                                <section class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 p-3 space-y-2.5">
+                                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Identité du chèque</p>
+                                                    <div class="grid grid-cols-1 gap-2.5">
+                                                        <div>
+                                                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Banque <span class="text-red-500">*</span></label>
+                                                            <input type="text" name="banque" value="{{ old('banque') }}" required
+                                                                   class="{{ $inputChequeClass }}" placeholder="Ex. : BCH, UBA">
+                                                            @error('banque')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                                        </div>
+                                                        <div>
+                                                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">N° pièce <span class="text-red-500">*</span></label>
+                                                            <input type="text" name="numero_piece" value="{{ old('numero_piece') }}" required
+                                                                   class="{{ $inputChequeClass }}" placeholder="Ex. : Chèque N° 0000322">
+                                                            @error('numero_piece')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                                        </div>
+                                                        <div>
+                                                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Montant (FCFA) <span class="text-red-500">*</span></label>
+                                                            <div
+                                                                class="relative"
+                                                                x-data="{
+                                                                    montant: @js($montantChequeAffiche),
+                                                                    formatMontant(v) {
+                                                                        const chiffres = String(v ?? '').replace(/\D/g, '');
+                                                                        if (!chiffres) return '';
+                                                                        return chiffres.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+                                                                    }
+                                                                }"
+                                                            >
+                                                                <input type="text" name="montant" x-model="montant" @input="montant = formatMontant($event.target.value)"
+                                                                       inputmode="numeric" autocomplete="off" required
+                                                                       class="{{ $inputChequeClass }} pr-14 font-semibold tabular-nums"
+                                                                       placeholder="Ex. : 1 949 700">
+                                                                <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-slate-400">FCFA</span>
+                                                            </div>
+                                                            @error('montant')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                                        </div>
+                                                        <div>
+                                                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Bénéficiaire <span class="text-red-500">*</span></label>
+                                                            <input type="text" name="beneficiaire_libelle" value="{{ $beneficiaireChequeDefaut }}" required
+                                                                   class="{{ $inputChequeClass }}">
+                                                            @error('beneficiaire_libelle')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                                        </div>
+                                                        <div>
+                                                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Programmation <span class="font-normal text-slate-400">(facultatif)</span></label>
+                                                            <input type="text" name="programmation" value="{{ old('programmation') }}"
+                                                                   class="{{ $inputChequeClass }}" placeholder="Ex. : 05 Août 2026">
+                                                            @error('programmation')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                                        </div>
+                                                    </div>
+                                                </section>
+
+                                                <section class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/30 p-3 space-y-2.5">
+                                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Message au DG</p>
+                                                    <div>
+                                                        <label class="sr-only">Message au DG</label>
+                                                        <textarea name="message" required rows="3"
+                                                                  class="{{ $inputChequeClass }} resize-y min-h-[4.5rem]"
+                                                                  placeholder="Ex. : Chèque établi, prêt pour signature…">{{ old('message') }}</textarea>
+                                                        @error('message')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                                    </div>
+                                                </section>
+                                            </div>
+
+                                            <div class="shrink-0 flex items-center justify-end gap-2 px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-900/50">
+                                                <button type="button" @click="fermer()"
+                                                        class="inline-flex items-center justify-center px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+                                                    Annuler
+                                                </button>
+                                                <button type="button"
+                                                        onclick="flashAlert('Transmettre ce chèque au DG pour signature ? Le circuit avancera automatiquement.', document.getElementById('form-envoyer-cheque-ac'), {icon:'✓', danger:false, confirmText:'Envoyer au DG', title:'Envoi du chèque'})"
+                                                        class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition">
+                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                                                    Envoyer au DG
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                         @elseif($peutSignerChequeDg)
                         <div class="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-900/20 p-3 space-y-2">
@@ -577,55 +806,25 @@
                         @elseif($peutEnregistrerDechargeAc)
                         @php
                             $suiviBordereau = $courrier->suiviPaiement;
-                            $montantDechargeAffiche = old('montant', $suiviBordereau?->montant
-                                ? number_format((float) $suiviBordereau->montant, 0, '', ' ')
-                                : '');
                         @endphp
                         <div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/20 p-3 space-y-2">
                             <p class="text-xs font-semibold text-emerald-900 dark:text-emerald-200">Bordereau — décharge bénéficiaire</p>
-                            <p class="text-[11px] text-slate-500 leading-snug">Enregistrez le paiement lorsque le bénéficiaire décharge le chèque (comme sur le bordereau de transmission).</p>
+                            <p class="text-[11px] text-slate-500 leading-snug">Les références du chèque sont figées. Joignez les pièces justificatives et la date de décharge.</p>
+                            @if($suiviBordereau)
+                            <div class="rounded-md bg-white/80 dark:bg-slate-900/40 border border-emerald-100 dark:border-emerald-900 px-2.5 py-2 text-[11px] text-slate-700 dark:text-slate-200 space-y-0.5">
+                                <p><strong>Ref pièce :</strong> {{ $suiviBordereau->numero_piece ?? '—' }}</p>
+                                <p><strong>Montant :</strong> {{ $suiviBordereau->montant ? number_format((float) $suiviBordereau->montant, 0, ',', ' ').' FCFA' : '—' }}</p>
+                                <p><strong>Banque :</strong> {{ $suiviBordereau->banque ?? '—' }}</p>
+                                <p><strong>Bénéficiaire :</strong> {{ $suiviBordereau->beneficiaire_libelle ?: $suiviBordereau->fournisseur_libelle ?: $courrier->expediteur_libelle ?: '—' }}</p>
+                                <p><strong>Programmation :</strong> {{ $suiviBordereau->programmation ?? '—' }}</p>
+                            </div>
+                            @endif
                             <form method="post" action="{{ route('courriers.circuit.deposer-preuve-paiement', $courrier) }}" enctype="multipart/form-data" class="space-y-2">
                                 @csrf
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label class="block text-[11px] font-semibold mb-1">Date <span class="text-red-500">*</span></label>
-                                        <input type="date" name="date_decharge" value="{{ old('date_decharge', now()->toDateString()) }}" required class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900">
-                                        @error('date_decharge')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-                                    </div>
-                                    <div>
-                                        <label class="block text-[11px] font-semibold mb-1">Banque <span class="text-red-500">*</span></label>
-                                        <input type="text" name="banque" value="{{ old('banque', $suiviBordereau?->banque) }}" required class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : BCH, BOA">
-                                        @error('banque')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-                                    </div>
-                                </div>
                                 <div>
-                                    <label class="block text-[11px] font-semibold mb-1">N° pièce <span class="text-red-500">*</span></label>
-                                    <input type="text" name="numero_piece" value="{{ old('numero_piece', $suiviBordereau?->numero_piece) }}" required class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : Chèque N° 0000312">
-                                    @error('numero_piece')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-                                </div>
-                                <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Montant (FCFA) <span class="text-red-500">*</span></label>
-                                    <div x-data="{
-                                        montant: @js($montantDechargeAffiche),
-                                        formatMontant(v) {
-                                            const chiffres = String(v ?? '').replace(/\D/g, '');
-                                            if (!chiffres) return '';
-                                            return chiffres.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-                                        }
-                                    }">
-                                        <input type="text" name="montant" x-model="montant" @input="montant = formatMontant($event.target.value)" inputmode="numeric" required class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : 1 000 000">
-                                    </div>
-                                    @error('montant')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-                                </div>
-                                <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Bénéficiaire <span class="text-red-500">*</span></label>
-                                    <input type="text" name="beneficiaire_libelle" value="{{ old('beneficiaire_libelle', $suiviBordereau?->beneficiaire_libelle ?: $suiviBordereau?->fournisseur_libelle ?: $courrier->expediteur_libelle) }}" required class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900">
-                                    @error('beneficiaire_libelle')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-                                </div>
-                                <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Programmation <span class="font-normal text-slate-400">(facultatif)</span></label>
-                                    <input type="text" name="programmation" value="{{ old('programmation', $suiviBordereau?->programmation) }}" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Ex. : du 14 juillet 2026">
-                                    @error('programmation')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                    <label class="block text-[11px] font-semibold mb-1">Date de décharge <span class="text-red-500">*</span></label>
+                                    <input type="date" name="date_decharge" value="{{ old('date_decharge', now()->toDateString()) }}" required class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900">
+                                    @error('date_decharge')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
                                 <div>
                                     <label class="block text-[11px] font-semibold mb-1">Pièces (chèque déchargé, identité…) <span class="text-red-500">*</span></label>
@@ -648,10 +847,10 @@
                         @elseif($peutConfirmerControleDepense)
                         <div class="rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50/70 dark:bg-sky-900/20 p-3 space-y-2">
                             <p class="text-xs font-semibold text-sky-900 dark:text-sky-200">Contrôle de la dépense</p>
-                            <p class="text-[11px] text-slate-500 leading-snug">Vérifiez les éléments saisis par l’AC avec les pièces physiques. Vous pouvez joindre des pièces complémentaires, puis confirmer la clôture.</p>
+                            <p class="text-[11px] text-slate-500 leading-snug">Vérifiez les éléments saisis par l’AC avec les pièces physiques. Vous pouvez joindre les pièces manquantes, puis confirmer le contrôle (sans clôturer — la clôture a déjà été faite à la décharge).</p>
                             @if($courrier->suiviPaiement)
                             <div class="rounded-md bg-white/70 dark:bg-slate-900/40 border border-sky-100 dark:border-sky-900 px-2.5 py-2 text-[11px] text-slate-700 dark:text-slate-200 space-y-0.5">
-                                <p><strong>N° pièce :</strong> {{ $courrier->suiviPaiement->numero_piece ?? '—' }}</p>
+                                <p><strong>Ref pièce :</strong> {{ $courrier->suiviPaiement->numero_piece ?? '—' }}</p>
                                 <p><strong>Montant :</strong> {{ $courrier->suiviPaiement->montant ? number_format((float) $courrier->suiviPaiement->montant, 0, ',', ' ') : '—' }}</p>
                                 <p><strong>Banque :</strong> {{ $courrier->suiviPaiement->banque ?? '—' }}</p>
                                 <p><strong>Bénéficiaire :</strong> {{ $courrier->suiviPaiement->beneficiaire_libelle ?? '—' }}</p>
@@ -672,13 +871,13 @@
                                     @error('message')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
                                 <button type="button"
-                                        onclick="flashAlert('Confirmer le contrôle et clôturer le dossier ?', this.closest('form'), {icon:'✓', danger:false, confirmText:'Confirmer la clôture', title:'Contrôle dépense'})"
+                                        onclick="flashAlert('Confirmer le contrôle des pièces physiques ?', this.closest('form'), {icon:'✓', danger:false, confirmText:'Confirmer le contrôle', title:'Contrôle dépense'})"
                                         class="w-full px-3 py-2 rounded-lg bg-sky-600 text-white text-xs font-semibold">
-                                    Confirmer le contrôle et clôturer
+                                    Confirmer le contrôle
                                 </button>
                             </form>
                         </div>
-                        @elseif($courrier->statutCourrier->code !== 'cloture')
+                        @elseif($etapeCircuitActuelle && $courrier->statutCourrier->code !== 'cloture')
                         <p class="text-[11px] text-slate-400 italic px-1">En attente de l’acteur de l’étape en cours.</p>
                         @endif
                         @if($peutCreerReponseDirecte)

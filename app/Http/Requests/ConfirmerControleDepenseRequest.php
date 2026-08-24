@@ -7,7 +7,7 @@ use App\Services\CircuitCourrierMoteurService;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * Mme Eleni contrôle les éléments saisis par l’AC et confirme la clôture.
+ * Mme Eleni confirme le contrôle des pièces physiques (hors circuit).
  */
 class ConfirmerControleDepenseRequest extends FormRequest
 {
@@ -15,21 +15,9 @@ class ConfirmerControleDepenseRequest extends FormRequest
     {
         /** @var Courrier $courrier */
         $courrier = $this->route('courrier');
-        $courrier->loadMissing('circuitEtapeActuelle');
-        $etape = $courrier->circuitEtapeActuelle;
-
-        if (! $etape || $etape->code !== 'cloture_depenses') {
-            return false;
-        }
-
-        $user = $this->user();
-
-        if ($user->aAccesTotal() || $user->hasRole('admin')) {
-            return true;
-        }
 
         return app(CircuitCourrierMoteurService::class)
-            ->userCorrespondActeurParRole($user, $etape, $courrier);
+            ->peutConfirmerControleDepenseHorsCircuit($this->user(), $courrier);
     }
 
     /**

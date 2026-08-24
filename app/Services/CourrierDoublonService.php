@@ -11,7 +11,7 @@ class CourrierDoublonService
 {
     /**
      * Recherche un doublon d’arrivée selon, dans l’ordre :
-     * 1) n° fulgurant (identifiant de correspondance)
+     * 1) n° registre saisi (numero_fulgurant)
      * 2) référence
      * 3) empreinte expéditeur + date du courrier + objet
      *
@@ -71,7 +71,7 @@ class CourrierDoublonService
         $lien = 'n° '.$numero;
 
         return match ($critere) {
-            'numero_fulgurant' => "Ce n° fulgurant est déjà enregistré sur le courrier {$lien}.",
+            'numero_fulgurant' => "Ce n° de registre est déjà enregistré sur le courrier {$lien}.",
             'reference' => "Cette référence est déjà enregistrée sur le courrier {$lien}.",
             'empreinte' => "Un courrier arrivée similaire existe déjà ({$lien}) : même expéditeur, date et objet.",
             default => "Ce courrier semble déjà enregistré ({$lien}).",

@@ -122,6 +122,29 @@ class Structure extends Model
             ->orderBy('nom');
     }
 
+    /**
+     * Directions et antennes départementales pouvant être « service demandeur »
+     * (facture, MAD, etc.).
+     */
+    public static function servicesDemandeurs(): Builder
+    {
+        return static::query()
+            ->where('actif', true)
+            ->whereIn('type', ['direction', 'antenne'])
+            ->orderBy('nom');
+    }
+
+    /**
+     * Directions destinataires d’une orientation DG (hors antennes).
+     */
+    public static function directionsOrientation(): Builder
+    {
+        return static::query()
+            ->where('actif', true)
+            ->where('type', 'direction')
+            ->orderBy('nom');
+    }
+
     public function estSecretariatDirection(): bool
     {
         if ($this->type === 'secretariat') {
@@ -136,7 +159,7 @@ class Structure extends Model
 
     public function estDirection(): bool
     {
-        return $this->type === 'direction';
+        return in_array($this->type, ['direction', 'antenne'], true);
     }
 
     /**

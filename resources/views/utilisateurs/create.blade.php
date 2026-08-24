@@ -31,9 +31,10 @@
             </div>
             <div>
                 <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Téléphone (pour SMS)</label>
-                <input type="text" name="telephone" value="{{ old('telephone') }}" placeholder="+242 XX XXX XXXX"
+                <input type="text" name="telephone" value="{{ old('telephone') }}" placeholder="+242 06 XXX XX XX"
                     class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white @error('telephone') border-red-500 @enderror">
                 @error('telephone')<p class="mt-1 text-sm text-red-500">{{ $message }}</p>@enderror
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Numéro mobile Congo utilisé pour les SMS métier (optionnel). Ex. +242 06 XXX XX XX.</p>
             </div>
             <div>
                 <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Mot de passe *</label>

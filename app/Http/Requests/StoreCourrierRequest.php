@@ -29,11 +29,21 @@ class StoreCourrierRequest extends FormRequest
             'priorite_courrier_id' => ['nullable', 'exists:priorite_courriers,id'],
             'date_reception' => ['nullable', 'date'],
             'date_courrier' => ['nullable', 'date'],
-            'numero_fulgurant' => ['nullable', 'string', 'max:100'],
+            'numero_fulgurant' => [
+                Rule::requiredIf(fn () => $this->input('sens') === 'arrivee'),
+                'nullable',
+                'string',
+                'max:100',
+            ],
             'reference' => ['nullable', 'string', 'max:100'],
             'expediteur_libelle' => ['nullable', 'string', 'max:255'],
             'expediteur_email' => ['nullable', 'email', 'max:255'],
-            'expediteur_telephone' => ['nullable', 'string', 'max:40'],
+            'expediteur_telephone' => [
+                Rule::requiredIf(fn () => $this->typeCourrierNecessiteTelephoneExpediteur()),
+                'nullable',
+                'string',
+                'max:40',
+            ],
             'destinataire_libelle' => ['nullable', 'string', 'max:255'],
             'est_expediteur_externe' => ['nullable', 'boolean'],
             'structure_expediteur_id' => ['nullable', 'exists:structures,id'],
@@ -45,7 +55,7 @@ class StoreCourrierRequest extends FormRequest
                 Rule::requiredIf(fn () => $this->typeCourrierNecessiteServiceDemandeur()),
                 'nullable',
                 Rule::exists('structures', 'id')->where(function ($query) {
-                    $query->where('type', 'direction')->where('actif', true);
+                    $query->whereIn('type', ['direction', 'antenne'])->where('actif', true);
                 }),
             ],
             'objet' => ['required', 'string', 'max:500'],
@@ -96,9 +106,11 @@ class StoreCourrierRequest extends FormRequest
                 ]);
 
                 if ($doublon) {
-                    $champ = in_array($doublon['critere'], ['numero_fulgurant', 'reference'], true)
-                        ? $doublon['critere']
-                        : 'objet';
+                    $champ = match ($doublon['critere']) {
+                        'numero_fulgurant' => 'numero_fulgurant',
+                        'reference' => 'reference',
+                        default => 'objet',
+                    };
                     $validator->errors()->add(
                         $champ,
                         $service->messagePour($doublon['courrier'], $doublon['critere'])
@@ -132,11 +144,26 @@ class StoreCourrierRequest extends FormRequest
             'fichiers.*.mimes' => 'Chaque scan doit être un PDF ou une image (jpg, png).',
             'nouveau_type_document_id.required' => 'Choisissez le type de pièce à déposer dans le parapheur.',
             'service_demandeur_structure_id.required' => 'Le service demandeur (direction) est obligatoire pour une facture ou une MAD.',
-            'service_demandeur_structure_id.exists' => 'Choisissez une direction valide dans le référentiel.',
+            'service_demandeur_structure_id.exists' => 'Choisissez une direction ou antenne départementale valide.',
+            'expediteur_telephone.required' => 'Le téléphone de l’expéditeur est obligatoire pour une facture ou une demande (SMS / notification).',
+            'numero_fulgurant.required' => 'Le n° de registre (saisi par le secrétariat) est obligatoire.',
         ];
     }
 
     private function typeCourrierNecessiteServiceDemandeur(): bool
+    {
+        return $this->typeCourrierCodeDans(['facture', 'mad']);
+    }
+
+    private function typeCourrierNecessiteTelephoneExpediteur(): bool
+    {
+        return $this->typeCourrierCodeDans(['facture', 'demande']);
+    }
+
+    /**
+     * @param  list<string>  $codes
+     */
+    private function typeCourrierCodeDans(array $codes): bool
     {
         if ($this->input('sens') !== 'arrivee' || ! $this->filled('type_courrier_id')) {
             return false;
@@ -144,6 +171,6 @@ class StoreCourrierRequest extends FormRequest
 
         $type = TypeCourrier::query()->find($this->input('type_courrier_id'));
 
-        return $type !== null && in_array($type->code, ['facture', 'mad'], true);
+        return $type !== null && in_array($type->code, $codes, true);
     }
 }

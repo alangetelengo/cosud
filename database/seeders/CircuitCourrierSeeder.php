@@ -77,30 +77,20 @@ class CircuitCourrierSeeder extends Seeder
             [
                 'ordre' => 5,
                 'code' => 'preuve_paiement',
-                'nom' => 'AC — enregistrement décharge / paiement',
+                'nom' => 'AC — enregistrement décharge / paiement (clôture)',
                 'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
                 'acteur_valeur' => 'agent_comptable',
-                'action' => CircuitCourrierEtape::ACTION_TRAITER,
-                'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
-                'notifie_roles' => ['responsable_suivi_depenses', 'particulier_dg', 'particulier_ac', 'dg', 'responsable_dossiers_prestataires'],
-                'instructions_aide' => 'À la décharge du bénéficiaire : saisir le bordereau (date, n° pièce, montant, banque, bénéficiaire, programmation) et joindre les pièces (chèque déchargé, identité…).',
-            ],
-            [
-                'ordre' => 6,
-                'code' => 'cloture_depenses',
-                'nom' => 'Contrôle suivi des dépenses / confirmation',
-                'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
-                'acteur_valeur' => 'responsable_suivi_depenses',
                 'action' => CircuitCourrierEtape::ACTION_CLOTURER,
                 'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
-                'notifie_roles' => ['secretaire_direction', 'dg', 'particulier_dg', 'particulier_ac', 'responsable_dossiers_prestataires', 'agent_comptable'],
-                'instructions_aide' => 'Contrôler les éléments saisis par l’AC avec les pièces physiques, joindre éventuellement des pièces complémentaires, puis confirmer la clôture.',
+                'notifie_roles' => ['responsable_suivi_depenses', 'particulier_dg', 'particulier_ac', 'dg', 'responsable_dossiers_prestataires'],
+                'instructions_aide' => 'À la décharge du bénéficiaire : saisir la date, joindre les pièces (chèque déchargé, identité…). Cette action clôture le circuit. Mme Eleni contrôlera ensuite les pièces hors circuit.',
                 'est_finale' => true,
             ],
         ]);
 
         $this->reassignerCourriersEtapeObsoleteDossiersVersAc($facture);
         $this->reassignerCourriersEtapesCaissiersVersDecharge($facture);
+        $this->cloturerCourriersBloquesSurControleEleni($facture);
 
         $general = CircuitCourrier::updateOrCreate(
             ['code' => 'courrier_general'],
@@ -303,31 +293,72 @@ class CircuitCourrierSeeder extends Seeder
         }
     }
 
+    /**
+     * Option A : le contrôle Eleni n’est plus une étape de circuit.
+     * Les dossiers encore sur « cloture_depenses » sont considérés clôturés côté circuit
+     * (la décharge AC a déjà été faite) — le contrôle reste possible hors circuit.
+     */
+    protected function cloturerCourriersBloquesSurControleEleni(CircuitCourrier $facture): void
+    {
+        $obsolete = CircuitCourrierEtape::query()
+            ->where('circuit_courrier_id', $facture->id)
+            ->where('code', 'cloture_depenses')
+            ->first();
+
+        if (! $obsolete) {
+            return;
+        }
+
+        $updated = Courrier::query()
+            ->where('circuit_etape_actuelle_id', $obsolete->id)
+            ->update([
+                'circuit_etape_actuelle_id' => null,
+                'circuit_etape_depuis' => null,
+            ]);
+
+        if ($updated > 0) {
+            $this->command?->info("{$updated} courrier(s) sorti(s) de l’étape « contrôle Eleni » (circuit clôturé — contrôle hors circuit).");
+        }
+    }
+
     protected function assurerRolesActeurs(): void
     {
         // Ne pas syncPermissions ici : cela écrasait documents.view / dossiers.view
         // déjà attribués par RoleAndPermissionSeeder.
-        $perms = Permission::whereIn('name', [
+        $permsBase = Permission::whereIn('name', [
             'documents.view', 'documents.create', 'documents.edit',
             'dossiers.view', 'dossiers.create', 'dossiers.edit',
-            'types-documents.view',
             'courriers.view', 'courriers.create', 'courriers.edit', 'courriers.transmettre',
             'courriers.archiver', 'courriers.recevoir',
-            'suivi-paiements.view',
         ])->pluck('name');
 
         foreach ([
-            'particulier_dg' => 'Particulière du DG',
-            'particulier_ac' => 'Particulière de l\'agent comptable',
-            'responsable_dossiers_prestataires' => 'Responsable dossiers prestataires / fournisseurs',
-            'responsable_suivi_depenses' => 'Responsable suivi des dépenses',
-            'agent_comptable' => 'Agent comptable',
-            'caissier' => 'Caissier',
-        ] as $name => $_label) {
+            'particulier_dg',
+            'particulier_ac',
+            'responsable_dossiers_prestataires',
+            'responsable_suivi_depenses',
+            'agent_comptable',
+            'caissier',
+        ] as $name) {
             $role = Role::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
-            if ($perms->isNotEmpty()) {
-                $role->givePermissionTo($perms);
+            if ($permsBase->isNotEmpty()) {
+                $role->givePermissionTo($permsBase);
             }
         }
+
+        // Menus métier : Suivi paiements = Eleni (+ DG via RoleAndPermissionSeeder) ;
+        // Bordereau = AC, Eleni, particulières circuit.
+        Role::findByName('responsable_suivi_depenses', 'web')
+            ?->givePermissionTo(['suivi-paiements.view', 'suivi-paiements.create', 'bordereau-transmission.view']);
+        Role::findByName('agent_comptable', 'web')
+            ?->givePermissionTo(['bordereau-transmission.view']);
+        Role::findByName('caissier', 'web')
+            ?->givePermissionTo(['bordereau-transmission.view']);
+        Role::findByName('particulier_ac', 'web')
+            ?->givePermissionTo(['bordereau-transmission.view']);
+        Role::findByName('particulier_dg', 'web')
+            ?->givePermissionTo(['suivi-paiements.view', 'suivi-factures.view', 'bordereau-transmission.view']);
+        Role::findByName('responsable_dossiers_prestataires', 'web')
+            ?->givePermissionTo(['suivi-factures.view']);
     }
 }

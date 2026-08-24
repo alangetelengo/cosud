@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Services\CircuitCourrierMoteurService;
+use App\Services\CourrierVisibiliteService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -353,9 +353,29 @@ class Courrier extends Model
         return $this->origine === self::ORIGINE_EXTERNE;
     }
 
+    /**
+     * Numéro métier affiché (saisi par le secrétariat), ex. « 192/2026/DAF/SAGP » ou « 45/2026 ».
+     * Repli : référence départ auto, puis compteur technique interne.
+     */
     public function numeroRegistreComplet(): string
     {
-        return sprintf('%d/%d', $this->numero_registre, $this->numero_registre_annee);
+        $saisi = trim((string) ($this->numero_fulgurant ?? ''));
+        if ($saisi !== '') {
+            return $saisi;
+        }
+
+        if ($this->estDepart()) {
+            $reference = trim((string) ($this->reference ?? ''));
+            if ($reference !== '') {
+                return $reference;
+            }
+        }
+
+        if ($this->numero_registre !== null && $this->numero_registre_annee !== null) {
+            return sprintf('%d/%d', $this->numero_registre, $this->numero_registre_annee);
+        }
+
+        return '—';
     }
 
     /**
@@ -404,91 +424,12 @@ class Courrier extends Model
 
     public function visiblePar(User $user): bool
     {
-        if ($user->aAccesTotal()) {
-            return true;
-        }
-
-        if ($user->hasRole('responsable_dossiers_prestataires')
-            || $user->hasRole('responsable_suivi_depenses')
-            || $user->hasRole('agent_comptable')
-            || $user->hasRole('caissier')) {
-            return true;
-        }
-
-        if (($user->gereCourrierSecretariat() || $user->hasRole('particulier_dg'))
-            && $this->appartientAuPerimetreSecretariat($user)) {
-            return true;
-        }
-
-        if ($user->peutSignerCourrierDepart()
-            && $this->estDepart()
-            && (int) $this->directeur_en_attente_id === (int) $user->id) {
-            return true;
-        }
-
-        // Réponse confidentielle adressée directement à un agent (pas à une structure) :
-        // l'agent destinataire doit pouvoir consulter son courrier départ.
-        if ($this->estDepart()
-            && $this->destinataire_agent_id
-            && (int) $this->destinataire_agent_id === (int) $user->id) {
-            return true;
-        }
-
-        if ($this->ventilationDestinataires()->where('user_id', $user->id)->exists()) {
-            return true;
-        }
-
-        if ((int) $this->createur_id === (int) $user->id) {
-            return true;
-        }
-
-        if ($this->enAttenteReceptionInterne()
-            && (int) $this->structure_destinataire_id === (int) $user->structure_id) {
-            return $user->gereCourrierSecretariat();
-        }
-
-        // Acteur courant du circuit métier (ex. directeur de la structure destinataire
-        // sur l’étape d’instruction) : doit pouvoir consulter le courrier pour y agir,
-        // même sans lien de secrétariat/ventilation direct.
-        if ($this->circuit_etape_actuelle_id
-            && app(CircuitCourrierMoteurService::class)->peutAgir($this, $user)) {
-            return true;
-        }
-
-        return false;
+        return app(CourrierVisibiliteService::class)->estVisible($this, $user);
     }
 
     public function scopeVisibleBy(Builder $query, User $user): Builder
     {
-        if ($user->aAccesTotal()) {
-            return $query;
-        }
-
-        if ($user->hasRole('responsable_dossiers_prestataires')
-            || $user->hasRole('responsable_suivi_depenses')
-            || $user->hasRole('agent_comptable')
-            || $user->hasRole('caissier')) {
-            return $query;
-        }
-
-        if ($user->gereCourrierSecretariat() || $user->hasRole('particulier_dg')) {
-            $structureId = (int) $user->structure_id;
-
-            // Registre / listes : uniquement les courriers de CE secrétariat.
-            // Les départs reçus d’une autre direction restent hors liste (page « À réceptionner »
-            // + visiblePar pour ouvrir la fiche), puis deviennent une Arrivée après réception.
-            return $query->where(function (Builder $q) use ($user, $structureId) {
-                $q->where('structure_id', $structureId)
-                    ->orWhere('createur_id', $user->id);
-            });
-        }
-
-        return $query->where(function ($q) use ($user) {
-            $q->where('createur_id', $user->id)
-                ->orWhere('directeur_en_attente_id', $user->id)
-                ->orWhere('destinataire_agent_id', $user->id)
-                ->orWhereHas('ventilationDestinataires', fn ($vq) => $vq->where('user_id', $user->id));
-        });
+        return app(CourrierVisibiliteService::class)->appliquerFiltreListe($query, $user);
     }
 
     /**

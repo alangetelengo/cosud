@@ -15,10 +15,10 @@
     $etapeTraiteeViaEnvoiChequeAc = ($etapeCourante?->code === 'ac_etablit_cheque');
     // « DG signe le chèque » se termine via confirmation dans Actions (sans scan).
     $etapeTraiteeViaSignatureChequeDg = ($etapeCourante?->code === 'dg_signe_cheque');
-    // « Décharge AC » se termine via le bordereau dans Actions.
+    // « Décharge AC » se termine via le bordereau dans Actions (clôture du circuit).
     $etapeTraiteeViaPreuvePaiement = ($etapeCourante?->code === 'preuve_paiement');
-    // « Contrôle Eleni » se termine via confirmation dans Actions.
-    $etapeTraiteeViaControleDepense = ($etapeCourante?->code === 'cloture_depenses');
+    // Contrôle Eleni hors circuit — plus d’étape dédiée.
+    $etapeTraiteeViaControleDepense = false;
     // Ne pas présenter « création courrier réponse » pour les étapes facture dédiées
     // ni pour la préparation particulière (gérée via transmission pour signature).
     $etapeCompleteeParReponse = ($etapeCourante?->meneVersCreationDepart() ?? false)
@@ -264,11 +264,11 @@
         </p>
         @elseif($peutAvancerCircuit && $etapeTraiteeViaPreuvePaiement)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
-            Enregistrez le bordereau et les pièces de décharge via « Actions » — le suivi des dépenses sera notifié.
+            Enregistrez le bordereau et les pièces de décharge via « Actions » — cette action clôture le circuit.
         </p>
         @elseif($peutAvancerCircuit && $etapeTraiteeViaControleDepense)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
-            Contrôlez les éléments et confirmez la clôture via « Actions » ci-dessous.
+            Contrôlez les pièces via « Actions » (hors circuit — sans clôturer).
         </p>
         @elseif($etapeRelaisFactureAuto)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">

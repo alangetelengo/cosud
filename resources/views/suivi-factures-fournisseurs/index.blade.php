@@ -58,7 +58,7 @@
         </div>
         <div class="flex-1 min-w-[220px]">
             <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Recherche</label>
-            <input type="search" name="q" value="{{ request('q') }}" placeholder="Fournisseur, objet, n° fulgurant…"
+            <input type="search" name="q" value="{{ request('q') }}" placeholder="Fournisseur, objet, référence…"
                    class="w-full rounded-lg border px-3 py-2 text-sm dark:bg-slate-900">
         </div>
         <button type="submit" class="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900">
@@ -88,6 +88,7 @@
                         <th class="px-3 py-2 text-left font-bold">Statut paiement</th>
                         <th class="px-3 py-2 text-left font-bold">Étape</th>
                         <th class="px-3 py-2 text-left font-bold">Service demandeur</th>
+                        <th class="px-3 py-2 text-left font-bold">Classement</th>
                         <th class="px-3 py-2 text-left font-bold whitespace-nowrap">Actions</th>
                     </tr>
                 </thead>
@@ -117,9 +118,21 @@
                             </td>
                             <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ $c->circuitEtapeActuelle?->nom ?? 'Terminé' }}</td>
                             <td class="px-3 py-2">{{ $c->serviceDemandeurStructure?->nom ?? '—' }}</td>
+                            <td class="px-3 py-2">
+                                @if($c->dossier_id)
+                                    <a href="{{ route('dossiers.show', $c->dossier_id) }}" class="text-emerald-700 dark:text-emerald-300 font-semibold no-underline hover:underline" title="{{ $c->dossier?->chemin_complet }}">
+                                        Classée
+                                    </a>
+                                @else
+                                    <span class="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">À classer</span>
+                                @endif
+                            </td>
                             <td class="px-3 py-2 whitespace-nowrap">
                                 <a href="{{ route('courriers.show', $c) }}" class="text-emerald-600 font-semibold no-underline hover:underline">Ouvrir</a>
-                                @if($c->dossier_id)
+                                @if(! $c->dossier_id)
+                                    <span class="text-slate-300 mx-1">·</span>
+                                    <a href="{{ route('courriers.show', ['courrier' => $c, 'classer' => 1]) }}" class="text-emerald-600 font-semibold no-underline hover:underline">Classer</a>
+                                @elseif($c->dossier_id)
                                     <span class="text-slate-300 mx-1">·</span>
                                     <a href="{{ route('dossiers.show', $c->dossier_id) }}" class="text-sky-600 font-semibold no-underline hover:underline">Dossier</a>
                                 @endif
@@ -127,7 +140,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="px-4 py-12 text-center text-sm text-slate-500">
+                            <td colspan="10" class="px-4 py-12 text-center text-sm text-slate-500">
                                 Aucune facture avec Bon pour accord pour cette période.
                                 <span class="block text-xs mt-1">Les factures apparaissent ici dès que le DG a donné ses instructions / BPA.</span>
                             </td>

@@ -48,7 +48,7 @@
                 <span class="absolute left-4 top-1/2 -translate-y-1/2 z-10 text-slate-400 pointer-events-none">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 </span>
-                <input type="text" name="q" value="{{ request('q') }}" placeholder="Nom ou email..."
+                <input type="text" name="q" value="{{ request('q') }}" placeholder="Nom, email ou téléphone SMS..."
                     class="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 dark:bg-slate-700/50 dark:text-white text-sm focus:ring-2 focus:ring-[#00b464]/25 focus:border-[#00b464] transition-all placeholder:text-slate-400">
             </div>
         </div>
@@ -116,6 +116,7 @@
                     <th class="px-4 py-4 w-10"><input type="checkbox" id="selectAll2fa" title="Tout sélectionner" class="rounded border-slate-300 dark:border-slate-600 text-[#00b464] focus:ring-[#00b464]/25"></th>
                     @endcan
                     <th class="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest">Utilisateur</th>
+                    <th class="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest hidden lg:table-cell">Tél. SMS</th>
                     <th class="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest hidden sm:table-cell">Rôle</th>
                     <th class="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest hidden md:table-cell">Structure</th>
                     <th class="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest">Actif</th>
@@ -140,6 +141,13 @@
                                 <div class="text-sm text-slate-500 dark:text-slate-400">{{ $user->email }}</div>
                             </div>
                         </a>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300 hidden lg:table-cell font-mono tabular-nums">
+                        @if($user->telephone)
+                            +{{ $user->telephone }}
+                        @else
+                            <span class="text-slate-400 dark:text-slate-500">—</span>
+                        @endif
                     </td>
                     <td class="px-6 py-4 hidden sm:table-cell">
                         @php
@@ -206,7 +214,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="{{ auth()->user()->can('utilisateurs.edit') ? 8 : 7 }}" class="px-6 py-20 text-center">
+                    <td colspan="{{ auth()->user()->can('utilisateurs.edit') ? 9 : 8 }}" class="px-6 py-20 text-center">
                         <div class="flex flex-col items-center gap-5">
                             <span class="flex items-center justify-center w-20 h-20 rounded-2xl bg-slate-100 dark:bg-slate-700/80 text-slate-400 dark:text-slate-500">
                                 <svg class="w-10 h-10" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>

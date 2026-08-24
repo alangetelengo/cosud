@@ -46,9 +46,11 @@ class CourrierPiecesMultiplesTest extends TestCase
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-57507249/2026',
                 'type_courrier_id' => TypeCourrier::where('code', 'facture')->value('id'),
                 'objet' => 'Facture AF.COM multi-scans',
                 'expediteur_libelle' => 'AF.COM',
+                'expediteur_telephone' => '+242060000001',
                 'date_reception' => now()->toDateString(),
                 'service_demandeur_structure_id' => Structure::where('code', 'DAF')->value('id'),
                 'fichiers' => [
@@ -70,7 +72,11 @@ class CourrierPiecesMultiplesTest extends TestCase
 
         $moteur = app(CircuitCourrierMoteurService::class);
         $courrier = $moteur->instruire($this->demarrerFacture($dg), $dg, 'Bon pour accord.', $ac->id);
-        $courrier = $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque prêt.', 379540);
+        $courrier = $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque prêt.', 379540, [
+            'numero_piece' => 'Chèque N° 0000322',
+            'banque' => 'BCH',
+            'beneficiaire_libelle' => 'Bénéficiaire Test',
+        ]);
 
         $this->actingAs($dg)
             ->post(route('courriers.circuit.signer-cheque', $courrier, absolute: false), [

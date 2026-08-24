@@ -20,6 +20,7 @@ class CourrierActeursDgSeeder extends Seeder
             'DG', 'SEC-DIR', 'SEC-DDSAIT', 'SEC-DAF', 'SEC-DAC',
             'DAF', 'DDSAIT', 'DAC',
             'DING-SI', 'DINFRA', 'DSUPPORT', 'DCOM',
+            'ANT',
         ];
 
         $structures = Structure::query()
@@ -154,6 +155,14 @@ class CourrierActeursDgSeeder extends Seeder
                 'pivot_role' => 'Directeur DCOM',
                 'fonction_id' => $fonctionDirecteurDirection,
                 'preserve_existing_name' => true,
+            ],
+            [
+                'email' => '003020h@acsi.cg',
+                'name' => 'MARTISC MONDZILA',
+                'role' => 'directeur',
+                'structure' => $structures['ANT'],
+                'pivot_role' => 'Directeur départemental de Pointe-Noire',
+                'fonction_id' => $fonctionDirecteurDirection,
             ],
             [
                 'email' => '003232b@acsi.cg',

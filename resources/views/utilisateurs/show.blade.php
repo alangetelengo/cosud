@@ -30,9 +30,14 @@
                 @if($utilisateur->email_professionnel)
                 <p class="text-slate-600 dark:text-slate-400 text-sm mt-0.5">📧 Pro : {{ $utilisateur->email_professionnel }}</p>
                 @endif
-                @if($utilisateur->telephone)
-                <p class="text-slate-600 dark:text-slate-400 text-sm mt-0.5">📱 {{ $utilisateur->telephone }}</p>
-                @endif
+                <p class="text-slate-600 dark:text-slate-400 text-sm mt-0.5">
+                    Tél. SMS :
+                    @if($utilisateur->telephone)
+                        <span class="font-mono tabular-nums">+{{ $utilisateur->telephone }}</span>
+                    @else
+                        <span class="text-slate-400">non renseigné</span>
+                    @endif
+                </p>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
                     <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {{ $utilisateur->hasRole('admin') ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200' : 'bg-slate-100 dark:bg-slate-600 text-slate-700 dark:text-slate-300' }}">
                         {{ $utilisateur->roles->first()?->name ?? 'Aucun rôle' }}

@@ -181,6 +181,23 @@ class CourrierPolicy
             && $courrier->peutEtreArchive();
     }
 
+    /**
+     * Classement d’une facture dans un dossier fournisseur.
+     * Réservé à la responsable dossiers prestataires (Mme Taty) — hors MAD / secrétaires / Eleni.
+     */
+    public function classerDossier(User $user, Courrier $courrier): bool
+    {
+        if (! $user->can('courriers.view') || ! $courrier->visiblePar($user)) {
+            return false;
+        }
+
+        if (! $user->hasRole('responsable_dossiers_prestataires') && ! $user->hasRole('admin')) {
+            return false;
+        }
+
+        return $courrier->typeCourrier?->code === 'facture';
+    }
+
     public function annuler(User $user, Courrier $courrier): bool
     {
         if (! $courrier->estDepart()) {

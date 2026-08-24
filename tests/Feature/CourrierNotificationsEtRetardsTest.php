@@ -53,8 +53,10 @@ class CourrierNotificationsEtRetardsTest extends TestCase
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-3a50bd68/2026',
                 'objet' => 'Facture test notif',
                 'expediteur_libelle' => 'Fournisseur',
+                'expediteur_telephone' => '+242060000001',
                 'date_reception' => now()->toDateString(),
                 'type_courrier_id' => $type->id,
                 'service_demandeur_structure_id' => Structure::where('code', 'DAF')->value('id'),
@@ -96,6 +98,7 @@ class CourrierNotificationsEtRetardsTest extends TestCase
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-bffc7268/2026',
                 'objet' => 'Courrier sans circuit test notif',
                 'expediteur_libelle' => 'Expéditeur externe',
                 'date_reception' => now()->toDateString(),

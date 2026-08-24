@@ -8,6 +8,7 @@ use App\Models\CircuitCourrierHistorique;
 use App\Models\Courrier;
 use App\Models\Fonction;
 use App\Models\JournalAudit;
+use App\Models\SuiviPaiement;
 use App\Models\TypeCourrier;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -72,7 +73,12 @@ class CircuitCourrierMoteurService
                 $this->notifierEtapeCourante($courrier->fresh(['circuitEtapeActuelle']), $acteur);
             }
 
-            return $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'circuitHistoriques.etape', 'circuitHistoriques.user']);
+            $courrier = $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'circuitHistoriques.etape', 'circuitHistoriques.user']);
+            if ($acteur) {
+                $this->notifications->notifierFactureEnregistreeDg($courrier, $acteur);
+            }
+
+            return $courrier;
         });
     }
 
@@ -280,9 +286,34 @@ class CircuitCourrierMoteurService
             throw new InvalidArgumentException('Vous n’êtes pas autorisé à faire avancer cette étape.');
         }
 
+        $this->assurerDechargeAvantCloturePreuvePaiement($courrier);
+
         $courrier = $this->avancerUneEtape($courrier, $acteur, $commentaire);
 
         return $this->poursuivreEtapesAutomatiques($courrier, $acteur);
+    }
+
+    /**
+     * L’étape finale « preuve_paiement » ne peut être clôturée que via le formulaire de décharge AC
+     * (date_decharge déjà enregistrée), jamais via « Valider l’étape » générique.
+     */
+    protected function assurerDechargeAvantCloturePreuvePaiement(Courrier $courrier): void
+    {
+        $courrier->loadMissing('circuitEtapeActuelle');
+        if ($courrier->circuitEtapeActuelle?->code !== 'preuve_paiement') {
+            return;
+        }
+
+        $aDecharge = SuiviPaiement::query()
+            ->where('courrier_id', $courrier->id)
+            ->whereNotNull('date_decharge')
+            ->exists();
+
+        if (! $aDecharge) {
+            throw new InvalidArgumentException(
+                'La décharge bénéficiaire doit être enregistrée via le formulaire dédié (Actions) avant de clôturer le circuit.'
+            );
+        }
     }
 
     /**
@@ -352,6 +383,7 @@ class CircuitCourrierMoteurService
         }
 
         $this->notifierSuiviParalleleDossiersPrestataires($courrier, $acteur);
+        $this->notifications->notifierBonPourAccordAc($courrier, $acteur);
 
         return $courrier;
     }
@@ -441,11 +473,18 @@ class CircuitCourrierMoteurService
     }
 
     /**
-     * L’AC envoie le chèque au DG (message + scan optionnel déjà attaché au courrier) :
+     * L’AC envoie le chèque au DG (message + références bordereau) :
      * enregistre le message, crée la fiche FSP et notifie la responsable suivi dépenses,
      * puis avance automatiquement vers la signature DG.
+     *
+     * @param  array{
+     *     numero_piece: string,
+     *     banque: string,
+     *     beneficiaire_libelle: string,
+     *     programmation?: ?string
+     * }  $references
      */
-    public function envoyerChequeAuDg(Courrier $courrier, User $acteur, string $message, float $montant): Courrier
+    public function envoyerChequeAuDg(Courrier $courrier, User $acteur, string $message, float $montant, array $references): Courrier
     {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->code !== 'ac_etablit_cheque') {
@@ -456,12 +495,12 @@ class CircuitCourrierMoteurService
             throw new InvalidArgumentException('Vous n’êtes pas autorisé à envoyer le chèque au DG.');
         }
 
-        $courrier = DB::transaction(function () use ($courrier, $acteur, $message, $montant): Courrier {
+        $courrier = DB::transaction(function () use ($courrier, $acteur, $message, $montant, $references): Courrier {
             $courrier->update([
                 'message_ac' => $message,
             ]);
 
-            $this->suiviPaiements->creerDepuisEntreeCheque($courrier->fresh(), $acteur, $montant);
+            $this->suiviPaiements->creerDepuisEntreeCheque($courrier->fresh(), $acteur, $montant, $references);
 
             return $this->avancerEtapesSansNotifier(
                 $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
@@ -510,16 +549,12 @@ class CircuitCourrierMoteurService
     }
 
     /**
-     * L’AC enregistre le bordereau + pièces à la décharge du bénéficiaire,
-     * puis notifie le suivi des dépenses pour contrôle.
+     * L’AC enregistre la décharge bénéficiaire (date + pièces + observation),
+     * sans modifier les références du chèque déjà saisies à l’envoi DG.
+     * Cette action clôture le circuit ; le contrôle Eleni se fait ensuite hors circuit.
      *
      * @param  array{
      *     date_decharge: string,
-     *     numero_piece: string,
-     *     montant: float|int|string,
-     *     banque: string,
-     *     beneficiaire_libelle: string,
-     *     programmation?: ?string,
      *     observation?: ?string
      * }  $bordereau
      */
@@ -534,44 +569,84 @@ class CircuitCourrierMoteurService
             throw new InvalidArgumentException('Vous n’êtes pas autorisé à enregistrer la décharge / le paiement.');
         }
 
-        $this->suiviPaiements->enregistrerDechargeBordereau($courrier, $bordereau);
+        $commentaire = $message ?: 'Décharge bénéficiaire enregistrée (bordereau + pièces) — circuit clôturé.';
 
-        $commentaire = $message ?: 'Décharge bénéficiaire enregistrée (bordereau + pièces).';
+        $courrier = DB::transaction(function () use ($courrier, $acteur, $bordereau, $commentaire): Courrier {
+            $this->suiviPaiements->enregistrerDechargeBordereau($courrier, $bordereau);
 
-        $courrier = $this->avancer(
-            $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
+            $avance = $this->avancerEtapesSansNotifier(
+                $courrier->fresh(['circuitEtapeActuelle', 'agentConfie', 'suiviPaiement']),
+                $acteur,
+                $commentaire
+            );
+
+            $this->viderAgentsConfies($avance);
+
+            return $avance->fresh(['circuitEtapeActuelle', 'agentConfie', 'agentsConfies', 'suiviPaiement']);
+        });
+
+        $this->notifications->notifierRoles(
+            ['responsable_suivi_depenses'],
+            $courrier,
             $acteur,
-            $commentaire
+            CourrierNotificationService::ETAPE_CIRCUIT,
+            'Décharge enregistrée — contrôler les pièces physiques et joindre les pièces manquantes si besoin (hors circuit).'
         );
 
-        $this->viderAgentsConfies($courrier);
+        return $courrier;
+    }
+
+    /**
+     * Mme Eleni confirme le contrôle des pièces physiques (hors circuit).
+     * N’avance / ne clôture pas le circuit — la clôture a déjà eu lieu à la décharge AC.
+     */
+    public function confirmerControleDepense(Courrier $courrier, User $acteur, ?string $message = null): Courrier
+    {
+        if (! $this->peutConfirmerControleDepenseHorsCircuit($acteur, $courrier)) {
+            throw new InvalidArgumentException('Vous n’êtes pas autorisé à confirmer le contrôle de cette dépense, ou le contrôle a déjà été effectué.');
+        }
+
+        $this->suiviPaiements->marquerControleEffectue($courrier, $acteur);
+
+        $commentaire = $message ?: 'Contrôle des pièces physiques confirmé.';
+
+        $this->historiser(
+            $courrier->fresh(),
+            null,
+            $acteur,
+            'controle_depense',
+            $commentaire
+        );
 
         return $courrier->fresh(['circuitEtapeActuelle', 'agentConfie', 'agentsConfies', 'suiviPaiement']);
     }
 
     /**
-     * Mme Eleni contrôle les éléments saisis par l’AC et confirme la clôture du dossier.
+     * Contrôle Eleni après décharge AC (circuit déjà terminé).
      */
-    public function confirmerControleDepense(Courrier $courrier, User $acteur, ?string $message = null): Courrier
+    public function peutConfirmerControleDepenseHorsCircuit(User $user, Courrier $courrier): bool
     {
-        $etape = $courrier->circuitEtapeActuelle;
-        if (! $etape || $etape->code !== 'cloture_depenses') {
-            throw new InvalidArgumentException('Aucune étape de contrôle / clôture en cours sur ce courrier.');
+        if (! $user->can('courriers.view')) {
+            return false;
         }
 
-        if (! $this->peutAgir($courrier, $acteur)) {
-            throw new InvalidArgumentException('Vous n’êtes pas autorisé à confirmer le contrôle de cette dépense.');
+        if (! $user->aAccesTotal()
+            && ! $user->hasRole('responsable_suivi_depenses')
+            && ! $user->hasRole('admin')) {
+            return false;
         }
 
-        $this->suiviPaiements->marquerControleEffectue($courrier, $acteur);
+        if (! $user->aAccesTotal() && ! $courrier->visiblePar($user)) {
+            return false;
+        }
 
-        $commentaire = $message ?: 'Contrôle effectué — clôture du dossier confirmée.';
+        $courrier->loadMissing('suiviPaiement');
+        $suivi = $courrier->suiviPaiement;
 
-        return $this->avancer(
-            $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
-            $acteur,
-            $commentaire
-        );
+        return $suivi
+            && $courrier->circuit_etape_actuelle_id === null
+            && $suivi->date_decharge !== null
+            && $suivi->controle_at === null;
     }
 
     /**
@@ -579,18 +654,8 @@ class CircuitCourrierMoteurService
      */
     public function deposerPreuvePaiement(Courrier $courrier, User $acteur, ?string $message = null, ?string $observation = null): Courrier
     {
-        $courrier->loadMissing('suiviPaiement');
-        $suivi = $courrier->suiviPaiement;
-
         return $this->enregistrerDechargeAc($courrier, $acteur, [
             'date_decharge' => now()->toDateString(),
-            'numero_piece' => $suivi?->numero_piece ?: 'Chèque',
-            'montant' => (float) ($suivi?->montant ?: 1),
-            'banque' => $suivi?->banque ?: 'N/A',
-            'beneficiaire_libelle' => $suivi?->beneficiaire_libelle
-                ?: $suivi?->fournisseur_libelle
-                ?: ($courrier->expediteur_libelle ?: 'Bénéficiaire'),
-            'programmation' => $suivi?->programmation,
             'observation' => $observation,
         ], $message);
     }
@@ -1092,6 +1157,7 @@ class CircuitCourrierMoteurService
             'avancement' => 'Validation d’étape',
             'etape_suivante' => 'Passage à l’étape suivante',
             'cloture_circuit' => 'Clôture du circuit',
+            'controle_depense' => 'Contrôle des pièces (suivi dépenses)',
             'rejet' => 'Rejet de la réponse',
             'relance' => 'Relance DG',
             'alerte_retard' => 'Alerte retard',

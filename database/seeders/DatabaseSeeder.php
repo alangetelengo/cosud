@@ -41,6 +41,7 @@ class DatabaseSeeder extends Seeder
             TypeDocumentSeeder::class,
             CourrierReferentielSeeder::class,
             CircuitCourrierSeeder::class,
+            CategorieDepenseSeeder::class,
             CourrierActeursDgSeeder::class,
             TypeMetadonneeSeeder::class,
             PlanClassementSeeder::class,

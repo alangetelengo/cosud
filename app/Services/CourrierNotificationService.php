@@ -56,6 +56,12 @@ class CourrierNotificationService
 
     public const ENTREE_CHEQUE_SUIVI_DEPENSE = 'entree_cheque_suivi_depense';
 
+    /** SMS + cloche : facture/MAD enregistrée — le DG doit donner le Bon pour accord. */
+    public const FACTURE_ENREGISTREE_DG = 'facture_enregistree_dg';
+
+    /** SMS + cloche : Bon pour accord DG — l’AC doit établir le chèque. */
+    public const BON_POUR_ACCORD_AC = 'bon_pour_accord_ac';
+
     public function notifier(User $destinataire, Courrier $courrier, User $acteur, string $type, ?string $detail = null): void
     {
         if ((int) $destinataire->id === (int) $acteur->id) {
@@ -260,6 +266,62 @@ class CourrierNotificationService
             $courrier,
             $acteur,
             self::ENTREE_CHEQUE_SUIVI_DEPENSE,
+            $detail
+        );
+    }
+
+    /**
+     * Facture / MAD (circuit facture_prestataire) : SMS + notif au DG pour traiter (Bon pour accord).
+     */
+    public function notifierFactureEnregistreeDg(Courrier $courrier, User $acteur): void
+    {
+        $courrier->loadMissing('circuit');
+
+        if ($courrier->circuit?->code !== 'facture_prestataire') {
+            return;
+        }
+
+        $fournisseur = trim((string) ($courrier->expediteur_libelle ?? ''));
+        $detail = $fournisseur !== ''
+            ? 'Fournisseur / prestataire : '.$fournisseur
+            : null;
+
+        $this->notifierRoles(
+            ['dg'],
+            $courrier,
+            $acteur,
+            self::FACTURE_ENREGISTREE_DG,
+            $detail
+        );
+    }
+
+    /**
+     * Après Bon pour accord DG : SMS + notif à l’AC pour éditer le chèque selon les instructions.
+     */
+    public function notifierBonPourAccordAc(Courrier $courrier, User $acteur): void
+    {
+        $courrier->loadMissing('circuit');
+
+        if ($courrier->circuit?->code !== 'facture_prestataire') {
+            return;
+        }
+
+        $fournisseur = trim((string) ($courrier->expediteur_libelle ?? ''));
+        $instructions = trim((string) ($courrier->instructions_dg ?? ''));
+        $parties = [];
+        if ($fournisseur !== '') {
+            $parties[] = 'Fournisseur : '.$fournisseur;
+        }
+        if ($instructions !== '') {
+            $parties[] = 'Instructions DG : '.$instructions;
+        }
+        $detail = $parties !== [] ? implode(' | ', $parties) : null;
+
+        $this->notifierRoles(
+            ['agent_comptable'],
+            $courrier,
+            $acteur,
+            self::BON_POUR_ACCORD_AC,
             $detail
         );
     }

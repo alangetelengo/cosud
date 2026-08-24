@@ -211,6 +211,7 @@ class CourrierExpediteurContactClotureTest extends TestCase
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-15764461/2026',
                 'objet' => 'Demande avec contacts',
                 'expediteur_libelle' => 'Entreprise X',
                 'expediteur_email' => 'x@exemple.cg',

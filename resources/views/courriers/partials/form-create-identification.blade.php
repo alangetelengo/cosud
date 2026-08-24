@@ -19,11 +19,17 @@
                     @php
                         $circuitDuType = ($t->circuit && $t->circuit->sens_initial === $sensCode) ? $t->circuit : null;
                         $necessiteServiceDemandeur = in_array($t->code, ['facture', 'mad'], true);
+                        // MAD : pas de contacts externes. Facture / demande : téléphone obligatoire (SMS / mail).
+                        $afficheContacts = ! in_array($t->code, ['mad'], true);
+                        $telephoneObligatoire = in_array($t->code, ['facture', 'demande'], true);
                     @endphp
                     <option
                         value="{{ $t->id }}"
+                        data-code="{{ $t->code }}"
                         data-circuit-libelle="{{ $circuitDuType?->libelle }}"
                         data-service-demandeur="{{ $necessiteServiceDemandeur ? '1' : '0' }}"
+                        data-contacts="{{ $afficheContacts ? '1' : '0' }}"
+                        data-telephone-requis="{{ $telephoneObligatoire ? '1' : '0' }}"
                         @selected(old('type_courrier_id') == $t->id)
                     >{{ $t->libelle }}</option>
                     @endforeach
@@ -48,7 +54,7 @@
                 <option value="{{ $direction->id }}" @selected(old('service_demandeur_structure_id') == $direction->id)>{{ $direction->nom }}</option>
                 @endforeach
             </select>
-            <p class="text-xs text-slate-500 mt-1.5">Direction à l’origine de la demande (référentiel organigramme).</p>
+            <p class="text-xs text-slate-500 mt-1.5">Direction ou antenne départementale à l’origine de la demande.</p>
             @error('service_demandeur_structure_id')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
         </div>
         @endif

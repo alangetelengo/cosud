@@ -135,7 +135,7 @@ class CourrierOrientationDgTest extends TestCase
             ->assertOk()
             ->assertSee('Enregistrer au registre', false)
             ->assertSee('Aide à l’enregistrement', false)
-            ->assertSee('N° fulgurant', false)
+            ->assertDontSee('N° fulgurant', false)
             ->assertSee('Après l’enregistrement', false);
     }
 

@@ -7,7 +7,7 @@ use App\Services\CircuitCourrierMoteurService;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * L’Agent comptable envoie le chèque au DG : message obligatoire, scans facultatifs (un ou plusieurs).
+ * L’Agent comptable envoie le chèque au DG : message, montant et références bordereau obligatoires.
  */
 class EnvoyerChequeAcRequest extends FormRequest
 {
@@ -38,6 +38,10 @@ class EnvoyerChequeAcRequest extends FormRequest
         return [
             'message' => ['required', 'string', 'max:2000'],
             'montant' => ['required', 'numeric', 'min:1'],
+            'numero_piece' => ['required', 'string', 'max:150'],
+            'banque' => ['required', 'string', 'max:100'],
+            'beneficiaire_libelle' => ['required', 'string', 'max:255'],
+            'programmation' => ['nullable', 'string', 'max:255'],
             'scan_cheque' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'scans_cheque' => ['nullable', 'array', 'max:20'],
             'scans_cheque.*' => ['file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
@@ -63,6 +67,9 @@ class EnvoyerChequeAcRequest extends FormRequest
             'montant.required' => 'Le montant du chèque est obligatoire.',
             'montant.numeric' => 'Le montant doit être un nombre.',
             'montant.min' => 'Le montant doit être supérieur à zéro.',
+            'numero_piece.required' => 'Le N° de pièce (chèque) est obligatoire.',
+            'banque.required' => 'La banque est obligatoire.',
+            'beneficiaire_libelle.required' => 'Le bénéficiaire est obligatoire.',
             'scan_cheque.mimes' => 'Chaque scan du chèque doit être un PDF ou une image (jpg, png).',
             'scans_cheque.*.mimes' => 'Chaque scan du chèque doit être un PDF ou une image (jpg, png).',
         ];

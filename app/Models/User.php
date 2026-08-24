@@ -149,6 +149,16 @@ class User extends Authenticatable
         return $this->telephone;
     }
 
+    /**
+     * Destinataire SMS GED (canal ged_sms) — numéro normalisé Congo si renseigné.
+     */
+    public function routeNotificationForGedSms(): ?string
+    {
+        $telephone = $this->telephone;
+
+        return filled($telephone) ? (string) $telephone : null;
+    }
+
     public function structure(): BelongsTo
     {
         return $this->belongsTo(Structure::class);

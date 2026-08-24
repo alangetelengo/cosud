@@ -109,6 +109,14 @@
                 </div>
                 <svg class="w-4 h-4 text-slate-300 group-hover:text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             </a>
+            <a href="{{ route('parametres.categories-depense.index') }}" class="group flex items-center gap-3 p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all no-underline">
+                <span class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-lg flex-shrink-0">🏷️</span>
+                <div class="min-w-0 flex-1">
+                    <span class="font-semibold text-slate-800 dark:text-slate-100 text-sm block group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Catégories de dépense</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">Référentiel Suivi de dépense</span>
+                </div>
+                <svg class="w-4 h-4 text-slate-300 group-hover:text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </a>
             <a href="{{ route('types-documents.index') }}" class="group flex items-center gap-3 p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-sky-300 dark:hover:border-sky-700 hover:bg-sky-50/50 dark:hover:bg-sky-950/20 transition-all no-underline">
                 <span class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-lg flex-shrink-0">📄</span>
                 <div class="min-w-0 flex-1">

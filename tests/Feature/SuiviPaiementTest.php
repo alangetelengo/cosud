@@ -44,10 +44,10 @@ class SuiviPaiementTest extends TestCase
         $ligne = $this->creerLigneFspFacture();
 
         $this->actingAs($suivi)
-            ->get(route('suivi-paiements.index', ['type' => SuiviPaiement::TYPE_FSP_FACTURE], absolute: false))
+            ->get(route('suivi-paiements.index', ['annee' => 2026], absolute: false))
             ->assertOk()
-            ->assertSee('FSP FACTURE', false)
-            ->assertSee('Fiche de suivi des paiements facture', false)
+            ->assertSee('Fiche de suivi paiement facture', false)
+            ->assertSee('Suivi de dépense', false)
             ->assertSee($ligne->intitule, false)
             ->assertSee('Exporter Excel (CSV)', false);
     }
@@ -61,7 +61,6 @@ class SuiviPaiementTest extends TestCase
 
         $response = $this->actingAs($suivi)
             ->get(route('suivi-paiements.export', [
-                'type' => SuiviPaiement::TYPE_FSP_FACTURE,
                 'annee' => 2026,
             ], absolute: false));
 
@@ -69,9 +68,9 @@ class SuiviPaiementTest extends TestCase
         $response->assertHeader('content-type', 'text/csv; charset=UTF-8');
 
         $content = $response->streamedContent();
-        $this->assertStringContainsString('Fournisseur', $content);
-        $this->assertStringContainsString('Service demandeur', $content);
-        $this->assertStringContainsString('DIRECTION ADMINISTRATIVE ET FINANCIERE', $content);
+        $this->assertStringContainsString('Ref pièce', $content);
+        $this->assertStringContainsString('Bénéficiaire / Fournisseur', $content);
+        $this->assertStringContainsString('Fiche de suivi paiement facture', $content);
         $this->assertStringContainsString('1 949 700', $content);
         $this->assertStringContainsString('Total', $content);
     }
@@ -89,8 +88,10 @@ class SuiviPaiementTest extends TestCase
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-a7b38d66/2026',
                 'objet' => 'Facture avec service demandeur',
                 'expediteur_libelle' => 'ETS KOMBO',
+                'expediteur_telephone' => '+242060000001',
                 'date_reception' => now()->toDateString(),
                 'type_courrier_id' => $type->id,
                 'fichier' => UploadedFile::fake()->create('f.pdf', 20, 'application/pdf'),
@@ -100,8 +101,10 @@ class SuiviPaiementTest extends TestCase
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-8773de12/2026',
                 'objet' => 'Facture avec service demandeur',
                 'expediteur_libelle' => 'ETS KOMBO',
+                'expediteur_telephone' => '+242060000001',
                 'date_reception' => now()->toDateString(),
                 'type_courrier_id' => $type->id,
                 'service_demandeur_structure_id' => $daf->id,
@@ -117,7 +120,11 @@ class SuiviPaiementTest extends TestCase
         $ac->assignRole('agent_comptable');
         $moteur = app(CircuitCourrierMoteurService::class);
         $courrier = $moteur->instruire($courrier->fresh(), $dg, 'Bon pour accord.', $ac->id);
-        $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque établi.', 500000);
+        $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque établi.', 500000, [
+            'numero_piece' => 'Chèque N° 0000322',
+            'banque' => 'BCH',
+            'beneficiaire_libelle' => 'Bénéficiaire Test',
+        ]);
 
         $this->assertDatabaseHas('suivi_paiements', [
             'courrier_id' => $courrier->id,
@@ -140,15 +147,18 @@ class SuiviPaiementTest extends TestCase
         $moteur = app(CircuitCourrierMoteurService::class);
         $courrier = $moteur->demarrer($courrier, $circuit, $dg);
         $courrier = $moteur->instruire($courrier, $dg, 'Bon pour accord.', $ac->id);
-        $moteur->envoyerChequeAuDg($courrier, $ac, 'MAD établie.', 3000000);
+        $moteur->envoyerChequeAuDg($courrier, $ac, 'MAD établie.', 3000000, [
+            'numero_piece' => 'Chèque N° 0000322',
+            'banque' => 'BCH',
+            'beneficiaire_libelle' => 'Bénéficiaire Test',
+        ]);
 
         $this->actingAs($suivi)
-            ->get(route('suivi-paiements.index', ['type' => SuiviPaiement::TYPE_FSP_MAD], absolute: false))
+            ->get(route('suivi-paiements.index', ['annee' => 2026], absolute: false))
             ->assertOk()
-            ->assertSee('FSP MAD', false)
-            ->assertSee('Demandeur', false)
-            ->assertSee('Responsable chargé du dossier', false)
-            ->assertSee('RAÏSSA LEBANITOU', false)
+            ->assertSee('Fiche de suivi paiement divers', false)
+            ->assertSee('Bénéficiaire', false)
+            ->assertSee('Bénéficiaire Test', false)
             ->assertSee('3 000 000', false);
     }
 
@@ -161,7 +171,11 @@ class SuiviPaiementTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Une fiche de suivi existe déjà pour ce courrier.');
 
-        app(SuiviPaiementService::class)->creerDepuisEntreeCheque($courrier, $ac, 600000);
+        app(SuiviPaiementService::class)->creerDepuisEntreeCheque($courrier, $ac, 600000, [
+            'numero_piece' => 'Chèque N° 0000322',
+            'banque' => 'BCH',
+            'beneficiaire_libelle' => 'Bénéficiaire Test',
+        ]);
 
         $this->assertSame(1, SuiviPaiement::query()->where('courrier_id', $courrier->id)->count());
     }
@@ -214,7 +228,11 @@ class SuiviPaiementTest extends TestCase
         $moteur = app(CircuitCourrierMoteurService::class);
         $courrier = $moteur->demarrer($courrier, $circuit, $dg);
         $courrier = $moteur->instruire($courrier, $dg, 'Bon pour accord.', $ac->id);
-        $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque établi.', $montant);
+        $moteur->envoyerChequeAuDg($courrier, $ac, 'Chèque établi.', $montant, [
+            'numero_piece' => 'Chèque N° 0000322',
+            'banque' => 'BCH',
+            'beneficiaire_libelle' => 'Bénéficiaire Test',
+        ]);
 
         return SuiviPaiement::query()->where('courrier_id', $courrier->id)->firstOrFail();
     }

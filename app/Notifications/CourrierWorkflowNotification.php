@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\Courrier;
 use App\Models\User;
 use App\Services\CourrierNotificationService;
+use App\Services\SmsService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -26,6 +27,12 @@ class CourrierWorkflowNotification extends Notification
 
         if (config('ged.courrier_notifications_mail')) {
             $channels[] = 'mail';
+        }
+
+        if ($this->doitEnvoyerSms()
+            && $notifiable->routeNotificationFor('ged_sms')
+            && app(SmsService::class)->isConfigured()) {
+            $channels[] = 'ged_sms';
         }
 
         return $channels;
@@ -162,11 +169,53 @@ class CourrierWorkflowNotification extends Notification
                 'title' => 'Entrée chèque — suivi des dépenses',
                 'body' => 'L’Agent comptable a établi un chèque : inscrivez-le sur la fiche de suivi des paiements.',
             ],
+            CourrierNotificationService::FACTURE_ENREGISTREE_DG => [
+                'title' => 'Facture prestataire à traiter',
+                'body' => 'Une facture / MAD prestataire vient d’être enregistrée : donnez votre Bon pour accord.',
+            ],
+            CourrierNotificationService::BON_POUR_ACCORD_AC => [
+                'title' => 'Bon pour accord — établir le chèque',
+                'body' => 'Le DG a donné son Bon pour accord : établissez le chèque selon ses instructions.',
+            ],
             default => [
                 'title' => 'Courrier — mise à jour',
                 'body' => 'Le courrier a été mis à jour.',
             ],
         };
+    }
+
+    public function toGedSms(object $notifiable): string
+    {
+        $numero = $this->courrier->numeroRegistreComplet();
+        $fournisseur = trim((string) ($this->courrier->expediteur_libelle ?? ''));
+        $fournisseurCourt = $fournisseur !== '' ? mb_substr($fournisseur, 0, 40) : 'fournisseur';
+
+        $texte = match ($this->type) {
+            CourrierNotificationService::FACTURE_ENREGISTREE_DG => 'GED n°'.$numero
+                .' : facture prestataire a traiter (Bon pour accord). Fournisseur : '.$fournisseurCourt.'.',
+            CourrierNotificationService::BON_POUR_ACCORD_AC => $this->texteSmsBonPourAccordAc($numero, $fournisseurCourt),
+            default => 'GED n°'.$numero.' : action requise sur un courrier.',
+        };
+
+        return app(SmsService::class)->sanitizeSmsText($texte);
+    }
+
+    private function texteSmsBonPourAccordAc(string $numero, string $fournisseurCourt): string
+    {
+        $instructions = trim((string) ($this->courrier->instructions_dg ?? ''));
+        $extrait = $instructions !== '' ? mb_substr($instructions, 0, 80) : 'voir GED';
+
+        return 'GED n°'.$numero
+            .' : Bon pour accord DG — editer un cheque. Fournisseur : '.$fournisseurCourt
+            .'. Instructions : '.$extrait;
+    }
+
+    private function doitEnvoyerSms(): bool
+    {
+        return in_array($this->type, [
+            CourrierNotificationService::FACTURE_ENREGISTREE_DG,
+            CourrierNotificationService::BON_POUR_ACCORD_AC,
+        ], true);
     }
 
     private function titreEtapeCircuit(): string

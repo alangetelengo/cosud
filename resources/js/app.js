@@ -127,4 +127,21 @@ window.searchableSelect = searchableSelectFn;
 window.searchableMultiSelect = searchableMultiSelectFn;
 Alpine.data('searchableSelect', searchableSelectFn);
 Alpine.data('searchableMultiSelect', searchableMultiSelectFn);
+
+/** Montant FCFA : espaces comme séparateurs de milliers (ex. 1 949 700). */
+function formatMontantFcfa(value) {
+    const chiffres = String(value ?? '').replace(/\D/g, '');
+    if (!chiffres) {
+        return '';
+    }
+
+    return chiffres.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+window.formatMontantFcfa = formatMontantFcfa;
+Alpine.data('montantFcfa', (initial = '') => ({
+    montant: formatMontantFcfa(initial),
+    format: formatMontantFcfa,
+}));
+
 Alpine.start();

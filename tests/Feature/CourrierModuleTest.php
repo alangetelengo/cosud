@@ -67,6 +67,7 @@ class CourrierModuleTest extends TestCase
         $this->actingAs($user)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-c3ee2e31/2026',
                 'objet' => 'Demande sans scan',
             ])
             ->assertSessionHasErrors('fichiers');
@@ -80,6 +81,7 @@ class CourrierModuleTest extends TestCase
         $this->actingAs($user)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-bc7f112f/2026',
                 'objet' => 'Facture multi-pièces',
                 'expediteur_libelle' => 'AF.COM',
                 'date_reception' => now()->toDateString(),
@@ -104,6 +106,7 @@ class CourrierModuleTest extends TestCase
         $this->actingAs($user)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-113fb65b/2026',
                 'objet' => 'Demande de renseignements',
                 'expediteur_libelle' => 'Ministère X',
                 'date_reception' => now()->toDateString(),
@@ -116,7 +119,36 @@ class CourrierModuleTest extends TestCase
             'objet' => 'Demande de renseignements',
             'origine' => 'externe',
             'numero_registre' => 1,
+            'numero_fulgurant' => 'REG-113fb65b/2026',
         ]);
+
+        $courrier = Courrier::query()->where('objet', 'Demande de renseignements')->firstOrFail();
+        $this->assertSame('REG-113fb65b/2026', $courrier->numeroRegistreComplet());
+    }
+
+    public function test_numero_registre_affiche_saisie_secretariat_libre(): void
+    {
+        Storage::fake('public');
+        $user = $this->creerSecretaire();
+
+        $this->actingAs($user)
+            ->post(route('courriers.store', absolute: false), [
+                'sens' => 'arrivee',
+                'numero_fulgurant' => '192/2026/DAF/SAGP',
+                'objet' => 'MAD caisse',
+                'expediteur_libelle' => 'DAF',
+                'date_reception' => now()->toDateString(),
+                'fichier' => UploadedFile::fake()->create('mad.pdf', 50, 'application/pdf'),
+            ])
+            ->assertRedirect();
+
+        $courrier = Courrier::query()->where('objet', 'MAD caisse')->firstOrFail();
+
+        $this->actingAs($user)
+            ->get(route('courriers.index', ['sens' => 'arrivee'], absolute: false))
+            ->assertOk()
+            ->assertSee('192/2026/DAF/SAGP', false)
+            ->assertDontSee('>'.$courrier->numero_registre.'/'.$courrier->numero_registre_annee.'<', false);
     }
 
     public function test_workflow_depart_secretaire_directeur_expedition_reception(): void
@@ -869,6 +901,7 @@ class CourrierModuleTest extends TestCase
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-d6a148b9/2026',
                 'objet' => 'Courrier ministère',
                 'expediteur_libelle' => 'Ministère X',
                 'fichier' => UploadedFile::fake()->create('entree.pdf', 100, 'application/pdf'),
@@ -949,6 +982,7 @@ class CourrierModuleTest extends TestCase
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-78bf6cbd/2026',
                 'objet' => 'Doc traçabilité',
                 'fichier' => UploadedFile::fake()->create('trace.pdf', 100, 'application/pdf'),
             ]);

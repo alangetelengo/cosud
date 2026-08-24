@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\AuditController;
+use App\Http\Controllers\BordereauTransmissionController;
+use App\Http\Controllers\CategorieDepenseController;
 use App\Http\Controllers\CircuitCourrierController;
 use App\Http\Controllers\CorbeilleController;
 use App\Http\Controllers\CourrierController;
@@ -126,6 +128,12 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::put('/parametres/workflow/{workflow_etape}', [WorkflowEtapeController::class, 'update'])->name('parametres.workflow.update');
     Route::delete('/parametres/workflow/{workflow_etape}', [WorkflowEtapeController::class, 'destroy'])->name('parametres.workflow.destroy');
     Route::get('/parametres/types-dossiers', [TypeDossierController::class, 'index'])->name('parametres.types-dossiers.index');
+    Route::get('/parametres/categories-depense', [CategorieDepenseController::class, 'index'])->name('parametres.categories-depense.index');
+    Route::get('/parametres/categories-depense/create', [CategorieDepenseController::class, 'create'])->name('parametres.categories-depense.create');
+    Route::post('/parametres/categories-depense', [CategorieDepenseController::class, 'store'])->name('parametres.categories-depense.store');
+    Route::get('/parametres/categories-depense/{categorie_depense}/edit', [CategorieDepenseController::class, 'edit'])->name('parametres.categories-depense.edit');
+    Route::put('/parametres/categories-depense/{categorie_depense}', [CategorieDepenseController::class, 'update'])->name('parametres.categories-depense.update');
+    Route::delete('/parametres/categories-depense/{categorie_depense}', [CategorieDepenseController::class, 'destroy'])->name('parametres.categories-depense.destroy');
     Route::get('/parametres/types-dossiers/create', [TypeDossierController::class, 'create'])->name('parametres.types-dossiers.create');
     Route::post('/parametres/types-dossiers', [TypeDossierController::class, 'store'])->name('parametres.types-dossiers.store');
     Route::get('/parametres/types-dossiers/{type_dossier}/edit', [TypeDossierController::class, 'edit'])->name('parametres.types-dossiers.edit');
@@ -147,8 +155,15 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::get('/registres/courriers/depart', [CourrierRegistreController::class, 'depart'])->name('courriers.registres.depart');
     Route::get('/registres/courriers/arrivee/imprimer', [CourrierRegistreController::class, 'printArrivee'])->name('courriers.registres.print-arrivee');
     Route::get('/registres/courriers/depart/imprimer', [CourrierRegistreController::class, 'printDepart'])->name('courriers.registres.print-depart');
+    Route::get('/bordereau-transmission', [BordereauTransmissionController::class, 'index'])->name('bordereau-transmission.index');
+    Route::get('/bordereau-transmission/export', [BordereauTransmissionController::class, 'export'])->name('bordereau-transmission.export');
     Route::get('/suivi-paiements', [SuiviPaiementController::class, 'index'])->name('suivi-paiements.index');
     Route::get('/suivi-paiements/export', [SuiviPaiementController::class, 'export'])->name('suivi-paiements.export');
+    Route::get('/suivi-paiements/export-hebdomadaire', [SuiviPaiementController::class, 'exportHebdomadaire'])->name('suivi-paiements.export-hebdomadaire');
+    Route::get('/suivi-paiements/imprimer', [SuiviPaiementController::class, 'print'])->name('suivi-paiements.print');
+    Route::post('/suivi-paiements/remise-dg', [SuiviPaiementController::class, 'storeRemiseDg'])->name('suivi-paiements.remise-dg');
+    Route::get('/suivi-paiements/{suiviPaiement}/classer', [SuiviPaiementController::class, 'classerForm'])->name('suivi-paiements.classer');
+    Route::post('/suivi-paiements/{suiviPaiement}/classer', [SuiviPaiementController::class, 'classer'])->name('suivi-paiements.classer.store');
     Route::get('/suivi-factures-fournisseurs', [SuiviFacturesFournisseursController::class, 'index'])->name('suivi-factures-fournisseurs.index');
     Route::get('/suivi-factures-fournisseurs/export', [SuiviFacturesFournisseursController::class, 'export'])->name('suivi-factures-fournisseurs.export');
     Route::get('/courriers', [CourrierController::class, 'index'])->name('courriers.index');
@@ -163,6 +178,7 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::post('/courriers/{courrier}/cloturer', [CourrierController::class, 'cloturer'])->name('courriers.cloturer');
     Route::post('/courriers/{courrier}/signer', [CourrierController::class, 'signer'])->name('courriers.signer');
     Route::post('/courriers/{courrier}/archiver', [CourrierController::class, 'archiverCourrier'])->name('courriers.archiver');
+    Route::post('/courriers/{courrier}/classer-dossier', [CourrierController::class, 'classerDossier'])->name('courriers.classer-dossier');
     Route::post('/courriers/{courrier}/transmettre', [CourrierController::class, 'transmettre'])->name('courriers.transmettre');
     Route::post('/courriers/{courrier}/transmettre-directeur', [CourrierController::class, 'transmettreAuDirecteur'])->name('courriers.transmettre-directeur');
     Route::post('/courriers/{courrier}/rejeter-depart', [CourrierController::class, 'rejeterDepart'])->name('courriers.rejeter-depart');

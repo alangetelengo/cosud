@@ -53,19 +53,6 @@ class SuiviFacturesFournisseursController extends Controller
 
     private function autoriserAcces(): void
     {
-        $user = auth()->user();
-
-        abort_unless(
-            $user
-            && (
-                $user->aAccesTotal()
-                || $user->hasRole('admin')
-                || $user->hasRole('responsable_dossiers_prestataires')
-                || $user->hasRole('dg')
-                || $user->hasRole('particulier_dg')
-            ),
-            403,
-            'Accès réservé à la responsable des dossiers fournisseurs / prestataires.'
-        );
+        $this->authorize('suivi-factures.view');
     }
 }

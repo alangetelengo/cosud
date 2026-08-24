@@ -374,7 +374,7 @@ class CircuitCourrierConfigurableTest extends TestCase
             ->assertDontSee('Créer le courrier départ (signé)', false);
     }
 
-    public function test_dg_sur_circuit_facture_peut_repondre_lui_meme_et_cloturer_le_circuit(): void
+    public function test_dg_sur_circuit_facture_ne_peut_pas_repondre_lui_meme(): void
     {
         $dg = $this->creerDg();
         $secDdsait = Structure::where('code', 'SEC-DDSAIT')->firstOrFail();
@@ -389,8 +389,8 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->actingAs($dg)
             ->get(route('courriers.show', $courrier, absolute: false))
             ->assertOk()
-            ->assertSee('Répondre moi-même et signer', false)
-            ->assertSee('A — Instruire', false)
+            ->assertSee('A — Instruire le dossier', false)
+            ->assertDontSee('Répondre moi-même et signer', false)
             ->assertDontSee('avant de pouvoir préparer une réponse', false);
 
         $this->actingAs($dg)
@@ -399,17 +399,10 @@ class CircuitCourrierConfigurableTest extends TestCase
                 'document_reponse' => UploadedFile::fake()->create('reponse-facture.pdf', 20, 'application/pdf'),
                 'structure_destinataire_id' => $secDdsait->id,
             ])
-            ->assertRedirect();
+            ->assertForbidden();
 
-        $this->assertNull($courrier->fresh()->circuit_etape_actuelle_id);
-        $reponse = Courrier::where('courrier_parent_id', $courrier->id)->firstOrFail();
-        $this->assertSame('signe', $reponse->statutCourrier->code);
-        $this->assertSame($dg->id, $reponse->signataire_id);
-        // Clôture directe : pas de passage vers l’étape AC / chèque.
-        $this->assertDatabaseHas('circuit_courrier_historiques', [
-            'courrier_id' => $courrier->id,
-            'evenement' => 'cloture_circuit',
-        ]);
+        $this->assertSame('instructions_dg', $courrier->fresh()->circuitEtapeActuelle?->code);
+        $this->assertNull(Courrier::where('courrier_parent_id', $courrier->id)->first());
     }
 
     public function test_dg_peut_repondre_lui_meme_sans_passer_par_la_particuliere(): void
@@ -710,6 +703,7 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->actingAs($user)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-0932bed9/2026',
                 'objet' => 'Note de service test circuit',
                 'expediteur_libelle' => 'Service X',
                 'date_reception' => now()->toDateString(),

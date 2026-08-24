@@ -384,7 +384,7 @@ class Dossier extends Model
             if ($idsPerso !== []) {
                 $q->orWhereIn('id', $idsPerso);
             }
-            if ($élargi && $idsStructure !== []) {
+            if ($élargi && $idsStructure !== [] && ! $user->hasRole('responsable_suivi_depenses')) {
                 $exclus = array_merge($idsAutresPerso);
                 $q->orWhere(function ($sub) use ($idsStructure, $exclus) {
                     $sub->whereIn('structure_id', $idsStructure);
@@ -425,6 +425,12 @@ class Dossier extends Model
         if (in_array((int) $this->id, static::idsPourArbrePersonnel($user->id), true)) {
             return true;
         }
+
+        // Eleni (suivi dépenses) : uniquement ses dossiers / arbre perso — pas le plan org. prestataires.
+        if ($user->hasRole('responsable_suivi_depenses')) {
+            return false;
+        }
+
         if ($user->aVisibiliteElargiePlanOrganisation()) {
             $sid = $this->structure_id ?? $this->structure_id_depot;
             if ($sid && in_array((int) $sid, $user->structureIdsPérimètrePlanClassement(), true)) {
