@@ -71,7 +71,7 @@ class MesDossiersRacineService
     public function ensureSousDossierParapheurDepart(User $user): Dossier
     {
         $racine = $this->createDefaultRacinePourCommande($user);
-        $nom = (string) config('ged.parapheur_depart.dossier_nom', 'Courriers départ');
+        $nom = (string) config('cosud.parapheur_depart.dossier_nom', 'Courriers départ');
 
         $existant = Dossier::query()
             ->where('parent_id', $racine->id)

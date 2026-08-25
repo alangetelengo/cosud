@@ -71,7 +71,7 @@ class CourrierNotificationService
         try {
             $destinataire->notify(new CourrierWorkflowNotification($courrier, $acteur, $type, $detail));
         } catch (\Throwable $e) {
-            Log::channel('eged')->error('Notification courrier échouée', [
+            Log::channel('cosud')->error('Notification courrier échouée', [
                 'destinataire_id' => $destinataire->id,
                 'courrier_id' => $courrier->id,
                 'type' => $type,
@@ -233,7 +233,7 @@ class CourrierNotificationService
         try {
             if ($email !== '' && $smsOk) {
                 Notification::route('mail', $email)
-                    ->route('ged_sms', $telephone)
+                    ->route('cosud_sms', $telephone)
                     ->notify($notification);
 
                 return;
@@ -246,10 +246,10 @@ class CourrierNotificationService
                 return;
             }
 
-            Notification::route('ged_sms', $telephone)
+            Notification::route('cosud_sms', $telephone)
                 ->notify($notification);
         } catch (\Throwable $e) {
-            Log::channel('eged')->error('Notification expéditeur externe échouée', [
+            Log::channel('cosud')->error('Notification expéditeur externe échouée', [
                 'courrier_id' => $courrier->id,
                 'message' => $e->getMessage(),
             ]);

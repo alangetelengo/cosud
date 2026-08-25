@@ -43,6 +43,55 @@ class SuiviDepenseClassementJustificatifsTest extends TestCase
         Storage::fake('public');
     }
 
+    public function test_saisie_dg_depose_justificatifs_chez_eleni(): void
+    {
+        $eleni = $this->creerEleni();
+        $dg = User::factory()->create([
+            'structure_id' => Structure::where('code', 'DG')->value('id'),
+        ]);
+        $dg->assignRole('dg');
+
+        $catPaie = CategorieDepense::query()->where('code', CategorieDepense::CODE_PAIE)->firstOrFail();
+
+        $ligne = app(SuiviPaiementService::class)->creerRemiseDg($dg, [
+            'categorie_depense_id' => $catPaie->id,
+            'date_suivi' => '2026-08-24',
+            'intitule' => 'Remise DG pour Eleni',
+            'montant' => 75000,
+            'beneficiaire_libelle' => 'Bénéficiaire DG',
+            'justificatifs' => [
+                UploadedFile::fake()->create('scan-remise.pdf', 30, 'application/pdf'),
+            ],
+        ]);
+
+        $dossier = Dossier::query()->findOrFail($ligne->dossier_id);
+        $this->assertSame((int) $eleni->id, (int) $dossier->proprietaire_id);
+        $this->assertTrue(app(SuiviDepenseClassementService::class)->estDossierAttente($dossier));
+        $this->assertTrue($dossier->visiblePar($eleni));
+        $this->assertTrue($eleni->can('classerDossier', $ligne));
+        // Le DG reste créateur du dossier d’attente (traçabilité), Eleni en est propriétaire.
+
+        $document = Document::query()->where('dossier_id', $dossier->id)->firstOrFail();
+        $this->assertSame((int) $dg->id, (int) $document->createur_id);
+        $this->assertSame((int) $eleni->id, (int) $document->proprietaire_id);
+        $this->assertTrue($document->visiblePar($eleni));
+
+        $this->actingAs($eleni)
+            ->get(route('suivi-paiements.classer', $ligne, absolute: false))
+            ->assertOk();
+
+        $this->actingAs($eleni)
+            ->post(route('suivi-paiements.classer.store', $ligne, absolute: false), [
+                'mode' => 'nouveau',
+                'nom_dossier' => 'Bénéficiaire DG',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertTrue($ligne->fresh()->estClasseMetier());
+        $this->assertTrue($ligne->fresh()->dossier->visiblePar($eleni));
+    }
+
     public function test_saisie_depense_depose_justificatifs_en_attente_a_classer(): void
     {
         $eleni = $this->creerEleni();

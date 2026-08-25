@@ -48,7 +48,7 @@ class CategorieDepenseController extends Controller
         $validated['est_systeme'] = false;
 
         $cat = CategorieDepense::query()->create($validated);
-        Log::channel('eged')->info('Catégorie dépense créée', ['id' => $cat->id, 'code' => $cat->code, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Catégorie dépense créée', ['id' => $cat->id, 'code' => $cat->code, 'user_id' => auth()->id()]);
 
         return redirect()->route('parametres.categories-depense.index')->with('success', 'Catégorie créée.');
     }

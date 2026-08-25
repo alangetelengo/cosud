@@ -11,12 +11,12 @@ class CourrierRetardService
 {
     public function delaiHeures(): int
     {
-        return max(1, (int) config('ged.circuit_retard_heures', 48));
+        return max(1, (int) config('cosud.circuit_retard_heures', 48));
     }
 
     public function rappelHeures(): int
     {
-        return max(1, (int) config('ged.circuit_retard_rappel_heures', 24));
+        return max(1, (int) config('cosud.circuit_retard_rappel_heures', 24));
     }
 
     /**

@@ -26,7 +26,7 @@ class PasswordController extends Controller
             'password' => Hash::make($validated['password']),
         ]);
 
-        Log::channel('eged')->info('Mot de passe modifié', ['user_id' => Auth::id()]);
+        Log::channel('cosud')->info('Mot de passe modifié', ['user_id' => Auth::id()]);
 
         return back()->with('status', 'password-updated');
     }

@@ -14,12 +14,14 @@ class TypeDocumentController extends Controller
     {
         $this->authorize('viewAny', TypeDocument::class);
         $types = TypeDocument::orderBy('libelle')->paginate(15);
+
         return view('types-documents.index', compact('types'));
     }
 
     public function create()
     {
         $this->authorize('create', TypeDocument::class);
+
         return view('types-documents.create');
     }
 
@@ -42,13 +44,15 @@ class TypeDocumentController extends Controller
         $validated['niveau_validation_final'] = $request->input('niveau_validation_final', 'dg') ?: 'dg';
         $type = TypeDocument::create($validated);
         JournalAudit::log('type_document.creation', 'types_documents', ['commentaire' => $type->code]);
-        Log::channel('eged')->info('Type de document créé', ['type_id' => $type->id, 'code' => $type->code, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Type de document créé', ['type_id' => $type->id, 'code' => $type->code, 'user_id' => auth()->id()]);
+
         return redirect()->route('types-documents.index')->with('success', 'Type de document créé.');
     }
 
     public function edit(TypeDocument $types_document)
     {
         $this->authorize('update', $types_document);
+
         return view('types-documents.edit', ['type' => $types_document]);
     }
 
@@ -71,7 +75,8 @@ class TypeDocumentController extends Controller
         $validated['niveau_validation_final'] = $request->input('niveau_validation_final', 'dg') ?: 'dg';
         $types_document->update($validated);
         JournalAudit::log('type_document.modification', 'types_documents', ['commentaire' => $types_document->code]);
-        Log::channel('eged')->info('Type de document mis à jour', ['type_id' => $types_document->id, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Type de document mis à jour', ['type_id' => $types_document->id, 'user_id' => auth()->id()]);
+
         return redirect()->route('types-documents.index')->with('success', 'Type de document mis à jour.');
     }
 
@@ -79,12 +84,14 @@ class TypeDocumentController extends Controller
     {
         $this->authorize('delete', $types_document);
         if ($types_document->documents()->exists()) {
-            Log::channel('eged')->warning('Suppression type refusée : documents associés', ['type_id' => $types_document->id]);
+            Log::channel('cosud')->warning('Suppression type refusée : documents associés', ['type_id' => $types_document->id]);
+
             return back()->with('error', 'Impossible de supprimer : des documents utilisent ce type.');
         }
         JournalAudit::log('type_document.suppression', 'types_documents', ['commentaire' => $types_document->code]);
-        Log::channel('eged')->info('Type de document supprimé', ['type_id' => $types_document->id, 'code' => $types_document->code, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Type de document supprimé', ['type_id' => $types_document->id, 'code' => $types_document->code, 'user_id' => auth()->id()]);
         $types_document->delete();
+
         return redirect()->route('types-documents.index')->with('success', 'Type de document supprimé.');
     }
 }

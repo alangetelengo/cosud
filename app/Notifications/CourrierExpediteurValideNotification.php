@@ -29,8 +29,8 @@ class CourrierExpediteurValideNotification extends Notification
             $channels[] = 'mail';
         }
 
-        if ($notifiable->routeNotificationFor('ged_sms') && app(SmsService::class)->isConfigured()) {
-            $channels[] = 'ged_sms';
+        if ($notifiable->routeNotificationFor('cosud_sms') && app(SmsService::class)->isConfigured()) {
+            $channels[] = 'cosud_sms';
         }
 
         return $channels;
@@ -41,19 +41,19 @@ class CourrierExpediteurValideNotification extends Notification
         $numero = $this->numero();
 
         return (new MailMessage)
-            ->subject('GED : dossier n° '.$numero.' — validé par la Direction')
+            ->subject('COSUD : dossier n° '.$numero.' — validé par la Direction')
             ->greeting('Bonjour,')
             ->line('**État de votre dossier :** la Direction Générale a validé votre demande (courrier n° '.$numero.').')
             ->line('**Objet :** '.$this->objet())
             ->line('**Ce que cela signifie :** votre dossier est accepté au niveau de la direction. Une réponse officielle est en cours de finalisation et d’expédition.')
             ->line('**Ce que vous devez faire :** aucune démarche de votre part n’est requise pour le moment. Attendez la suite du traitement ; vous serez informé(e) lorsque le dossier sera clôturé.')
             ->line('Merci de votre confiance.')
-            ->salutation('L’équipe GED — '.config('app.name'));
+            ->salutation('L’équipe COSUD — '.config('app.name'));
     }
 
-    public function toGedSms(object $notifiable): string
+    public function toCosudSms(object $notifiable): string
     {
-        return 'GED n°'.$this->numero().' : dossier VALIDÉ par la Direction. '
+        return 'COSUD n°'.$this->numero().' : dossier VALIDÉ par la Direction. '
             .'Réponse en cours d’envoi. Aucune action de votre part pour l’instant.';
     }
 

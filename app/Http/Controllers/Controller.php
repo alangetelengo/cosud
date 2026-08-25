@@ -13,6 +13,6 @@ abstract class Controller extends BaseController
 
     protected function logEged(string $level, string $message, array $context = []): void
     {
-        Log::channel('eged')->log($level, $message, $context);
+        Log::channel('cosud')->log($level, $message, $context);
     }
 }

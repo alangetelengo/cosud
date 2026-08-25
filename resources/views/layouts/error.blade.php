@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="color-scheme" content="light dark">
 
-        <title>@yield('title', config('app.name', 'GED'))</title>
+        <title>@yield('title', config('app.name', 'COSUD'))</title>
 
         @include('partials.favicon')
         <link rel="preconnect" href="https://fonts.bunny.net">

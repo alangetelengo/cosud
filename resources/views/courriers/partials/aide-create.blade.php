@@ -49,7 +49,7 @@
         <div id="aide-arrivee-facture" class="hidden">
             <div>
                 <h3 class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400 mb-1.5">Facture fournisseur</h3>
-                <p>Trace GED d’une facture prestataire. Le système ne produit pas la facture : joignez le(s) scan(s).</p>
+                <p>Trace COSUD d’une facture prestataire. Le système ne produit pas la facture : joignez le(s) scan(s).</p>
             </div>
             <ol class="mt-4 space-y-3 list-decimal list-inside marker:font-semibold marker:text-slate-400">
                 <li><span class="font-semibold text-slate-800 dark:text-slate-100">Service demandeur</span><p class="mt-1 pl-5 text-xs text-slate-500">Direction à l’origine de la dépense.</p></li>
@@ -72,7 +72,7 @@
                 <li><span class="font-semibold text-slate-800 dark:text-slate-100">Émetteur</span><p class="mt-1 pl-5 text-xs text-slate-500">Service interne émetteur (pas un fournisseur externe).</p></li>
                 <li><span class="font-semibold text-slate-800 dark:text-slate-100">N° registre</span><p class="mt-1 pl-5 text-xs text-slate-500">N° porté au registre (ex. 192/2026/DAF/SAGP).</p></li>
                 <li><span class="font-semibold text-slate-800 dark:text-slate-100">Référence</span><p class="mt-1 pl-5 text-xs text-slate-500">Optionnel si déjà saisi comme n° registre.</p></li>
-                <li><span class="font-semibold text-slate-800 dark:text-slate-100">Scans</span><p class="mt-1 pl-5 text-xs text-slate-500">Toutes les pièces du dossier — le GED ne les produit pas.</p></li>
+                <li><span class="font-semibold text-slate-800 dark:text-slate-100">Scans</span><p class="mt-1 pl-5 text-xs text-slate-500">Toutes les pièces du dossier — COSUD ne les produit pas.</p></li>
             </ol>
             <div class="mt-4 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-900/20 px-4 py-3">
                 <p class="text-xs text-amber-900/80 dark:text-amber-200/90">Même circuit que les factures. Mme Eleni intervient <strong class="font-medium">après la décharge AC</strong>.</p>

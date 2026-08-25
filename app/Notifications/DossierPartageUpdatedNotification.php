@@ -30,7 +30,7 @@ class DossierPartageUpdatedNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $mail = (new MailMessage)
-            ->subject('GED : Vos droits de partage ont ete mis a jour')
+            ->subject('COSUD : Vos droits de partage ont ete mis a jour')
             ->greeting('Bonjour '.$notifiable->name.',')
             ->line('Vos droits sur un dossier partage ont ete modifies.')
             ->line('**Dossier :** '.$this->dossier->nom)
@@ -42,7 +42,7 @@ class DossierPartageUpdatedNotification extends Notification
             $mail->line('**Expiration :** '.$this->dateExpiration);
         }
 
-        return $mail->line('Merci d\'utiliser GED.');
+        return $mail->line('Merci d\'utiliser COSUD.');
     }
 
     public function toArray(object $notifiable): array

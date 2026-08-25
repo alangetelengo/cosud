@@ -39,7 +39,7 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // GED - Documents (download et valider avant resource pour éviter conflit)
+    // COSUD - Documents (download et valider avant resource pour éviter conflit)
     Route::get('/documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
     Route::get('/documents/{document}/fiche', [DocumentController::class, 'fiche'])->name('documents.fiche');
     Route::get('/documents/{document}/nouvelle-version', [DocumentController::class, 'nouvelleVersion'])->name('documents.nouvelle-version');
@@ -55,10 +55,10 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::get('/corbeille', [CorbeilleController::class, 'index'])->name('corbeille.index');
     Route::post('/corbeille/{document}/restore', [CorbeilleController::class, 'restore'])->name('corbeille.restore');
 
-    // GED - Types de documents
+    // COSUD - Types de documents
     Route::resource('types-documents', TypeDocumentController::class)->parameters(['types-documents' => 'types_document']);
 
-    // GED - Dossiers
+    // COSUD - Dossiers
     Route::get('/dossiers', [DossierController::class, 'index'])->name('dossiers.index');
     Route::get('/dossiers/create', [DossierController::class, 'create'])->name('dossiers.create');
     Route::post('/dossiers', [DossierController::class, 'store'])->name('dossiers.store');
@@ -80,8 +80,8 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::delete('/utilisateurs/{user}/affectations/{structure}', [UserAffectationController::class, 'destroy'])->name('utilisateurs.affectations.destroy');
     Route::resource('utilisateurs', UtilisateurController::class)->parameters(['utilisateurs' => 'user']);
     Route::get('/parametres', [ParametresController::class, 'index'])->name('parametres.index');
-    Route::get('/parametres/ged-acces', [ParametresController::class, 'gedAcces'])->name('parametres.ged-acces');
-    Route::put('/parametres/ged-acces', [ParametresController::class, 'updateGedAcces'])->name('parametres.ged-acces.update');
+    Route::get('/parametres/cosud-acces', [ParametresController::class, 'cosudAcces'])->name('parametres.cosud-acces');
+    Route::put('/parametres/cosud-acces', [ParametresController::class, 'updateCosudAcces'])->name('parametres.cosud-acces.update');
     Route::get('/parametres/audit', [AuditController::class, 'index'])->name('parametres.audit.index');
     Route::get('/parametres/roles', [RoleController::class, 'index'])->name('parametres.roles.index');
     Route::get('/parametres/roles/create', [RoleController::class, 'create'])->name('parametres.roles.create');
@@ -166,6 +166,7 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::post('/suivi-paiements/{suiviPaiement}/classer', [SuiviPaiementController::class, 'classer'])->name('suivi-paiements.classer.store');
     Route::get('/suivi-factures-fournisseurs', [SuiviFacturesFournisseursController::class, 'index'])->name('suivi-factures-fournisseurs.index');
     Route::get('/suivi-factures-fournisseurs/export', [SuiviFacturesFournisseursController::class, 'export'])->name('suivi-factures-fournisseurs.export');
+    Route::get('/suivi-factures-fournisseurs/imprimer', [SuiviFacturesFournisseursController::class, 'print'])->name('suivi-factures-fournisseurs.print');
     Route::get('/courriers', [CourrierController::class, 'index'])->name('courriers.index');
     Route::get('/courriers/create', [CourrierController::class, 'create'])->name('courriers.create');
     Route::post('/courriers', [CourrierController::class, 'store'])->name('courriers.store');

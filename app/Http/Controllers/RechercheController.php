@@ -18,7 +18,7 @@ class RechercheController extends Controller
         $dossiers = collect();
 
         if (strlen($q) >= 2) {
-            Log::channel('eged')->debug('Recherche', ['q' => $q, 'user_id' => auth()->id()]);
+            Log::channel('cosud')->debug('Recherche', ['q' => $q, 'user_id' => auth()->id()]);
             $documents = Document::horsCorbeille()
                 ->visibleBy(auth()->user())
                 ->with(['typeDocument', 'user', 'dossier' => fn ($d) => $d->with(['parent' => fn ($p) => $p->with('parent')])])

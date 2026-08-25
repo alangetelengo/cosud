@@ -35,6 +35,7 @@ class InstruireCircuitCourrierRequest extends FormRequest
     {
         return [
             'instructions' => ['required', 'string', 'max:2000'],
+            'delai_execution_jours' => ['nullable', 'integer', 'min:1', 'max:365'],
             'agent_confie_id' => ['nullable', 'integer', 'exists:users,id'],
             'agent_confie_ids' => ['nullable', 'array'],
             'agent_confie_ids.*' => ['integer', 'exists:users,id'],
@@ -48,9 +49,19 @@ class InstruireCircuitCourrierRequest extends FormRequest
     {
         return [
             'instructions.required' => 'Les instructions sont obligatoires.',
+            'delai_execution_jours.integer' => 'Le délai d’exécution doit être un nombre de jours.',
+            'delai_execution_jours.min' => 'Le délai d’exécution doit être d’au moins 1 jour.',
+            'delai_execution_jours.max' => 'Le délai d’exécution ne peut pas dépasser 365 jours.',
             'agent_confie_id.exists' => 'Le destinataire choisi est introuvable.',
             'agent_confie_ids.*.exists' => 'Un des destinataires choisis est introuvable.',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('delai_execution_jours') === '' || $this->input('delai_execution_jours') === null) {
+            $this->merge(['delai_execution_jours' => null]);
+        }
     }
 
     public function withValidator(Validator $validator): void

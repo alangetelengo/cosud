@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Structure;
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Models\Structure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -56,7 +56,7 @@ class ProfileController extends Controller
 
         $request->user()->save();
 
-        Log::channel('eged')->info('Profil mis à jour', ['user_id' => $request->user()->id]);
+        Log::channel('cosud')->info('Profil mis à jour', ['user_id' => $request->user()->id]);
 
         return Redirect::route('profile.edit')->with('status', 'profile-updated');
     }
@@ -72,7 +72,7 @@ class ProfileController extends Controller
 
         $user = $request->user();
 
-        Log::channel('eged')->info('Compte supprimé', ['user_id' => $user->id, 'email' => $user->email]);
+        Log::channel('cosud')->info('Compte supprimé', ['user_id' => $user->id, 'email' => $user->email]);
 
         Auth::logout();
 

@@ -112,7 +112,7 @@ class DocumentController extends Controller
         $typeDoc = TypeDocument::findOrFail($request->type_document_id);
 
         if ($file->getSize() > $typeDoc->taille_max_bytes) {
-            Log::channel('eged')->warning('Document rejeté : fichier trop volumineux', ['user_id' => auth()->id(), 'nom' => $file->getClientOriginalName()]);
+            Log::channel('cosud')->warning('Document rejeté : fichier trop volumineux', ['user_id' => auth()->id(), 'nom' => $file->getClientOriginalName()]);
 
             return back()->withInput()->with('error', 'Fichier trop volumineux (max '.$typeDoc->taille_max_ko.' Ko).');
         }
@@ -161,14 +161,14 @@ class DocumentController extends Controller
         try {
             app(MetadonneeExtracteur::class)->extrairePourDocument($document);
         } catch (\Throwable $e) {
-            Log::channel('eged')->warning('Extraction métadonnées échouée', ['document_id' => $document->id, 'error' => $e->getMessage()]);
+            Log::channel('cosud')->warning('Extraction métadonnées échouée', ['document_id' => $document->id, 'error' => $e->getMessage()]);
         }
 
         // Notification au dépôt désactivée pour les ayants-droits du dossier :
         // la notification est désormais ciblée au seul destinataire explicite
         // lors de l'envoi en validation.
 
-        Log::channel('eged')->info('Document déposé', ['document_id' => $document->id, 'user_id' => auth()->id(), 'nom' => $document->nom_original]);
+        Log::channel('cosud')->info('Document déposé', ['document_id' => $document->id, 'user_id' => auth()->id(), 'nom' => $document->nom_original]);
 
         $redirect = $request->dossier_id
             ? redirect()->route('dossiers.show', $request->dossier_id)
@@ -299,10 +299,10 @@ class DocumentController extends Controller
         try {
             app(MetadonneeExtracteur::class)->extrairePourDocument($document);
         } catch (\Throwable $e) {
-            Log::channel('eged')->warning('Extraction métadonnées échouée', ['document_id' => $document->id, 'error' => $e->getMessage()]);
+            Log::channel('cosud')->warning('Extraction métadonnées échouée', ['document_id' => $document->id, 'error' => $e->getMessage()]);
         }
 
-        Log::channel('eged')->info('Nouvelle version déposée', ['document_id' => $document->id, 'version' => $prochainNumero, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Nouvelle version déposée', ['document_id' => $document->id, 'version' => $prochainNumero, 'user_id' => auth()->id()]);
 
         $messageSuccess = 'Nouvelle version (v'.$prochainNumero.') enregistrée.';
         if ($repasserEnBrouillon) {
@@ -352,7 +352,7 @@ class DocumentController extends Controller
             'donnees_avant' => json_encode($donneesAvant),
         ]);
 
-        Log::channel('eged')->info('Document mis à jour', ['document_id' => $document->id, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Document mis à jour', ['document_id' => $document->id, 'user_id' => auth()->id()]);
 
         return redirect()->route('documents.index')->with('success', 'Document mis à jour.');
     }
@@ -398,7 +398,7 @@ class DocumentController extends Controller
         ]);
         HistoriqueDocument::enregistrer($document, 'validation', null, 'Document validé (direct)');
         JournalAudit::log('document.validation', 'documents', ['document_id' => $document->id]);
-        Log::channel('eged')->info('Document validé', ['document_id' => $document->id, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Document validé', ['document_id' => $document->id, 'user_id' => auth()->id()]);
 
         return redirect()->back()->with('success', 'Document validé.');
     }
@@ -424,7 +424,7 @@ class DocumentController extends Controller
             return back()->with('error', 'Aucune étape de workflow configurée (service, type, ni global).');
         }
         // Log pour corréler le workflow résolu (type prioritaire, sinon global) et l'erreur éventuelle côté UI.
-        Log::channel('eged')->info('Workflow résolu avant envoi en validation', [
+        Log::channel('cosud')->info('Workflow résolu avant envoi en validation', [
             'document_id' => (int) $document->id,
             'type_document_id' => (int) ($document->type_document_id ?? 0),
             'workflow_etape_id' => (int) ($etape->id ?? 0),
@@ -493,7 +493,7 @@ class DocumentController extends Controller
         ]);
 
         $destinataire->notify(new DocumentValidationDemandeNotification($document->fresh(), auth()->user(), $etape));
-        Log::channel('eged')->info('Document envoyé en validation', [
+        Log::channel('cosud')->info('Document envoyé en validation', [
             'document_id' => $document->id,
             'user_id' => auth()->id(),
             'etape' => $etape->nom,
@@ -549,7 +549,7 @@ class DocumentController extends Controller
             return [];
         }
 
-        Log::channel('eged')->info('Chaine hiérarchique calculée pour l’envoi en validation', [
+        Log::channel('cosud')->info('Chaine hiérarchique calculée pour l’envoi en validation', [
             'document_id' => (int) $document->id,
             'dossier_id' => $document->dossier_id ? (int) $document->dossier_id : null,
             'source_structure' => $sourceStructure,
@@ -566,7 +566,7 @@ class DocumentController extends Controller
             $createur = $document->createur ?? $document->user;
             $alt = $createur?->structurePourValidationHierarchique();
             if ($alt && (int) $alt->id !== (int) $structure->id) {
-                Log::channel('eged')->info('Chaine hiérarchique : repli sur la structure du déposant', [
+                Log::channel('cosud')->info('Chaine hiérarchique : repli sur la structure du déposant', [
                     'document_id' => (int) $document->id,
                     'structure_depot_id' => (int) $structure->id,
                     'structure_deposant_id' => (int) $alt->id,
@@ -1011,7 +1011,7 @@ class DocumentController extends Controller
                 if ($createur && $createur->id !== auth()->id()) {
                     $createur->notify(new DocumentValidationResultNotification($document, auth()->user(), true, $request->commentaire));
                 }
-                Log::channel('eged')->info('Document validé (workflow hiérarchique complet)', ['document_id' => $document->id, 'user_id' => auth()->id()]);
+                Log::channel('cosud')->info('Document validé (workflow hiérarchique complet)', ['document_id' => $document->id, 'user_id' => auth()->id()]);
 
                 return redirect()->back()->with('success', 'Document validé.');
             }
@@ -1035,7 +1035,7 @@ class DocumentController extends Controller
             if ($prochainValidateur) {
                 $prochainValidateur->notify(new DocumentValidationDemandeNotification($document->fresh(), auth()->user(), $etape));
             }
-            Log::channel('eged')->info('Document : étape validée, passage au validateur suivant', ['document_id' => $document->id, 'next_user_id' => $prochainValidateurId]);
+            Log::channel('cosud')->info('Document : étape validée, passage au validateur suivant', ['document_id' => $document->id, 'next_user_id' => $prochainValidateurId]);
 
             return redirect()->back()->with('success', 'Visa enregistré. Document transmis à l\'étape suivante.');
         }
@@ -1062,7 +1062,7 @@ class DocumentController extends Controller
             if ($createur && $createur->id !== auth()->id()) {
                 $createur->notify(new DocumentValidationResultNotification($document, auth()->user(), true, $request->commentaire));
             }
-            Log::channel('eged')->info('Document approuvé (workflow)', ['document_id' => $document->id, 'user_id' => auth()->id()]);
+            Log::channel('cosud')->info('Document approuvé (workflow)', ['document_id' => $document->id, 'user_id' => auth()->id()]);
 
             return redirect()->back()->with('success', 'Document validé.');
         }
@@ -1199,7 +1199,7 @@ class DocumentController extends Controller
         if ($createur && $createur->id !== auth()->id()) {
             $createur->notify(new DocumentValidationResultNotification($document, auth()->user(), false, $request->commentaire));
         }
-        Log::channel('eged')->info('Document rejeté (workflow)', ['document_id' => $document->id, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Document rejeté (workflow)', ['document_id' => $document->id, 'user_id' => auth()->id()]);
 
         return redirect()->back()->with('success', 'Document rejeté.');
     }
@@ -1225,7 +1225,7 @@ class DocumentController extends Controller
         $this->validationDossierLecturePartage->revoquerPourDocument($document->fresh(['dossier']));
         HistoriqueDocument::enregistrer($document, 'archivage', null, 'Document archivé');
         JournalAudit::log('document.archivage', 'documents', ['document_id' => $document->id]);
-        Log::channel('eged')->info('Document archivé', ['document_id' => $document->id, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Document archivé', ['document_id' => $document->id, 'user_id' => auth()->id()]);
 
         return $request->headers->get('X-Requested-With') === 'XMLHttpRequest'
             ? response()->json(['success' => true, 'message' => 'Document archivé.'])
@@ -1244,7 +1244,7 @@ class DocumentController extends Controller
                 }
             }
             $document->delete();
-            Log::channel('eged')->info('Document supprimé définitivement', ['document_id' => $docId, 'user_id' => auth()->id()]);
+            Log::channel('cosud')->info('Document supprimé définitivement', ['document_id' => $docId, 'user_id' => auth()->id()]);
             JournalAudit::log('document.suppression_definitive', 'documents', ['document_id' => $docId]);
             $msg = 'Document supprimé définitivement.';
         } else {
@@ -1254,7 +1254,7 @@ class DocumentController extends Controller
             ]);
             HistoriqueDocument::enregistrer($document, 'corbeille', null, 'Document déplacé en corbeille');
             JournalAudit::log('document.corbeille', 'documents', ['document_id' => $document->id]);
-            Log::channel('eged')->info('Document en corbeille', ['document_id' => $document->id, 'user_id' => auth()->id()]);
+            Log::channel('cosud')->info('Document en corbeille', ['document_id' => $document->id, 'user_id' => auth()->id()]);
             $msg = 'Document déplacé en corbeille.';
         }
 

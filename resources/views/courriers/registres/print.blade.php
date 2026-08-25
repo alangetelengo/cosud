@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Registre {{ $sensCode === 'depart' ? 'Départ' : 'Arrivée' }} {{ $annee }} — GED ACSI</title>
+    <title>Registre {{ $sensCode === 'depart' ? 'Départ' : 'Arrivée' }} {{ $annee }} — COSUD ACSI</title>
     <style>
         @page {
             size: A4 landscape;
@@ -160,7 +160,7 @@
         ])
 
         <div class="footer">
-            <span>GED ACSI — Registre du courrier {{ $sensCode === 'depart' ? 'départ' : 'arrivée' }}</span>
+            <span>COSUD ACSI — Registre du courrier {{ $sensCode === 'depart' ? 'départ' : 'arrivée' }}</span>
             <span>Page imprimable A4 paysage</span>
         </div>
     </div>

@@ -109,8 +109,14 @@ class SuiviFacturesFournisseursService
                 $debut->copy()->startOfDay(),
                 $fin->copy()->endOfDay(),
             ]);
-        } elseif ($request->filled('annee')) {
-            $query->whereYear('date_orientation', (int) $request->get('annee'));
+        } elseif ($request->get('periode') === 'mois') {
+            [$debut, $fin] = $this->bornesMois($request->get('mois'));
+            $query->whereBetween('date_orientation', [
+                $debut->copy()->startOfDay(),
+                $fin->copy()->endOfDay(),
+            ]);
+        } elseif ($request->get('periode') === 'annee') {
+            $query->whereYear('date_orientation', (int) $request->get('annee', now()->year));
         }
 
         return $query;
@@ -153,11 +159,42 @@ class SuiviFacturesFournisseursService
     }
 
     /**
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public function bornesMois(?string $mois = null): array
+    {
+        $ref = $mois
+            ? Carbon::createFromFormat('Y-m', $mois)->startOfMonth()
+            : now()->copy()->startOfMonth();
+
+        return [$ref->copy()->startOfMonth(), $ref->copy()->endOfMonth()];
+    }
+
+    public function labelPeriode(Request $request): string
+    {
+        return match ($request->get('periode', 'tous')) {
+            'semaine' => (function () {
+                [$debut, $fin] = $this->bornesSemaineCourante();
+
+                return 'Semaine du '.$debut->format('d/m/Y').' au '.$fin->format('d/m/Y');
+            })(),
+            'mois' => (function () use ($request) {
+                [$debut, $fin] = $this->bornesMois($request->get('mois'));
+
+                return 'Mois de '.$debut->locale('fr')->translatedFormat('F Y');
+            })(),
+            'annee' => 'Année '.(int) $request->get('annee', now()->year),
+            default => 'Toutes périodes',
+        };
+    }
+
+    /**
      * @param  Collection<int, array{courrier: Courrier, statut: string, libelle_statut: string}>  $lignes
      */
-    public function exportCsv(Collection $lignes, string $periodeLabel): StreamedResponse
+    public function exportCsv(Collection $lignes, string $periodeLabel, ?string $suffixeFichier = null): StreamedResponse
     {
-        $filename = 'rapport-factures-fournisseurs-'.now()->format('Y-m-d').'.csv';
+        $suffixe = $suffixeFichier ?: now()->format('Y-m-d');
+        $filename = 'rapport-factures-fournisseurs-prestataires-'.$suffixe.'.csv';
 
         return response()->streamDownload(function () use ($lignes, $periodeLabel): void {
             $out = fopen('php://output', 'w');
@@ -215,5 +252,17 @@ class SuiviFacturesFournisseursService
         }
 
         return number_format((float) $montant, 0, ',', ' ');
+    }
+
+    /**
+     * @param  Collection<int, array{courrier: Courrier, statut: string, libelle_statut: string}>  $lignes
+     */
+    public function totalMontants(Collection $lignes): float
+    {
+        return (float) $lignes->sum(function (array $ligne): float {
+            $montant = $ligne['courrier']->suiviPaiement?->montant;
+
+            return $montant !== null ? (float) $montant : 0.0;
+        });
     }
 }

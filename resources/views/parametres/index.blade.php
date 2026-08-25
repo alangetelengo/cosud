@@ -2,7 +2,7 @@
 
 @section('content-container-class', 'w-full max-w-none px-4 sm:px-6 lg:px-8')
 @section('page-title', 'Paramètres')
-@section('page-title-info', "Centre d'administration et de configuration GED")
+@section('page-title-info', "Centre d'administration et de configuration COSUD")
 
 @push('styles')
 <style>
@@ -27,7 +27,7 @@
             <p class="text-slate-600 dark:text-slate-400 mt-1 text-sm">Gérez l'organisation, les documents et les accès</p>
         </div>
         <div class="p-4 border-t border-slate-100 dark:border-slate-700">
-            <a href="{{ route('parametres.ged-acces') }}" class="group flex items-center gap-3 p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all no-underline">
+            <a href="{{ route('parametres.cosud-acces') }}" class="group flex items-center gap-3 p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all no-underline">
                 <span class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-lg flex-shrink-0">🔑</span>
                 <div class="min-w-0 flex-1">
                     <span class="font-semibold text-slate-800 dark:text-slate-100 text-sm block group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Politique d’accès documents</span>

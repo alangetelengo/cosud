@@ -9,7 +9,7 @@
         </div>
     </button>
     <div class="flex-1 flex justify-between items-center px-6">
-        <span class="text-sm text-slate-300 font-semibold system-label">GED – Gestion électronique des documents | ACSI</span>
+        <span class="text-sm text-slate-300 font-semibold system-label">COSUD – Courrier et Suivi des Dépenses | ACSI</span>
         <ul class="header-right flex items-center gap-1">
             {{-- 1. Theme Toggle (comme Progcaisse) --}}
             <li class="mr-3">

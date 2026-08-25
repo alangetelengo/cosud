@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\CourrierVisibiliteService;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -48,6 +49,7 @@ class Courrier extends Model
         'numero_archives',
         'observations',
         'instructions_dg',
+        'delai_execution_jours',
         'agent_confie_id',
         'message_ac',
         'date_orientation',
@@ -82,6 +84,7 @@ class Courrier extends Model
             'est_confidentiel' => 'boolean',
             'reponse_confidentielle' => 'boolean',
             'nombre_pieces' => 'integer',
+            'delai_execution_jours' => 'integer',
             'circuit_etape_depuis' => 'datetime',
             'dernier_alerte_retard_at' => 'datetime',
         ];
@@ -539,5 +542,34 @@ class Courrier extends Model
         $actuel = $this->statutCourrier?->code ?? '';
 
         return in_array($codeStatut, $transitions[$actuel] ?? [], true);
+    }
+
+    /**
+     * Échéance de traitement calculée depuis la date d’orientation + délai en jours (facultatif).
+     */
+    public function dateEcheanceExecution(): ?CarbonInterface
+    {
+        if ($this->delai_execution_jours === null || $this->date_orientation === null) {
+            return null;
+        }
+
+        return $this->date_orientation->copy()->startOfDay()->addDays((int) $this->delai_execution_jours);
+    }
+
+    public function libelleDelaiExecution(): ?string
+    {
+        if ($this->delai_execution_jours === null) {
+            return null;
+        }
+
+        $jours = (int) $this->delai_execution_jours;
+        $libelle = $jours.' jour'.($jours > 1 ? 's' : '');
+        $echeance = $this->dateEcheanceExecution();
+
+        if ($echeance) {
+            $libelle .= ' (échéance '.$echeance->format('d/m/Y').')';
+        }
+
+        return $libelle;
     }
 }

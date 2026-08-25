@@ -114,7 +114,7 @@
                 </div>
                 <h1 class="brand-title">{{ config('app.name') }}</h1>
                 <div class="decorative-line"></div>
-                <p class="brand-subtitle">Gestion Électronique des Documents – Propulsé par l'ACSI</p>
+                <p class="brand-subtitle">Courrier et Suivi des Dépenses</p>
             </div>
             <div class="acsi-badge">Propulsé par <strong>ACSI</strong></div>
         </div>

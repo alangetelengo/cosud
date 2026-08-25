@@ -66,7 +66,7 @@
 
 @push('styles')
 <link rel="stylesheet" href="{{ asset('vendor/bookblock/css/bookblock.css') }}">
-<link rel="stylesheet" href="{{ asset('css/ged-registre-livret.css') }}?v=14">
+<link rel="stylesheet" href="{{ asset('css/cosud-registre-livret.css') }}?v=14">
 <script src="{{ asset('vendor/bookblock/js/modernizr.custom.js') }}"></script>
 <style>
     /* Bandeau titre compact → plus de hauteur pour le livret */
@@ -90,7 +90,7 @@
     $hasLogo = is_file($logoPath);
 @endphp
 
-<div class="ged-registre-livret is-fullscreen is-closed {{ $isDepart ? 'is-depart' : '' }}">
+<div class="cosud-registre-livret is-fullscreen is-closed {{ $isDepart ? 'is-depart' : '' }}">
     <div class="registre-livret-shell">
         <div class="bb-custom-wrapper registre-livret-book-area">
             <div class="registre-livret-panel">
@@ -216,7 +216,7 @@
 <script>
 (function ($) {
     var $book = $('#bb-bookblock');
-    var $livret = $('.ged-registre-livret');
+    var $livret = $('.cosud-registre-livret');
     if (!$book.length || typeof $.fn.bookblock !== 'function') {
         console.error('BookBlock non initialisé (jQuery plugin manquant).');
         return;

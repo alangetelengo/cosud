@@ -21,12 +21,12 @@ class MailSmtpConfigurationTest extends TestCase
         config([
             'mail.default' => 'smtp',
             'mail.from.address' => 'sifec.etatcivil@gmail.com',
-            'mail.from.name' => 'GED ACSI',
+            'mail.from.name' => 'COSUD ACSI',
         ]);
 
         $this->assertSame('smtp', config('mail.default'));
         $this->assertSame('sifec.etatcivil@gmail.com', config('mail.from.address'));
-        $this->assertSame('GED ACSI', config('mail.from.name'));
+        $this->assertSame('COSUD ACSI', config('mail.from.name'));
     }
 
     public function test_mailable_2fa_utilise_lexpediteur_configure(): void
@@ -35,7 +35,7 @@ class MailSmtpConfigurationTest extends TestCase
 
         config([
             'mail.from.address' => 'sifec.etatcivil@gmail.com',
-            'mail.from.name' => 'GED ACSI',
+            'mail.from.name' => 'COSUD ACSI',
         ]);
 
         $user = User::factory()->create([
@@ -52,14 +52,14 @@ class MailSmtpConfigurationTest extends TestCase
         Mail::assertSent(TwoFactorBulkMailable::class, function (TwoFactorBulkMailable $mail) use ($user) {
             return $mail->hasTo($user->email)
                 && $mail->envelope()->from->address === 'sifec.etatcivil@gmail.com'
-                && $mail->envelope()->from->name === 'GED ACSI'
+                && $mail->envelope()->from->name === 'COSUD ACSI'
                 && str_contains((string) $mail->envelope()->subject, '2FA');
         });
     }
 
     public function test_notification_courrier_mail_desactivee_par_defaut(): void
     {
-        config(['ged.courrier_notifications_mail' => false]);
+        config(['cosud.courrier_notifications_mail' => false]);
 
         $user = User::factory()->create();
         $acteur = User::factory()->create();
@@ -81,7 +81,7 @@ class MailSmtpConfigurationTest extends TestCase
 
     public function test_notification_courrier_ajoute_le_canal_mail_si_active(): void
     {
-        config(['ged.courrier_notifications_mail' => true]);
+        config(['cosud.courrier_notifications_mail' => true]);
 
         Notification::fake();
 
@@ -103,6 +103,6 @@ class MailSmtpConfigurationTest extends TestCase
         $this->assertContains('database', $notification->via($user));
 
         $mail = $notification->toMail($user);
-        $this->assertStringStartsWith('GED : ', $mail->subject);
+        $this->assertStringStartsWith('COSUD : ', $mail->subject);
     }
 }

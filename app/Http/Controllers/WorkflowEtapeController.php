@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\JournalAudit;
 use App\Models\Fonction;
+use App\Models\JournalAudit;
 use App\Models\Structure;
 use App\Models\TypeDocument;
 use App\Models\User;
 use App\Models\WorkflowEtape;
-use Spatie\Permission\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Spatie\Permission\Models\Role;
 
 class WorkflowEtapeController extends Controller
 {
@@ -34,7 +34,7 @@ class WorkflowEtapeController extends Controller
             ->orderBy('nom')
             ->get();
 
-        Log::channel('eged')->debug('Admin workflow', ['user_id' => auth()->id()]);
+        Log::channel('cosud')->debug('Admin workflow', ['user_id' => auth()->id()]);
 
         return view('parametres.workflow.index', compact('etapes'));
     }
@@ -103,7 +103,7 @@ class WorkflowEtapeController extends Controller
         $typeDocumentId = $scope === 'type' ? ($validated['type_document_id'] ?? null) : null;
         $structureScopeId = $scope === 'service' ? ($validated['structure_scope_id'] ?? null) : null;
 
-        $codesAVerifier = array_map(fn ($i) => $prefixe . '_etape_' . $i, range(1, count($validated['etapes'])));
+        $codesAVerifier = array_map(fn ($i) => $prefixe.'_etape_'.$i, range(1, count($validated['etapes'])));
         $codesExistants = WorkflowEtape::whereIn('code', $codesAVerifier)->pluck('code')->toArray();
 
         if (! empty($codesExistants)) {
@@ -117,7 +117,7 @@ class WorkflowEtapeController extends Controller
 
         foreach ($validated['etapes'] as $index => $etapeData) {
             $ordre = $ordreMax + $index + 1;
-            $code = $prefixe . '_etape_' . ($index + 1);
+            $code = $prefixe.'_etape_'.($index + 1);
             $isLast = $index === count($validated['etapes']) - 1;
 
             $etape = WorkflowEtape::create([
@@ -144,12 +144,12 @@ class WorkflowEtapeController extends Controller
             $etapesCreees[$i]->update(['workflow_etape_suivante_id' => $etapesCreees[$i + 1]->id]);
         }
 
-        JournalAudit::log('workflow.creation', 'workflow', ['commentaire' => 'Circuit ' . $prefixe]);
-        \Illuminate\Support\Facades\Log::channel('eged')->info('Circuit workflow créé', ['prefixe' => $prefixe, 'nb_etapes' => count($etapesCreees), 'user_id' => auth()->id()]);
+        JournalAudit::log('workflow.creation', 'workflow', ['commentaire' => 'Circuit '.$prefixe]);
+        Log::channel('cosud')->info('Circuit workflow créé', ['prefixe' => $prefixe, 'nb_etapes' => count($etapesCreees), 'user_id' => auth()->id()]);
 
         return redirect()
             ->route('parametres.workflow.index')
-            ->with('success', 'Circuit de workflow créé avec ' . count($etapesCreees) . ' étape(s).');
+            ->with('success', 'Circuit de workflow créé avec '.count($etapesCreees).' étape(s).');
     }
 
     public function store(Request $request)
@@ -194,7 +194,7 @@ class WorkflowEtapeController extends Controller
         ]);
 
         JournalAudit::log('workflow.creation', 'workflow', ['commentaire' => $validated['code']]);
-        Log::channel('eged')->info('Étape de workflow créée', ['code' => $validated['code'], 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Étape de workflow créée', ['code' => $validated['code'], 'user_id' => auth()->id()]);
 
         return redirect()
             ->route('parametres.workflow.index')
@@ -261,7 +261,7 @@ class WorkflowEtapeController extends Controller
         ]);
 
         JournalAudit::log('workflow.modification', 'workflow', ['commentaire' => $etape->code]);
-        Log::channel('eged')->info('Étape de workflow mise à jour', ['etape_id' => $etape->id, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Étape de workflow mise à jour', ['etape_id' => $etape->id, 'user_id' => auth()->id()]);
 
         return redirect()
             ->route('parametres.workflow.index')
@@ -279,7 +279,7 @@ class WorkflowEtapeController extends Controller
         }
         $etape->delete();
         JournalAudit::log('workflow.suppression', 'workflow', ['commentaire' => $etape->code]);
-        Log::channel('eged')->info('Étape de workflow supprimée', ['etape_id' => $etape->id, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Étape de workflow supprimée', ['etape_id' => $etape->id, 'user_id' => auth()->id()]);
 
         return redirect()
             ->route('parametres.workflow.index')

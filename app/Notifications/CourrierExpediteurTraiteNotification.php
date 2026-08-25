@@ -28,8 +28,8 @@ class CourrierExpediteurTraiteNotification extends Notification
             $channels[] = 'mail';
         }
 
-        if ($notifiable->routeNotificationFor('ged_sms') && app(SmsService::class)->isConfigured()) {
-            $channels[] = 'ged_sms';
+        if ($notifiable->routeNotificationFor('cosud_sms') && app(SmsService::class)->isConfigured()) {
+            $channels[] = 'cosud_sms';
         }
 
         return $channels;
@@ -40,19 +40,19 @@ class CourrierExpediteurTraiteNotification extends Notification
         $numero = $this->numero();
 
         return (new MailMessage)
-            ->subject('GED : dossier n° '.$numero.' — traité et clôturé')
+            ->subject('COSUD : dossier n° '.$numero.' — traité et clôturé')
             ->greeting('Bonjour,')
             ->line('**État de votre dossier :** votre courrier n° '.$numero.' a été traité. Le dossier est désormais **clôturé**.')
             ->line('**Objet :** '.$this->objet())
             ->line('**Ce que cela signifie :** le traitement administratif de votre demande est terminé côté ACSI.')
             ->line('**Ce que vous devez faire :** aucune action complémentaire n’est attendue de votre part. Pour toute question, contactez le secrétariat de l’ACSI en rappelant le n° '.$numero.'.')
             ->line('Merci de votre confiance.')
-            ->salutation('L’équipe GED — '.config('app.name'));
+            ->salutation('L’équipe COSUD — '.config('app.name'));
     }
 
-    public function toGedSms(object $notifiable): string
+    public function toCosudSms(object $notifiable): string
     {
-        return 'GED n°'.$this->numero().' : dossier TRAITÉ et CLÔTURÉ. '
+        return 'COSUD n°'.$this->numero().' : dossier TRAITÉ et CLÔTURÉ. '
             .'Aucune action de votre part. Contactez le secrétariat ACSI si besoin.';
     }
 

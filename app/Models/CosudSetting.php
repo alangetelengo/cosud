@@ -5,11 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 
-class GedSetting extends Model
+class CosudSetting extends Model
 {
     public const LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT = 'lecture_dossier_lors_partage_document';
 
-    protected $table = 'ged_settings';
+    protected $table = 'cosud_settings';
 
     protected $fillable = [
         'cle',
@@ -18,7 +18,7 @@ class GedSetting extends Model
 
     public static function bool(string $cle, bool $default = false): bool
     {
-        $cacheKey = 'ged_setting_bool:'.$cle;
+        $cacheKey = 'cosud_setting_bool:'.$cle;
 
         return (bool) Cache::remember($cacheKey, 300, function () use ($cle, $default) {
             $raw = static::query()->where('cle', $cle)->value('valeur');
@@ -45,14 +45,14 @@ class GedSetting extends Model
                 'created_at' => now(),
             ]
         );
-        Cache::forget('ged_setting_bool:'.$cle);
+        Cache::forget('cosud_setting_bool:'.$cle);
     }
 
     public static function lectureDossierLorsPartageDocument(): bool
     {
         return static::bool(
             self::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT,
-            (bool) config('ged.defaults.lecture_dossier_lors_partage_document', false)
+            (bool) config('cosud.defaults.lecture_dossier_lors_partage_document', false)
         );
     }
 }

@@ -3,7 +3,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="color-scheme" content="light dark">
 
-<title>@yield('title', config('app.name', 'GED'))</title>
+<title>@yield('title', config('app.name', 'COSUD'))</title>
 
 <meta name="csrf-token" content="{{ csrf_token() }}">
 @include('partials.favicon')

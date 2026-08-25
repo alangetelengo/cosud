@@ -37,7 +37,7 @@ class UtilisateurTelephoneSmsTest extends TestCase
         $user = User::query()->where('email', 'agent.sms@example.com')->first();
         $this->assertNotNull($user);
         $this->assertSame('242066835332', $user->telephone);
-        $this->assertSame('242066835332', $user->routeNotificationForGedSms());
+        $this->assertSame('242066835332', $user->routeNotificationForCosudSms());
     }
 
     public function test_admin_peut_mettre_a_jour_et_effacer_le_telephone_sms(): void
@@ -73,7 +73,7 @@ class UtilisateurTelephoneSmsTest extends TestCase
             ->assertRedirect();
 
         $this->assertNull($user->fresh()->telephone);
-        $this->assertNull($user->fresh()->routeNotificationForGedSms());
+        $this->assertNull($user->fresh()->routeNotificationForCosudSms());
     }
 
     public function test_telephone_sms_invalide_est_refuse(): void

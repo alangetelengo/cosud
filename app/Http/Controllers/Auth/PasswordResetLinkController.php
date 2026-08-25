@@ -38,7 +38,7 @@ class PasswordResetLinkController extends Controller
             $request->only('email')
         );
 
-        Log::channel('eged')->info('Demande réinitialisation mot de passe', [
+        Log::channel('cosud')->info('Demande réinitialisation mot de passe', [
             'email' => $request->email,
             'status' => $status,
         ]);

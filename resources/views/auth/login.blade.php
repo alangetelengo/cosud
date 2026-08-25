@@ -58,7 +58,7 @@
                 <img src="{{ asset('images/image-logo.jpg') }}" alt="ACSI" class="logo-acsi" width="108" height="108" decoding="async">
             </div>
             <h1>{{ config('app.name') }}</h1>
-            <p>Gestion Électronique des Documents – Propulsé par l'ACSI</p>
+            <p>Courrier et Suivi des Dépenses</p>
         </section>
         <section class="form">
             <h2>Connexion</h2>

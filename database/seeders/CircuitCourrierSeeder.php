@@ -61,7 +61,7 @@ class CircuitCourrierSeeder extends Seeder
                 'action' => CircuitCourrierEtape::ACTION_TRAITER,
                 'mouvement' => CircuitCourrierEtape::MOUVEMENT_ATTENDRE_ARRIVEE,
                 'notifie_roles' => ['agent_comptable', 'particulier_dg', 'particulier_ac'],
-                'instructions_aide' => 'L’AC établit le chèque et l’envoie au DG pour signature (sans scan dans le GED).',
+                'instructions_aide' => 'L’AC établit le chèque et l’envoie au DG pour signature (sans scan dans COSUD).',
             ],
             [
                 'ordre' => 4,

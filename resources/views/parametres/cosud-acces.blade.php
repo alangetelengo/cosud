@@ -21,12 +21,12 @@
     @endif
 
     <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
-        Lorsque l’option ci-dessous est <strong class="font-semibold text-slate-700 dark:text-slate-200">activée</strong>, chaque <strong class="font-semibold text-slate-700 dark:text-slate-200">envoi en validation</strong> accorde au(x) destinataire(s) concerné(s) un <strong class="font-semibold text-slate-700 dark:text-slate-200">partage dossier en lecture seule</strong> sur le dossier qui contient le document (pour qu’ils puissent le consulter dans la GED). Ce partage est <strong class="font-semibold text-slate-700 dark:text-slate-200">révoqué automatiquement</strong> lorsque le document est validé, rejeté ou archivé, ou lors du passage à une autre étape (nouveau validateur).
+        Lorsque l’option ci-dessous est <strong class="font-semibold text-slate-700 dark:text-slate-200">activée</strong>, chaque <strong class="font-semibold text-slate-700 dark:text-slate-200">envoi en validation</strong> accorde au(x) destinataire(s) concerné(s) un <strong class="font-semibold text-slate-700 dark:text-slate-200">partage dossier en lecture seule</strong> sur le dossier qui contient le document (pour qu’ils puissent le consulter dans COSUD). Ce partage est <strong class="font-semibold text-slate-700 dark:text-slate-200">révoqué automatiquement</strong> lorsque le document est validé, rejeté ou archivé, ou lors du passage à une autre étape (nouveau validateur).
         Par défaut, l’option est <strong class="font-semibold text-slate-700 dark:text-slate-200">désactivée</strong> (principe « une seule pièce ») ; vous pouvez l’activer pour que les validateurs voient aussi le dossier parent en lecture seule.
     </p>
 
     <div class="rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
-        <form method="post" action="{{ route('parametres.ged-acces.update') }}" class="p-6 space-y-6">
+        <form method="post" action="{{ route('parametres.cosud-acces.update') }}" class="p-6 space-y-6">
             @csrf
             @method('PUT')
 

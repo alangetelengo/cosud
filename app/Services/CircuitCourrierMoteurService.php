@@ -332,6 +332,7 @@ class CircuitCourrierMoteurService
         string $instructions,
         ?int $agentConfieId = null,
         ?array $agentConfieIds = null,
+        ?int $delaiExecutionJours = null,
     ): Courrier {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->action !== CircuitCourrierEtape::ACTION_INSTRUIRE) {
@@ -355,6 +356,7 @@ class CircuitCourrierMoteurService
 
         $courrier->update([
             'instructions_dg' => $instructions,
+            'delai_execution_jours' => $delaiExecutionJours,
             'date_orientation' => now(),
         ]);
         $this->synchroniserAgentsConfies($courrier, $agents->pluck('id')->all());
@@ -516,7 +518,7 @@ class CircuitCourrierMoteurService
     }
 
     /**
-     * Le DG confirme la signature du chèque (sans scan dans le GED), notifie éventuellement
+     * Le DG confirme la signature du chèque (sans scan dans COSUD), notifie éventuellement
      * le fournisseur pour recouvrement, puis renvoie le dossier à l’AC pour la décharge.
      */
     public function signerChequeDg(Courrier $courrier, User $acteur, ?string $message = null, bool $notifierFournisseur = true): Courrier
@@ -1035,6 +1037,9 @@ class CircuitCourrierMoteurService
         if ($courrier->instructions_dg) {
             $detail .= ' | Instructions : '.$courrier->instructions_dg;
         }
+        if ($courrier->libelleDelaiExecution()) {
+            $detail .= ' | Délai d’exécution : '.$courrier->libelleDelaiExecution();
+        }
 
         $courrier->loadMissing(['agentConfie', 'agentsConfies']);
         $agentsConfies = $courrier->agentsConfies->isNotEmpty()
@@ -1105,7 +1110,27 @@ class CircuitCourrierMoteurService
             $roles = array_merge($roles, ['particulier_dg', 'particulier_ac']);
         }
 
+        // Facture/MAD : le DG est déjà alerté par notifierFactureEnregistreeDg (cloche + SMS).
+        // Éviter le doublon « À traiter : Bon pour accord… » sur la même étape.
+        if ($this->etapeFactureInstructionsDgSansNotifCircuitDg($courrier, $etape)) {
+            $roles = array_values(array_filter($roles, fn (string $role): bool => $role !== 'dg'));
+        }
+
         $this->notifications->notifierRoles($roles, $courrier, $acteur, $type, $detail);
+    }
+
+    /**
+     * Étape « Bon pour accord / instructions DG » du circuit facture prestataire.
+     */
+    protected function etapeFactureInstructionsDgSansNotifCircuitDg(Courrier $courrier, CircuitCourrierEtape $etape): bool
+    {
+        $courrier->loadMissing('circuit');
+
+        if ($courrier->circuit?->code !== 'facture_prestataire') {
+            return false;
+        }
+
+        return in_array($etape->code, ['instructions_dg', 'instruction_dg'], true);
     }
 
     /**

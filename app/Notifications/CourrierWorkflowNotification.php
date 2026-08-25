@@ -25,14 +25,14 @@ class CourrierWorkflowNotification extends Notification
     {
         $channels = ['database'];
 
-        if (config('ged.courrier_notifications_mail')) {
+        if (config('cosud.courrier_notifications_mail')) {
             $channels[] = 'mail';
         }
 
         if ($this->doitEnvoyerSms()
-            && $notifiable->routeNotificationFor('ged_sms')
+            && $notifiable->routeNotificationFor('cosud_sms')
             && app(SmsService::class)->isConfigured()) {
-            $channels[] = 'ged_sms';
+            $channels[] = 'cosud_sms';
         }
 
         return $channels;
@@ -43,14 +43,14 @@ class CourrierWorkflowNotification extends Notification
         $labels = $this->libelles();
 
         return (new MailMessage)
-            ->subject('GED : '.$labels['title'])
+            ->subject('COSUD : '.$labels['title'])
             ->greeting('Bonjour '.$notifiable->name.',')
             ->line($labels['body'])
             ->line('**Courrier :** n° '.$this->courrier->numeroRegistreComplet().' — '.$this->courrier->objet)
             ->line('**Par :** '.$this->acteur->name)
             ->when($this->detail, fn (MailMessage $mail) => $mail->line('**Détail :** '.$this->detail))
             ->action('Voir le courrier', $this->urlAction())
-            ->line('Merci d\'utiliser GED.');
+            ->line('Merci d\'utiliser COSUD.');
     }
 
     /**
@@ -184,17 +184,17 @@ class CourrierWorkflowNotification extends Notification
         };
     }
 
-    public function toGedSms(object $notifiable): string
+    public function toCosudSms(object $notifiable): string
     {
         $numero = $this->courrier->numeroRegistreComplet();
         $fournisseur = trim((string) ($this->courrier->expediteur_libelle ?? ''));
         $fournisseurCourt = $fournisseur !== '' ? mb_substr($fournisseur, 0, 40) : 'fournisseur';
 
         $texte = match ($this->type) {
-            CourrierNotificationService::FACTURE_ENREGISTREE_DG => 'GED n°'.$numero
+            CourrierNotificationService::FACTURE_ENREGISTREE_DG => 'COSUD n°'.$numero
                 .' : facture prestataire a traiter (Bon pour accord). Fournisseur : '.$fournisseurCourt.'.',
             CourrierNotificationService::BON_POUR_ACCORD_AC => $this->texteSmsBonPourAccordAc($numero, $fournisseurCourt),
-            default => 'GED n°'.$numero.' : action requise sur un courrier.',
+            default => 'COSUD n°'.$numero.' : action requise sur un courrier.',
         };
 
         return app(SmsService::class)->sanitizeSmsText($texte);
@@ -203,9 +203,9 @@ class CourrierWorkflowNotification extends Notification
     private function texteSmsBonPourAccordAc(string $numero, string $fournisseurCourt): string
     {
         $instructions = trim((string) ($this->courrier->instructions_dg ?? ''));
-        $extrait = $instructions !== '' ? mb_substr($instructions, 0, 80) : 'voir GED';
+        $extrait = $instructions !== '' ? mb_substr($instructions, 0, 80) : 'voir COSUD';
 
-        return 'GED n°'.$numero
+        return 'COSUD n°'.$numero
             .' : Bon pour accord DG — editer un cheque. Fournisseur : '.$fournisseurCourt
             .'. Instructions : '.$extrait;
     }

@@ -6,25 +6,25 @@ use App\Services\SmsService;
 use Illuminate\Notifications\Notification;
 
 /**
- * Canal SMS GED (Wirepick / Infobip) — route on-demand : Notification::route('ged_sms', $telephone).
+ * Canal SMS COSUD (Wirepick / Infobip) — route on-demand : Notification::route('cosud_sms', $telephone).
  */
-class GedSmsChannel
+class CosudSmsChannel
 {
     public function __construct(private readonly SmsService $sms) {}
 
     public function send(object $notifiable, Notification $notification): void
     {
-        if (! method_exists($notification, 'toGedSms')) {
+        if (! method_exists($notification, 'toCosudSms')) {
             return;
         }
 
         /** @var string $message */
-        $message = $notification->toGedSms($notifiable);
+        $message = $notification->toCosudSms($notifiable);
         if (! is_string($message) || trim($message) === '') {
             return;
         }
 
-        $to = $notifiable->routeNotificationFor('ged_sms', $notification);
+        $to = $notifiable->routeNotificationFor('cosud_sms', $notification);
         if (! is_string($to) || trim($to) === '') {
             return;
         }

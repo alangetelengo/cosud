@@ -46,9 +46,9 @@ class CourrierExpediteurContactClotureTest extends TestCase
     {
         Notification::fake();
         config([
-            'ged.sms.provider' => 'wirepick',
-            'ged.sms.wirepick.client' => 'test-client',
-            'ged.sms.wirepick.password' => 'secret-password',
+            'cosud.sms.provider' => 'wirepick',
+            'cosud.sms.wirepick.client' => 'test-client',
+            'cosud.sms.wirepick.password' => 'secret-password',
         ]);
 
         $secretaire = $this->creerSecretaire();
@@ -66,7 +66,7 @@ class CourrierExpediteurContactClotureTest extends TestCase
         Notification::assertSentOnDemand(CourrierExpediteurTraiteNotification::class, function ($notification, $channels, $notifiable) use ($courrier) {
             return $notification->courrier->is($courrier)
                 && ($notifiable->routes['mail'] ?? null) === 'fournisseur@exemple.cg'
-                && ($notifiable->routes['ged_sms'] ?? null) === '+242061234567';
+                && ($notifiable->routes['cosud_sms'] ?? null) === '+242061234567';
         });
     }
 
@@ -88,9 +88,9 @@ class CourrierExpediteurContactClotureTest extends TestCase
     {
         Notification::fake();
         config([
-            'ged.sms.provider' => 'wirepick',
-            'ged.sms.wirepick.client' => 'test-client',
-            'ged.sms.wirepick.password' => 'secret-password',
+            'cosud.sms.provider' => 'wirepick',
+            'cosud.sms.wirepick.client' => 'test-client',
+            'cosud.sms.wirepick.password' => 'secret-password',
         ]);
 
         $dg = $this->creerDg();
@@ -118,12 +118,12 @@ class CourrierExpediteurContactClotureTest extends TestCase
         Notification::assertSentOnDemand(CourrierExpediteurValideNotification::class, function ($notification, $channels, $notifiable) use ($courrier) {
             if (! $notification->courrier->is($courrier)
                 || ($notifiable->routes['mail'] ?? null) !== 'stagiaire@exemple.cg'
-                || ($notifiable->routes['ged_sms'] ?? null) !== '+242066835332') {
+                || ($notifiable->routes['cosud_sms'] ?? null) !== '+242066835332') {
                 return false;
             }
 
             $mail = $notification->toMail($notifiable);
-            $sms = $notification->toGedSms($notifiable);
+            $sms = $notification->toCosudSms($notifiable);
 
             return str_contains(implode(' ', $mail->introLines), 'validé')
                 && str_contains(implode(' ', $mail->introLines), 'aucune démarche')
@@ -136,9 +136,9 @@ class CourrierExpediteurContactClotureTest extends TestCase
     {
         Notification::fake();
         config([
-            'ged.sms.provider' => 'wirepick',
-            'ged.sms.wirepick.client' => 'test-client',
-            'ged.sms.wirepick.password' => 'secret-password',
+            'cosud.sms.provider' => 'wirepick',
+            'cosud.sms.wirepick.client' => 'test-client',
+            'cosud.sms.wirepick.password' => 'secret-password',
         ]);
 
         $dg = $this->creerDg();
@@ -179,11 +179,11 @@ class CourrierExpediteurContactClotureTest extends TestCase
 
         Notification::assertSentOnDemand(CourrierExpediteurTraiteNotification::class, function ($notification, $channels, $notifiable) use ($courrier) {
             if (! $notification->courrier->is($courrier)
-                || ($notifiable->routes['ged_sms'] ?? null) !== '+242066835332') {
+                || ($notifiable->routes['cosud_sms'] ?? null) !== '+242066835332') {
                 return false;
             }
 
-            $sms = $notification->toGedSms($notifiable);
+            $sms = $notification->toCosudSms($notifiable);
 
             return str_contains($sms, 'CLÔTURÉ')
                 && str_contains($sms, 'Aucune action');

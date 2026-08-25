@@ -133,10 +133,10 @@
         <div class="relative">
             <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
                 <span class="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">📚</span>
-                Bienvenue sur GED
+                Bienvenue sur COSUD
             </h2>
             <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
-                GED est le système de <strong>Gestion Électronique des Documents</strong>. Utilisez le menu à gauche pour naviguer : Documents, Dossiers, Recherche, etc.
+                COSUD est le système de <strong>Courrier et Suivi des Dépenses</strong>. Utilisez le menu à gauche pour naviguer : Documents, Dossiers, Recherche, etc.
             </p>
             <div class="flex flex-wrap gap-4 mt-6">
                 @can('documents.create')

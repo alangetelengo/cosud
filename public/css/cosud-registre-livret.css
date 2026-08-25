@@ -1,15 +1,15 @@
 /**
  * Livret registre courriers GED — type SIFEC (BookBlock + double page + spirale).
  */
-.ged-registre-livret {
-    --ged-registre-accent: #334155;
-    --ged-registre-accent-soft: #475569;
-    --ged-registre-paper: #fffef9;
-    --ged-registre-paper-alt: #f7f4ea;
-    --ged-registre-row-odd: #d1fae5;
-    --ged-registre-row-even: #fffbeb;
-    --ged-registre-ink: #0f172a;
-    --ged-registre-rule: #c5b896;
+.cosud-registre-livret {
+    --cosud-registre-accent: #334155;
+    --cosud-registre-accent-soft: #475569;
+    --cosud-registre-paper: #fffef9;
+    --cosud-registre-paper-alt: #f7f4ea;
+    --cosud-registre-row-odd: #d1fae5;
+    --cosud-registre-row-even: #fffbeb;
+    --cosud-registre-ink: #0f172a;
+    --cosud-registre-rule: #c5b896;
     --ged-page-height: 640px;
     --ged-shell-height: 70vh;
     /* Largeur BookBlock constante (flip stable) */
@@ -18,19 +18,19 @@
     --ged-face-portrait: min(440px, 86%);
 }
 
-.ged-registre-livret.is-depart {
-    --ged-registre-accent: #1e293b;
-    --ged-registre-accent-soft: #334155;
+.cosud-registre-livret.is-depart {
+    --cosud-registre-accent: #1e293b;
+    --cosud-registre-accent-soft: #334155;
 }
 
-.ged-registre-livret.is-fullscreen {
+.cosud-registre-livret.is-fullscreen {
     margin: 0;
     height: var(--ged-shell-height);
     max-height: var(--ged-shell-height);
     overflow: visible; /* ne pas clipper la barre de feuilletage */
 }
 
-.ged-registre-livret .registre-livret-shell {
+.cosud-registre-livret .registre-livret-shell {
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -39,7 +39,7 @@
     overflow: visible;
 }
 
-.ged-registre-livret .registre-livret-book-area {
+.cosud-registre-livret .registre-livret-book-area {
     flex: 1 1 auto;
     min-height: 0;
     max-height: var(--ged-page-height);
@@ -49,12 +49,12 @@
     overflow: hidden; /* seul le livre est borné */
 }
 
-.ged-registre-livret .main.clearfix {
+.cosud-registre-livret .main.clearfix {
     margin: 0;
     padding: 0;
 }
 
-.ged-registre-livret .bb-custom-wrapper {
+.cosud-registre-livret .bb-custom-wrapper {
     width: 100%;
     position: relative;
     margin: 0 auto;
@@ -65,7 +65,7 @@
     flex-direction: column;
 }
 
-.ged-registre-livret .registre-livret-panel {
+.cosud-registre-livret .registre-livret-panel {
     background: transparent;
     border: none;
     box-shadow: none;
@@ -77,7 +77,7 @@
     align-items: center;
 }
 
-.ged-registre-livret .bb-bookblock {
+.cosud-registre-livret .bb-bookblock {
     width: var(--ged-book-width);
     max-width: var(--ged-book-width);
     height: var(--ged-page-height);
@@ -85,13 +85,13 @@
     box-shadow: none !important;
 }
 
-.ged-registre-livret .bb-item {
+.cosud-registre-livret .bb-item {
     background: transparent;
     width: 100%;
     height: 100%;
 }
 
-.ged-registre-livret .registre-spread {
+.cosud-registre-livret .registre-spread {
     position: relative;
     display: flex;
     width: 100%;
@@ -99,7 +99,7 @@
     box-sizing: border-box;
 }
 
-.ged-registre-livret .spiral-binding {
+.cosud-registre-livret .spiral-binding {
     position: absolute;
     left: 50%;
     top: 0;
@@ -123,7 +123,7 @@
     pointer-events: none;
 }
 
-.ged-registre-livret .spiral-binding::before {
+.cosud-registre-livret .spiral-binding::before {
     content: '';
     position: absolute;
     left: 50%;
@@ -141,48 +141,48 @@
     border-radius: 1px;
 }
 
-.ged-registre-livret .registre-page-half {
+.cosud-registre-livret .registre-page-half {
     width: 50%;
     height: 100%;
     box-sizing: border-box;
     padding: 0 12px;
 }
 
-.ged-registre-livret .registre-page-half:first-of-type {
+.cosud-registre-livret .registre-page-half:first-of-type {
     padding-right: 18px;
 }
 
-.ged-registre-livret .registre-page-half:last-of-type {
+.cosud-registre-livret .registre-page-half:last-of-type {
     padding-left: 18px;
 }
 
 /* Tableau : page gauche un peu plus large pour toutes les colonnes */
-.ged-registre-livret .registre-page-table {
+.cosud-registre-livret .registre-page-table {
     width: 58%;
 }
 
-.ged-registre-livret .registre-page-table + .registre-page-half {
+.cosud-registre-livret .registre-page-table + .registre-page-half {
     width: 42%;
 }
 
-.ged-registre-livret .registre-card {
+.cosud-registre-livret .registre-card {
     height: 100%;
     min-height: 0;
     box-sizing: border-box;
-    background: linear-gradient(180deg, var(--ged-registre-paper) 0%, var(--ged-registre-paper-alt) 100%);
+    background: linear-gradient(180deg, var(--cosud-registre-paper) 0%, var(--cosud-registre-paper-alt) 100%);
     border: 2px solid #334155;
-    color: var(--ged-registre-ink);
+    color: var(--cosud-registre-ink);
     text-align: left;
     overflow: hidden;
     display: flex;
     flex-direction: column;
 }
 
-.ged-registre-livret .registre-card-blank {
+.cosud-registre-livret .registre-card-blank {
     background: linear-gradient(180deg, #faf8f2 0%, #f0ebe0 100%);
 }
 
-.ged-registre-livret .registre-card-body {
+.cosud-registre-livret .registre-card-body {
     padding: 1rem 1.1rem 0.85rem;
     flex: 1;
     display: flex;
@@ -191,82 +191,82 @@
     overflow: hidden;
 }
 
-.ged-registre-livret .registre-card-scroll {
+.cosud-registre-livret .registre-card-scroll {
     flex: 1;
     overflow: auto;
     min-height: 0;
 }
 
-.ged-registre-livret .registre-full {
+.cosud-registre-livret .registre-full {
     height: var(--ged-page-height);
     box-sizing: border-box;
     padding: 0 4px;
 }
 
-.ged-registre-livret .registre-feuille-single {
+.cosud-registre-livret .registre-feuille-single {
     min-height: 0;
     height: 100%;
 }
 
 /* Feuillet : une seule face portrait (pleine largeur de la page de garde) */
-.ged-registre-livret .registre-feuille-face {
+.cosud-registre-livret .registre-feuille-face {
     display: flex;
     flex-direction: column;
     background: linear-gradient(180deg, #fffef9 0%, #f3efe3 100%);
     border: 2px solid #334155;
-    color: var(--ged-registre-ink);
+    color: var(--cosud-registre-ink);
     padding: 1.15rem 1.35rem 1rem;
 }
 
-.ged-registre-livret .registre-feuille-face .registre-feuille-head {
+.cosud-registre-livret .registre-feuille-face .registre-feuille-head {
     margin-bottom: 0.75rem;
 }
 
-.ged-registre-livret .registre-feuille-face .registre-feuille-head h3 {
+.cosud-registre-livret .registre-feuille-face .registre-feuille-head h3 {
     font-size: 1.75rem;
 }
 
-.ged-registre-livret .registre-feuille-face .registre-feuille-head .text-\[10px\] {
+.cosud-registre-livret .registre-feuille-face .registre-feuille-head .text-\[10px\] {
     font-size: 0.75rem !important;
     letter-spacing: 0.14em;
 }
 
-.ged-registre-livret .registre-feuille-face .registre-feuille-head .text-xs {
+.cosud-registre-livret .registre-feuille-face .registre-feuille-head .text-xs {
     font-size: 0.9rem !important;
 }
 
-.ged-registre-livret .registre-feuille-face-body {
+.cosud-registre-livret .registre-feuille-face-body {
     flex: 1;
     min-height: 0;
     overflow: auto;
     width: 100%;
 }
 
-.ged-registre-livret .registre-feuille-face-body .registre-table {
+.cosud-registre-livret .registre-feuille-face-body .registre-table {
     width: 100%;
     min-width: 100%;
 }
 
-.ged-registre-livret .registre-feuille-face .registre-th {
+.cosud-registre-livret .registre-feuille-face .registre-th {
     font-size: 0.85rem;
     padding: 0.7rem 0.45rem;
     line-height: 1.25;
 }
 
-.ged-registre-livret .registre-feuille-face .registre-td {
+.cosud-registre-livret .registre-feuille-face .registre-td {
     font-size: 0.95rem;
     padding: 0.65rem 0.5rem;
     line-height: 1.4;
 }
 
-.ged-registre-livret .registre-feuille-face .registre-feuille-foot {
+.cosud-registre-livret .registre-feuille-face .registre-feuille-foot {
     font-size: 0.85rem;
     margin-top: 0.65rem;
     padding-top: 0.5rem;
 }
 
 /* Scène : BookBlock pleine largeur stable ; contenu portrait ou large selon la page */
-.ged-registre-livret .registre-closed-book-stage {
+.cosud-registre-livret .registre-closed-book-stage {
     height: 100%;
     min-height: 0;
     width: 100%;
@@ -277,16 +277,16 @@
     padding: 0;
 }
 
-.ged-registre-livret .registre-closed-book-stage.is-wide {
+.cosud-registre-livret .registre-closed-book-stage.is-wide {
     justify-content: stretch;
 }
 
-.ged-registre-livret .registre-closed-book-stage.is-wide > .registre-single-face {
+.cosud-registre-livret .registre-closed-book-stage.is-wide > .registre-single-face {
     width: 100%;
     max-width: none;
 }
 
-.ged-registre-livret .registre-closed-book {
+.cosud-registre-livret .registre-closed-book {
     position: relative;
     width: var(--ged-face-portrait);
     max-width: var(--ged-face-portrait);
@@ -302,7 +302,7 @@
 }
 
 /* Page unique — portrait pour clôture, pleine largeur pour feuillet */
-.ged-registre-livret .registre-single-face {
+.cosud-registre-livret .registre-single-face {
     position: relative;
     width: var(--ged-face-portrait);
     max-width: var(--ged-face-portrait);
@@ -320,7 +320,7 @@
     flex: 0 0 auto;
 }
 
-.ged-registre-livret .registre-closed-spine {
+.cosud-registre-livret .registre-closed-spine {
     position: absolute;
     left: 0;
     top: 0;
@@ -338,7 +338,7 @@
 }
 
 /* Couverture physique (fond vert foncé + cadre or) — une seule face */
-.ged-registre-livret .registre-book-cover {
+.cosud-registre-livret .registre-book-cover {
     height: 100%;
     width: 100%;
     box-sizing: border-box;
@@ -368,8 +368,8 @@
     box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.4);
 }
 
-.ged-registre-livret .registre-closed-book.is-depart .registre-book-cover,
-.ged-registre-livret .registre-book-cover.is-depart {
+.cosud-registre-livret .registre-closed-book.is-depart .registre-book-cover,
+.cosud-registre-livret .registre-book-cover.is-depart {
     background:
         repeating-linear-gradient(
             90deg,
@@ -388,7 +388,7 @@
         linear-gradient(165deg, #1a2744 0%, #0c1424 45%, #152238 100%);
 }
 
-.ged-registre-livret .registre-book-cover-frame {
+.cosud-registre-livret .registre-book-cover-frame {
     border: 2.5px solid #d4af37;
     border-radius: 14px;
     padding: 1.5rem 4rem;
@@ -396,7 +396,7 @@
     box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.25);
 }
 
-.ged-registre-livret .registre-book-cover-line {
+.cosud-registre-livret .registre-book-cover-line {
     font-family: "Times New Roman", Times, Georgia, serif;
     font-size: clamp(2.2rem, 5.5vw, 3.1rem);
     font-weight: 700;
@@ -406,38 +406,38 @@
     text-transform: uppercase;
 }
 
-.ged-registre-livret .registre-book-cover {
+.cosud-registre-livret .registre-book-cover {
     padding-top: 22%;
 }
 
-.ged-registre-livret .registre-book-cover-hint {
+.cosud-registre-livret .registre-book-cover-hint {
     display: none;
 }
 
-.ged-registre-livret .registre-cloture-face {
+.cosud-registre-livret .registre-cloture-face {
     background: linear-gradient(180deg, #fffef9 0%, #f3efe3 100%);
     border: 2px solid #334155;
-    color: var(--ged-registre-ink);
+    color: var(--cosud-registre-ink);
 }
 
-.ged-registre-livret .registre-cloture-face h2 {
+.cosud-registre-livret .registre-cloture-face h2 {
     font-size: 1.15rem;
     line-height: 1.55;
     font-weight: 600;
     margin: 0.85rem 0 0;
 }
 
-.ged-registre-livret .registre-cloture-face .registre-cover-fait {
+.cosud-registre-livret .registre-cloture-face .registre-cover-fait {
     margin-top: 2rem;
 }
 
-.ged-registre-livret .registre-cloture-face .registre-cover-label {
+.cosud-registre-livret .registre-cloture-face .registre-cover-label {
     font-size: 0.95rem;
     letter-spacing: 0.14em;
 }
 
 /* Page clôture (legacy card) */
-.ged-registre-livret .registre-cover-card {
+.cosud-registre-livret .registre-cover-card {
     height: 100%;
     min-height: 0;
     box-sizing: border-box;
@@ -445,7 +445,7 @@
     background:
         radial-gradient(ellipse at 18% 8%, rgba(15, 118, 110, 0.08), transparent 48%),
         linear-gradient(180deg, #fffef9 0%, #f3efe3 100%);
-    color: var(--ged-registre-ink);
+    color: var(--cosud-registre-ink);
     text-align: left;
     padding: 1.5rem 2rem 1.5rem;
     overflow: auto;
@@ -453,13 +453,13 @@
     position: relative;
 }
 
-.ged-registre-livret.is-depart .registre-cover-card {
+.cosud-registre-livret.is-depart .registre-cover-card {
     background:
         radial-gradient(ellipse at 18% 8%, rgba(29, 78, 216, 0.08), transparent 48%),
         linear-gradient(180deg, #fffef9 0%, #eef3ff 100%);
 }
 
-.ged-registre-livret .registre-cloture-card h2 {
+.cosud-registre-livret .registre-cloture-card h2 {
     font-size: 1.35rem;
     line-height: 1.6;
     font-weight: 600;
@@ -467,7 +467,7 @@
     max-width: 52rem;
 }
 
-.ged-registre-livret .registre-cover-kicker {
+.cosud-registre-livret .registre-cover-kicker {
     font-family: ui-sans-serif, system-ui, sans-serif;
     font-size: 0.68rem;
     letter-spacing: 0.2em;
@@ -477,13 +477,13 @@
     margin-bottom: 0.75rem;
 }
 
-.ged-registre-livret .registre-cover-fait {
+.cosud-registre-livret .registre-cover-fait {
     margin-top: 3rem;
     text-align: right;
     font-size: 1.05rem;
 }
 
-.ged-registre-livret .registre-cover-seal {
+.cosud-registre-livret .registre-cover-seal {
     margin-top: 1rem;
     width: 96px;
     height: 96px;
@@ -494,7 +494,7 @@
     margin-left: auto;
 }
 
-.ged-registre-livret .registre-cover-label {
+.cosud-registre-livret .registre-cover-label {
     position: absolute;
     left: 50%;
     top: 52%;
@@ -510,30 +510,30 @@
     white-space: nowrap;
 }
 
-.ged-registre-livret .registre-feuille-head {
+.cosud-registre-livret .registre-feuille-head {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
     gap: 0.5rem;
-    border-bottom: 1px solid var(--ged-registre-rule);
+    border-bottom: 1px solid var(--cosud-registre-rule);
     padding-bottom: 0.55rem;
     margin-bottom: 0.65rem;
     flex-shrink: 0;
 }
 
-.ged-registre-livret .registre-feuille-head h3 {
+.cosud-registre-livret .registre-feuille-head h3 {
     font-family: "Times New Roman", Times, Georgia, serif;
     font-size: 1.15rem;
     font-weight: 700;
     letter-spacing: 0.06em;
-    color: var(--ged-registre-accent);
+    color: var(--cosud-registre-accent);
     margin: 0;
 }
 
-.ged-registre-livret .registre-feuille-foot {
+.cosud-registre-livret .registre-feuille-foot {
     margin-top: 0.45rem;
     padding-top: 0.35rem;
-    border-top: 1px dashed var(--ged-registre-rule);
+    border-top: 1px dashed var(--cosud-registre-rule);
     font-size: 0.68rem;
     color: #64748b;
     display: flex;
@@ -542,9 +542,9 @@
     flex-shrink: 0;
 }
 
-.ged-registre-livret .registre-th {
+.cosud-registre-livret .registre-th {
     border: 1px solid #1e293b;
-    background: var(--ged-registre-accent);
+    background: var(--cosud-registre-accent);
     padding: 0.45rem 0.3rem;
     text-align: center;
     font-weight: 700;
@@ -555,25 +555,25 @@
     vertical-align: middle;
 }
 
-.ged-registre-livret .registre-td {
+.cosud-registre-livret .registre-td {
     border: 1px solid #64748b;
     padding: 0.35rem 0.3rem;
     vertical-align: top;
     color: #0f172a;
-    background: var(--ged-registre-row-odd);
+    background: var(--cosud-registre-row-odd);
     font-size: 0.7rem;
     line-height: 1.3;
 }
 
-.ged-registre-livret .registre-row:nth-child(odd) .registre-td {
-    background: var(--ged-registre-row-odd);
+.cosud-registre-livret .registre-row:nth-child(odd) .registre-td {
+    background: var(--cosud-registre-row-odd);
 }
 
-.ged-registre-livret .registre-row:nth-child(even) .registre-td {
-    background: var(--ged-registre-row-even);
+.cosud-registre-livret .registre-row:nth-child(even) .registre-td {
+    background: var(--cosud-registre-row-even);
 }
 
-.ged-registre-livret .registre-livret-footer {
+.cosud-registre-livret .registre-livret-footer {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -591,18 +591,18 @@
     box-shadow: 0 -6px 16px -10px rgba(15, 23, 42, 0.2);
 }
 
-.ged-registre-livret.is-depart .registre-livret-footer {
+.cosud-registre-livret.is-depart .registre-livret-footer {
     background: rgba(245, 248, 255, 0.98);
     border-top-color: #e2e8f0;
 }
 
-.ged-registre-livret .registre-livret-footer nav {
+.cosud-registre-livret .registre-livret-footer nav {
     display: flex;
     gap: 0.4rem;
     align-items: center;
 }
 
-.ged-registre-livret .registre-livret-footer nav a {
+.cosud-registre-livret .registre-livret-footer nav a {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -610,7 +610,7 @@
     height: 2.25rem;
     padding: 0 0.65rem;
     border-radius: 0.4rem;
-    background: var(--ged-registre-accent);
+    background: var(--cosud-registre-accent);
     color: #fff;
     font-size: 0.85rem;
     font-weight: 700;
@@ -618,23 +618,23 @@
     box-shadow: 0 6px 14px -8px rgba(15, 23, 42, 0.55);
 }
 
-.ged-registre-livret .registre-livret-footer nav a:hover {
+.cosud-registre-livret .registre-livret-footer nav a:hover {
     opacity: 0.88;
 }
 
-.ged-registre-livret .registre-page-indicator {
+.cosud-registre-livret .registre-page-indicator {
     font-size: 0.75rem;
     color: #64748b;
     font-weight: 600;
 }
 
 @media (max-width: 900px) {
-    .ged-registre-livret {
+    .cosud-registre-livret {
         --ged-book-width: min(100%, 96vw);
         --ged-face-portrait: min(92%, 380px);
     }
 
-    .ged-registre-livret .registre-book-cover-frame {
+    .cosud-registre-livret .registre-book-cover-frame {
         padding: 1.15rem 2rem;
     }
 }

@@ -198,6 +198,9 @@
                     @if($courrier->instructions_dg)
                     <div class="mt-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 text-sm">
                         <strong>Orientation direction :</strong> {{ $courrier->instructions_dg }}
+                        @if($courrier->libelleDelaiExecution())
+                            <div class="text-[11px] text-amber-800/80 mt-1">Délai d’exécution : <strong>{{ $courrier->libelleDelaiExecution() }}</strong></div>
+                        @endif
                         @if($courrier->agentsConfies->isNotEmpty() || $courrier->agentConfie)
                             <div class="text-[11px] text-amber-800/80 mt-1">Confié à : <strong>{{ implode(', ', $courrier->libellesAgentsConfies()) }}</strong></div>
                         @endif
@@ -396,7 +399,7 @@
                               class="space-y-2 pt-2 border-t border-emerald-200 dark:border-emerald-800">
                             @csrf
                             <p class="text-[11px] text-slate-500 leading-snug">
-                                Classement hors circuit paiement : la facture et ses pièces sont rattachées au dossier GED du fournisseur.
+                                Classement hors circuit paiement : la facture et ses pièces sont rattachées au dossier COSUD du fournisseur.
                             </p>
                             <div class="flex flex-col gap-1.5">
                                 <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
@@ -599,6 +602,7 @@
                                 ? number_format((float) preg_replace('/\s+/', '', (string) old('montant')), 0, ',', ' ')
                                 : '';
                             $beneficiaireChequeDefaut = old('beneficiaire_libelle', $courrier->expediteur_libelle);
+                            $beneficiaireChequeVerrouille = trim((string) ($courrier->expediteur_libelle ?? '')) !== '';
                             $inputChequeClass = 'w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900/80 px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition';
                         @endphp
                         <div
@@ -624,6 +628,9 @@
                                 <div class="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200/70 dark:border-amber-800/50 px-3 py-2">
                                     <p class="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Instructions DG</p>
                                     <p class="mt-0.5 text-[11px] text-slate-700 dark:text-slate-300 leading-snug">{{ $courrier->instructions_dg }}</p>
+                                    @if($courrier->libelleDelaiExecution())
+                                        <p class="mt-1 text-[11px] text-amber-800/90 dark:text-amber-200/90">Délai d’exécution : <strong>{{ $courrier->libelleDelaiExecution() }}</strong></p>
+                                    @endif
                                 </div>
                                 @endif
                                 <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">Saisissez les références (bordereau), puis transmettez pour signature.</p>
@@ -728,9 +735,14 @@
                                                             @error('montant')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                                         </div>
                                                         <div>
-                                                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Bénéficiaire <span class="text-red-500">*</span></label>
-                                                            <input type="text" name="beneficiaire_libelle" value="{{ $beneficiaireChequeDefaut }}" required
-                                                                   class="{{ $inputChequeClass }}">
+                                                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Bénéficiaire @if(!$beneficiaireChequeVerrouille)<span class="text-red-500">*</span>@endif</label>
+                                                            <input type="text" name="beneficiaire_libelle" value="{{ $beneficiaireChequeDefaut }}"
+                                                                   @if($beneficiaireChequeVerrouille) readonly @else required @endif
+                                                                   class="{{ $inputChequeClass }} @if($beneficiaireChequeVerrouille) bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 cursor-not-allowed @endif"
+                                                                   @if($beneficiaireChequeVerrouille) title="Repris automatiquement du fournisseur / expéditeur du courrier" @endif>
+                                                            @if($beneficiaireChequeVerrouille)
+                                                                <p class="mt-1 text-[10px] text-slate-400">Repris du fournisseur / expéditeur — non modifiable.</p>
+                                                            @endif
                                                             @error('beneficiaire_libelle')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                                         </div>
                                                         <div>
@@ -774,7 +786,7 @@
                         @elseif($peutSignerChequeDg)
                         <div class="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-900/20 p-3 space-y-2">
                             <p class="text-xs font-semibold text-indigo-900 dark:text-indigo-200">Confirmer la signature du chèque</p>
-                            <p class="text-[11px] text-slate-500 leading-snug">Aucun scan dans le GED : le chèque est signé sur papier. Confirmez pour renvoyer le dossier à l’AC.</p>
+                            <p class="text-[11px] text-slate-500 leading-snug">Aucun scan dans COSUD : le chèque est signé sur papier. Confirmez pour renvoyer le dossier à l’AC.</p>
                             @if($courrier->message_ac)
                             <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug"><strong>Message AC :</strong> {{ $courrier->message_ac }}</p>
                             @endif

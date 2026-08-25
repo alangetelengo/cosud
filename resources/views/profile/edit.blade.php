@@ -2,7 +2,7 @@
 
 @section('content-container-class', 'w-full max-w-none px-3 sm:px-5 lg:px-8')
 
-@section('title', 'Mon profil — ' . config('app.name', 'GED'))
+@section('title', 'Mon profil — ' . config('app.name', 'COSUD'))
 
 @section('page-title', 'Mon profil')
 @section('page-title-info')
@@ -40,7 +40,7 @@
                         {{ $initials }}
                     </div>
                     <div class="min-w-0 flex-1 space-y-2">
-                        <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-100/95">Espace personnel GED</p>
+                        <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-100/95">Espace personnel COSUD</p>
                         <h2 class="text-2xl sm:text-3xl font-bold leading-tight text-white break-words">{{ $user->name }}</h2>
                         <p class="flex items-start gap-2 text-sm text-emerald-50/95">
                             <svg class="w-5 h-5 shrink-0 mt-0.5 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
@@ -157,7 +157,7 @@
                     </div>
                     <div>
                         <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Affectation organisationnelle</h2>
-                        <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Votre rattachement dans la GED</p>
+                        <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Votre rattachement dans COSUD</p>
                     </div>
                 </div>
                 <dl class="px-5 sm:px-7 py-6 space-y-4 text-sm">

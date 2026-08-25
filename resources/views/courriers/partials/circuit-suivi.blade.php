@@ -63,6 +63,9 @@
             @if($courrier->instructions_dg)
             <p class="text-[11px] text-amber-950 mt-1.5 leading-snug"><strong>Instructions :</strong> {{ $courrier->instructions_dg }}</p>
             @endif
+            @if($courrier->libelleDelaiExecution())
+            <p class="text-[11px] text-amber-950 mt-1 leading-snug"><strong>Délai d’exécution :</strong> {{ $courrier->libelleDelaiExecution() }}</p>
+            @endif
             @if($courrier->agentsConfies->isNotEmpty() || $courrier->agentConfie)
             <p class="text-[11px] text-amber-950 mt-1 leading-snug">
                 <strong>Confié à :</strong>
@@ -94,6 +97,17 @@
             <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Vos instructions <span class="text-red-500">*</span></label>
             <textarea name="instructions" required rows="3" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="{{ $placeholderInstructions }}">{{ old('instructions') }}</textarea>
             @error('instructions')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">Délai d’exécution <span class="font-normal text-slate-400">(facultatif)</span></label>
+                <div class="flex items-center gap-2">
+                    <input type="number" name="delai_execution_jours" min="1" max="365" step="1"
+                           value="{{ old('delai_execution_jours') }}"
+                           class="w-24 rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900"
+                           placeholder="Ex. 7">
+                    <span class="text-[11px] text-slate-500 dark:text-slate-400">jours auprès du destinataire</span>
+                </div>
+                @error('delai_execution_jours')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            </div>
             <div>
                 <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">Envoyer / confier à <span class="font-normal text-slate-400">(facultatif)</span></label>
                 @php

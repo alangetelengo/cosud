@@ -28,8 +28,8 @@ class CourrierFournisseurRecouvrementNotification extends Notification
             $channels[] = 'mail';
         }
 
-        if ($notifiable->routeNotificationFor('ged_sms') && app(SmsService::class)->isConfigured()) {
-            $channels[] = 'ged_sms';
+        if ($notifiable->routeNotificationFor('cosud_sms') && app(SmsService::class)->isConfigured()) {
+            $channels[] = 'cosud_sms';
         }
 
         return $channels;
@@ -40,19 +40,19 @@ class CourrierFournisseurRecouvrementNotification extends Notification
         $numero = $this->numero();
 
         return (new MailMessage)
-            ->subject('GED : dossier n° '.$numero.' — chèque signé, recouvrement possible')
+            ->subject('COSUD : dossier n° '.$numero.' — chèque signé, recouvrement possible')
             ->greeting('Bonjour,')
             ->line('**État de votre dossier :** le chèque relatif à votre facture (courrier n° '.$numero.') a été **signé** par la Direction.')
             ->line('**Objet :** '.$this->objet())
             ->line('**Ce que cela signifie :** le paiement est autorisé ; votre dossier est prêt pour le recouvrement.')
             ->line('**Ce que vous devez faire :** présentez-vous auprès de l’ACSI (ou contactez le service comptable) pour procéder au **recouvrement** du chèque, en rappelant le n° '.$numero.'.')
             ->line('Merci de votre confiance.')
-            ->salutation('L’équipe GED — '.config('app.name'));
+            ->salutation('L’équipe COSUD — '.config('app.name'));
     }
 
-    public function toGedSms(object $notifiable): string
+    public function toCosudSms(object $notifiable): string
     {
-        return 'GED n°'.$this->numero().' : chèque SIGNÉ. '
+        return 'COSUD n°'.$this->numero().' : chèque SIGNÉ. '
             .'Présentez-vous à l’ACSI pour le RECOUVREMENT (rappeler ce n°).';
     }
 

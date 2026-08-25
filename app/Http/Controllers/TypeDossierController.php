@@ -45,7 +45,7 @@ class TypeDossierController extends Controller
         ]);
         $validated['actif'] = $request->boolean('actif', true);
         $type = TypeDossier::create($validated);
-        Log::channel('eged')->info('Type de dossier créé', ['type_id' => $type->id, 'code' => $type->code, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Type de dossier créé', ['type_id' => $type->id, 'code' => $type->code, 'user_id' => auth()->id()]);
 
         return redirect()->route('parametres.types-dossiers.index')->with('success', 'Type de dossier créé.');
     }
@@ -68,7 +68,7 @@ class TypeDossierController extends Controller
         $validated['actif'] = $request->boolean('actif', true);
         $type_dossier->update($validated);
         JournalAudit::log('type_dossier.modification', 'types_dossiers', ['commentaire' => $type_dossier->code]);
-        Log::channel('eged')->info('Type de dossier mis à jour', ['type_id' => $type_dossier->id, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Type de dossier mis à jour', ['type_id' => $type_dossier->id, 'user_id' => auth()->id()]);
 
         return redirect()->route('parametres.types-dossiers.index')->with('success', 'Type de dossier mis à jour.');
     }
@@ -76,12 +76,12 @@ class TypeDossierController extends Controller
     public function destroy(TypeDossier $type_dossier)
     {
         if ($type_dossier->dossiers()->exists()) {
-            Log::channel('eged')->warning('Suppression type dossier refusée : dossiers associés', ['type_id' => $type_dossier->id]);
+            Log::channel('cosud')->warning('Suppression type dossier refusée : dossiers associés', ['type_id' => $type_dossier->id]);
 
             return back()->with('error', 'Impossible de supprimer : des dossiers utilisent ce type.');
         }
         JournalAudit::log('type_dossier.suppression', 'types_dossiers', ['commentaire' => $type_dossier->code]);
-        Log::channel('eged')->info('Type de dossier supprimé', ['type_id' => $type_dossier->id, 'code' => $type_dossier->code, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Type de dossier supprimé', ['type_id' => $type_dossier->id, 'code' => $type_dossier->code, 'user_id' => auth()->id()]);
         $type_dossier->delete();
 
         return redirect()->route('parametres.types-dossiers.index')->with('success', 'Type de dossier supprimé.');

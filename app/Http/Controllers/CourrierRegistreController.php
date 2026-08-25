@@ -98,7 +98,7 @@ class CourrierRegistreController extends Controller
         }
 
         $courriers = $query->get();
-        $lignesParFeuillet = max(1, (int) config('ged.registre_lignes_par_feuillet', 10));
+        $lignesParFeuillet = max(1, (int) config('cosud.registre_lignes_par_feuillet', 10));
         $feuillets = $courriers->chunk($lignesParFeuillet)->values();
 
         return view('courriers.registres.show', [

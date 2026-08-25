@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\CosudSetting;
 use App\Models\Document;
 use App\Models\Dossier;
-use App\Models\GedSetting;
 use App\Models\StatutDocument;
 use App\Models\TypeDocument;
 use App\Models\User;
@@ -27,12 +27,12 @@ class ValidationPieceSeuleAccesTest extends TestCase
             StatutDocumentSeeder::class,
             TypeDocumentSeeder::class,
         ]);
-        Cache::forget('ged_setting_bool:'.GedSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT);
+        Cache::forget('cosud_setting_bool:'.CosudSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT);
     }
 
     public function test_validateur_voit_seulement_le_document_en_attente_sans_ouvrir_le_dossier(): void
     {
-        GedSetting::setBool(GedSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, false);
+        CosudSetting::setBool(CosudSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, false);
 
         $owner = User::factory()->create();
         $owner->assignRole('utilisateur');
@@ -103,7 +103,7 @@ class ValidationPieceSeuleAccesTest extends TestCase
 
     public function test_destinataire_enregistre_peut_voir_le_document_meme_si_workflow_validateur_different(): void
     {
-        GedSetting::setBool(GedSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, false);
+        CosudSetting::setBool(CosudSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, false);
 
         $owner = User::factory()->create();
         $owner->assignRole('utilisateur');
@@ -152,7 +152,7 @@ class ValidationPieceSeuleAccesTest extends TestCase
 
     public function test_un_utilisateur_dans_la_liste_des_destinataires_workflow_peut_voir_le_document(): void
     {
-        GedSetting::setBool(GedSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, false);
+        CosudSetting::setBool(CosudSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, false);
 
         $owner = User::factory()->create();
         $owner->assignRole('utilisateur');

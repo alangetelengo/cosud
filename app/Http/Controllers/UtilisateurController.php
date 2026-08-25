@@ -142,7 +142,7 @@ class UtilisateurController extends Controller
         $user->assignRole($request->role);
 
         JournalAudit::log('utilisateur.creation', 'utilisateurs', ['user_id' => $user->id]);
-        Log::channel('eged')->info('Utilisateur créé', ['user_id' => $user->id, 'email' => $user->email, 'by' => auth()->id()]);
+        Log::channel('cosud')->info('Utilisateur créé', ['user_id' => $user->id, 'email' => $user->email, 'by' => auth()->id()]);
 
         return redirect()->route('utilisateurs.index')->with('success', 'Utilisateur créé.');
     }
@@ -220,7 +220,7 @@ class UtilisateurController extends Controller
         }
 
         JournalAudit::log('utilisateur.modification', 'utilisateurs', ['user_id' => $user->id]);
-        Log::channel('eged')->info('Utilisateur mis à jour', ['user_id' => $user->id, 'by' => auth()->id()]);
+        Log::channel('cosud')->info('Utilisateur mis à jour', ['user_id' => $user->id, 'by' => auth()->id()]);
 
         return redirect()
             ->route('utilisateurs.edit', $user)
@@ -231,7 +231,7 @@ class UtilisateurController extends Controller
     {
         $this->authorize('delete', $user);
         JournalAudit::log('utilisateur.suppression', 'utilisateurs', ['user_id' => $user->id]);
-        Log::channel('eged')->info('Utilisateur supprimé', ['user_id' => $user->id, 'email' => $user->email, 'by' => auth()->id()]);
+        Log::channel('cosud')->info('Utilisateur supprimé', ['user_id' => $user->id, 'email' => $user->email, 'by' => auth()->id()]);
         $user->delete();
 
         return redirect()->route('utilisateurs.index')->with('success', 'Utilisateur supprimé.');

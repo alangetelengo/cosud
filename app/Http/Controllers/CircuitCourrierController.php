@@ -188,6 +188,9 @@ class CircuitCourrierController extends Controller
                     ? (int) $request->validated('agent_confie_id')
                     : null,
                 $request->validated('agent_confie_ids') ?? [],
+                $request->validated('delai_execution_jours') !== null
+                    ? (int) $request->validated('delai_execution_jours')
+                    : null,
             );
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());
@@ -211,7 +214,7 @@ class CircuitCourrierController extends Controller
                 [
                     'numero_piece' => $request->validated('numero_piece'),
                     'banque' => $request->validated('banque'),
-                    'beneficiaire_libelle' => $request->validated('beneficiaire_libelle'),
+                    'beneficiaire_libelle' => $request->beneficiaireChequeForce(),
                     'programmation' => $request->validated('programmation'),
                 ],
             );

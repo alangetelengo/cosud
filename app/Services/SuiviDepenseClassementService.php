@@ -31,7 +31,8 @@ class SuiviDepenseClassementService
     ) {}
 
     /**
-     * Dépose les justificatifs dans un dossier d’attente (pas encore « classé » métier).
+     * Dépose les justificatifs dans le dossier d’attente de la responsable suivi des dépenses
+     * (pas dans « Mes dossiers » du saisisseur DG / admin), pour qu’elle puisse classer.
      *
      * @param  list<UploadedFile>  $fichiers
      */
@@ -45,12 +46,13 @@ class SuiviDepenseClassementService
         }
 
         return DB::transaction(function () use ($ligne, $acteur, $fichiers): Dossier {
-            $racinePerso = $this->mesDossiersRacine->createDefaultRacinePourCommande($acteur);
+            $proprietaire = $this->resoudreProprietaireClassementDepenses($acteur);
+            $racinePerso = $this->mesDossiersRacine->createDefaultRacinePourCommande($proprietaire);
             $attente = $this->assurerSousDossier(
-                $acteur,
+                $proprietaire,
                 $racinePerso,
                 self::NOM_ATTENTE,
-                'DEP-ATT-'.$acteur->id,
+                'DEP-ATT-'.$proprietaire->id,
                 'Justificatifs de dépenses en attente de classement prestataire.'
             );
 
@@ -64,24 +66,46 @@ class SuiviDepenseClassementService
                 'parent_id' => $attente->id,
                 'nom' => $nomLigne,
                 'code' => $this->codeUnique('DEP-ATT-L-'.$ligne->id),
-                'description' => 'En attente de classement — '.$ligne->intitule,
+                'description' => 'En attente de classement — '.$ligne->intitule
+                    .((int) $acteur->id !== (int) $proprietaire->id
+                        ? ' (saisi par '.$acteur->name.')'
+                        : ''),
                 'confidentiel' => false,
                 'notify_sms' => false,
                 'actif' => true,
                 'ordre' => (int) (Dossier::where('parent_id', $attente->id)->max('ordre') ?? -1) + 1,
-                'structure_id' => $acteur->structure_id ?? $attente->structure_id,
+                'structure_id' => $proprietaire->structure_id ?? $attente->structure_id,
                 'createur_id' => $acteur->id,
-                'proprietaire_id' => $acteur->id,
+                'proprietaire_id' => $proprietaire->id,
             ]);
 
             foreach ($fichiers as $fichier) {
-                $this->attacherJustificatif($dossierLigne, $acteur, $fichier, $ligne);
+                $this->attacherJustificatif($dossierLigne, $acteur, $proprietaire, $fichier, $ligne);
             }
 
             $ligne->update(['dossier_id' => $dossierLigne->id]);
 
             return $dossierLigne->fresh();
         });
+    }
+
+    /**
+     * Destinataire du classement Eleni : la responsable suivi des dépenses.
+     * Si le saisisseur a déjà ce rôle, on conserve son arbre « Mes dossiers ».
+     */
+    public function resoudreProprietaireClassementDepenses(User $acteur): User
+    {
+        if ($acteur->hasRole('responsable_suivi_depenses')) {
+            return $acteur;
+        }
+
+        $responsable = User::query()
+            ->role('responsable_suivi_depenses')
+            ->where('actif', true)
+            ->orderBy('id')
+            ->first();
+
+        return $responsable ?? $acteur;
     }
 
     /**
@@ -305,6 +329,7 @@ class SuiviDepenseClassementService
     private function attacherJustificatif(
         Dossier $dossier,
         User $acteur,
+        User $proprietaire,
         UploadedFile $fichier,
         SuiviPaiement $ligne,
     ): Document {
@@ -325,7 +350,7 @@ class SuiviDepenseClassementService
             'type_document_id' => $typeDoc->id,
             'user_id' => $acteur->id,
             'createur_id' => $acteur->id,
-            'proprietaire_id' => $acteur->id,
+            'proprietaire_id' => $proprietaire->id,
             'dossier_id' => $dossier->id,
             'nom_original' => $fichier->getClientOriginalName(),
             'chemin' => $chemin,

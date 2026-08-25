@@ -4,11 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\JournalAudit;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
-use Illuminate\Validation\ValidationException;
+use Spatie\Permission\PermissionRegistrar;
 
 class RoleController extends Controller
 {
@@ -50,7 +51,7 @@ class RoleController extends Controller
                 'permissions.*' => ['string', 'exists:permissions,name'],
             ]);
         } catch (ValidationException $e) {
-            Log::channel('eged')->warning('role.store validation échouée', [
+            Log::channel('cosud')->warning('role.store validation échouée', [
                 'request_name' => (string) $request->input('name'),
                 'errors' => $e->errors(),
                 'user_id' => auth()->id(),
@@ -61,11 +62,11 @@ class RoleController extends Controller
         $role = Role::create(['name' => $validated['name'], 'guard_name' => 'web']);
         $role->syncPermissions($request->input('permissions', []));
 
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
         JournalAudit::log('role.create', 'roles', ['role_id' => $role->id, 'role_name' => $role->name]);
 
         return redirect()->route('parametres.roles.index')
-            ->with('success', 'Rôle « ' . $role->name . ' » créé.');
+            ->with('success', 'Rôle « '.$role->name.' » créé.');
     }
 
     public function edit(Role $role)
@@ -92,7 +93,7 @@ class RoleController extends Controller
                 'permissions.*' => ['string', 'exists:permissions,name'],
             ]);
         } catch (ValidationException $e) {
-            Log::channel('eged')->warning('role.update validation échouée', [
+            Log::channel('cosud')->warning('role.update validation échouée', [
                 'role_id' => (int) $role->id,
                 'request_name' => (string) $request->input('name'),
                 'errors' => $e->errors(),
@@ -103,11 +104,11 @@ class RoleController extends Controller
         $role->update(['name' => $validated['name']]);
         $role->syncPermissions($request->input('permissions', []));
 
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
         JournalAudit::log('role.update', 'roles', ['role_id' => $role->id, 'role_name' => $role->name]);
 
         return redirect()->route('parametres.roles.index')
-            ->with('success', 'Rôle « ' . $role->name . ' » mis à jour.');
+            ->with('success', 'Rôle « '.$role->name.' » mis à jour.');
     }
 
     public function destroy(Role $role)
@@ -120,15 +121,15 @@ class RoleController extends Controller
         }
         $usersCount = $role->users()->count();
         if ($usersCount > 0) {
-            return back()->with('error', 'Impossible de supprimer ce rôle : ' . $usersCount . ' utilisateur(s) l\'ont encore. Réassignez-les avant suppression.');
+            return back()->with('error', 'Impossible de supprimer ce rôle : '.$usersCount.' utilisateur(s) l\'ont encore. Réassignez-les avant suppression.');
         }
         $name = $role->name;
         $role->delete();
 
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
         JournalAudit::log('role.delete', 'roles', ['role_name' => $name]);
 
         return redirect()->route('parametres.roles.index')
-            ->with('success', 'Rôle « ' . $name . ' » supprimé.');
+            ->with('success', 'Rôle « '.$name.' » supprimé.');
     }
 }

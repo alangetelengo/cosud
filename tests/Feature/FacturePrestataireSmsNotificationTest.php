@@ -68,10 +68,14 @@ class FacturePrestataireSmsNotificationTest extends TestCase
             function (CourrierWorkflowNotification $notification, array $channels) {
                 return $notification->type === CourrierNotificationService::FACTURE_ENREGISTREE_DG
                     && in_array('database', $channels, true)
-                    && in_array('ged_sms', $channels, true)
-                    && str_contains($notification->toGedSms($notification->courrier->createur), 'NETPLUS SARL');
+                    && in_array('cosud_sms', $channels, true)
+                    && str_contains($notification->toCosudSms($notification->courrier->createur), 'NETPLUS SARL');
             }
         );
+        Notification::assertSentToTimes($dg, CourrierWorkflowNotification::class, 1);
+        Notification::assertNotSentTo($dg, CourrierWorkflowNotification::class, function (CourrierWorkflowNotification $n) {
+            return $n->type === CourrierNotificationService::ETAPE_CIRCUIT;
+        });
     }
 
     public function test_bon_pour_accord_envoie_sms_a_l_ac(): void
@@ -107,9 +111,9 @@ class FacturePrestataireSmsNotificationTest extends TestCase
                     return false;
                 }
 
-                $sms = $notification->toGedSms($ac);
+                $sms = $notification->toCosudSms($ac);
 
-                return in_array('ged_sms', $channels, true)
+                return in_array('cosud_sms', $channels, true)
                     && str_contains($sms, 'KOMBO SERVICES')
                     && str_contains($sms, 'Payer avant le 30');
             }
@@ -141,7 +145,7 @@ class FacturePrestataireSmsNotificationTest extends TestCase
             function (CourrierWorkflowNotification $notification, array $channels) {
                 return $notification->type === CourrierNotificationService::FACTURE_ENREGISTREE_DG
                     && in_array('database', $channels, true)
-                    && ! in_array('ged_sms', $channels, true);
+                    && ! in_array('cosud_sms', $channels, true);
             }
         );
     }

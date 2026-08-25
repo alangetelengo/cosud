@@ -150,9 +150,9 @@ class User extends Authenticatable
     }
 
     /**
-     * Destinataire SMS GED (canal ged_sms) — numéro normalisé Congo si renseigné.
+     * Destinataire SMS COSUD (canal cosud_sms) — numéro normalisé Congo si renseigné.
      */
-    public function routeNotificationForGedSms(): ?string
+    public function routeNotificationForCosudSms(): ?string
     {
         $telephone = $this->telephone;
 

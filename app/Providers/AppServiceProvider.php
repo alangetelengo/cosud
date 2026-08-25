@@ -4,7 +4,7 @@ namespace App\Providers;
 
 use App\Listeners\EnsureMesDossiersRacineExists;
 use App\Models\Courrier;
-use App\Notifications\Channels\GedSmsChannel;
+use App\Notifications\Channels\CosudSmsChannel;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Pagination\Paginator;
@@ -52,6 +52,6 @@ class AppServiceProvider extends ServiceProvider
             $view->with('courriersNonLusTotal', $total);
         });
 
-        Notification::extend('ged_sms', fn ($app) => $app->make(GedSmsChannel::class));
+        Notification::extend('cosud_sms', fn ($app) => $app->make(CosudSmsChannel::class));
     }
 }

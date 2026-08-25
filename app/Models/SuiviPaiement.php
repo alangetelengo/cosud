@@ -130,7 +130,7 @@ class SuiviPaiement extends Model
     }
 
     /**
-     * Classement GED réservé à Mme Taty (factures prestataires / circuit chèque facture).
+     * Classement COSUD réservé à Mme Taty (factures prestataires / circuit chèque facture).
      */
     public function estClassementReserveFacturesPrestataires(): bool
     {

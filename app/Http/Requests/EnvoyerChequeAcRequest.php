@@ -35,17 +35,37 @@ class EnvoyerChequeAcRequest extends FormRequest
      */
     public function rules(): array
     {
+        $beneficiaireFourni = trim((string) ($this->route('courrier')?->expediteur_libelle ?? '')) !== '';
+
         return [
             'message' => ['required', 'string', 'max:2000'],
             'montant' => ['required', 'numeric', 'min:1'],
             'numero_piece' => ['required', 'string', 'max:150'],
             'banque' => ['required', 'string', 'max:100'],
-            'beneficiaire_libelle' => ['required', 'string', 'max:255'],
+            'beneficiaire_libelle' => $beneficiaireFourni
+                ? ['nullable', 'string', 'max:255']
+                : ['required', 'string', 'max:255'],
             'programmation' => ['nullable', 'string', 'max:255'],
             'scan_cheque' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'scans_cheque' => ['nullable', 'array', 'max:20'],
             'scans_cheque.*' => ['file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ];
+    }
+
+    /**
+     * Bénéficiaire imposé = fournisseur / expéditeur du courrier quand il est connu.
+     */
+    public function beneficiaireChequeForce(): string
+    {
+        /** @var Courrier $courrier */
+        $courrier = $this->route('courrier');
+        $depuisCourrier = trim((string) ($courrier->expediteur_libelle ?? ''));
+
+        if ($depuisCourrier !== '') {
+            return $depuisCourrier;
+        }
+
+        return trim((string) $this->validated('beneficiaire_libelle'));
     }
 
     protected function prepareForValidation(): void
@@ -54,6 +74,13 @@ class EnvoyerChequeAcRequest extends FormRequest
             $this->merge([
                 'montant' => preg_replace('/\s+/', '', (string) $this->input('montant')),
             ]);
+        }
+
+        /** @var Courrier|null $courrier */
+        $courrier = $this->route('courrier');
+        $depuisCourrier = trim((string) ($courrier?->expediteur_libelle ?? ''));
+        if ($depuisCourrier !== '') {
+            $this->merge(['beneficiaire_libelle' => $depuisCourrier]);
         }
     }
 

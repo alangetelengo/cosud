@@ -21,7 +21,7 @@ class StoreCourrierRequest extends FormRequest
     public function rules(): array
     {
         $sens = $this->input('sens');
-        $typesParapheur = config('ged.parapheur_depart.types_document', []);
+        $typesParapheur = config('cosud.parapheur_depart.types_document', []);
 
         return [
             'sens' => ['required', 'in:arrivee,depart'],

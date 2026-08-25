@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('page-title', 'Plan de classement')
-@section('page-title-info', 'Arborescence des dossiers du GED')
+@section('page-title-info', 'Arborescence des dossiers de COSUD')
 @section('btn-create')
     @can('create', App\Models\Dossier::class)
     <a href="{{ route('dossiers.create') }}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 shadow-sm transition-all no-underline text-sm">

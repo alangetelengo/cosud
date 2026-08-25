@@ -7,8 +7,8 @@ use App\Models\JournalAudit;
 use App\Models\Structure;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Role;
 
@@ -59,8 +59,8 @@ class StructureController extends Controller
             'actif' => $request->boolean('actif', true),
         ]);
 
-        JournalAudit::log('structure.creation', 'structures', ['commentaire' => 'Structure #' . $structure->id . ' ' . $structure->nom]);
-        Log::channel('eged')->info('Structure créée', ['structure_id' => $structure->id, 'user_id' => auth()->id()]);
+        JournalAudit::log('structure.creation', 'structures', ['commentaire' => 'Structure #'.$structure->id.' '.$structure->nom]);
+        Log::channel('cosud')->info('Structure créée', ['structure_id' => $structure->id, 'user_id' => auth()->id()]);
 
         return redirect()
             ->route('parametres.structures.index')
@@ -160,7 +160,7 @@ class StructureController extends Controller
             ->orderBy('nom')
             ->get(['id', 'nom', 'code']);
 
-        Log::channel('eged')->debug('Admin organigramme', ['user_id' => Auth::id()]);
+        Log::channel('cosud')->debug('Admin organigramme', ['user_id' => Auth::id()]);
 
         return view('parametres.structures.index', compact('structures', 'racines', 'byParent', 'utilisateursTitulaires', 'structuresForParent', 'fonctions'));
     }
@@ -221,8 +221,8 @@ class StructureController extends Controller
             'actif' => $request->boolean('actif', true),
         ]);
 
-        JournalAudit::log('structure.modification', 'structures', ['commentaire' => 'Structure #' . $structure->id . ' ' . $structure->nom]);
-        Log::channel('eged')->info('Structure mise à jour', ['structure_id' => $structure->id, 'user_id' => auth()->id()]);
+        JournalAudit::log('structure.modification', 'structures', ['commentaire' => 'Structure #'.$structure->id.' '.$structure->nom]);
+        Log::channel('cosud')->info('Structure mise à jour', ['structure_id' => $structure->id, 'user_id' => auth()->id()]);
 
         return redirect()
             ->route('parametres.structures.index')
@@ -240,8 +240,8 @@ class StructureController extends Controller
         $nom = $structure->nom;
         $structure->delete();
 
-        JournalAudit::log('structure.suppression', 'structures', ['commentaire' => 'Structure supprimée : ' . $nom]);
-        Log::channel('eged')->info('Structure supprimée', ['structure_nom' => $nom, 'user_id' => auth()->id()]);
+        JournalAudit::log('structure.suppression', 'structures', ['commentaire' => 'Structure supprimée : '.$nom]);
+        Log::channel('cosud')->info('Structure supprimée', ['structure_nom' => $nom, 'user_id' => auth()->id()]);
 
         return redirect()
             ->route('parametres.structures.index')

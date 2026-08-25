@@ -11,12 +11,12 @@ class SmsServiceTest extends TestCase
     public function test_wirepick_envoie_un_sms_quand_configure(): void
     {
         config([
-            'ged.sms.provider' => 'wirepick',
-            'ged.sms.sender_id' => 'ACSI-GED',
-            'ged.sms.wirepick.client' => 'test-client',
-            'ged.sms.wirepick.password' => 'secret-password',
-            'ged.sms.wirepick.endpoint' => 'https://api.wirepick.com/httpsms/send',
-            'ged.sms.wirepick.http_method' => 'get',
+            'cosud.sms.provider' => 'wirepick',
+            'cosud.sms.sender_id' => 'ACSI-COSUD',
+            'cosud.sms.wirepick.client' => 'test-client',
+            'cosud.sms.wirepick.password' => 'secret-password',
+            'cosud.sms.wirepick.endpoint' => 'https://api.wirepick.com/httpsms/send',
+            'cosud.sms.wirepick.http_method' => 'get',
         ]);
 
         Http::fake([
@@ -26,14 +26,14 @@ class SmsServiceTest extends TestCase
             ),
         ]);
 
-        $ok = app(SmsService::class)->send('+242066835332', 'GED n°1/2026 : dossier VALIDÉ.');
+        $ok = app(SmsService::class)->send('+242066835332', 'COSUD n°1/2026 : dossier VALIDÉ.');
 
         $this->assertTrue($ok);
         Http::assertSent(function ($request) {
             return str_contains($request->url(), 'api.wirepick.com/httpsms/send')
                 && $request['phone'] === '242066835332'
                 && $request['client'] === 'test-client'
-                && $request['from'] === 'ACSI-GED'
+                && $request['from'] === 'ACSI-COSUD'
                 && str_contains((string) $request['text'], 'VALIDE');
         });
     }
@@ -41,9 +41,9 @@ class SmsServiceTest extends TestCase
     public function test_refuse_si_non_configure(): void
     {
         config([
-            'ged.sms.provider' => 'wirepick',
-            'ged.sms.wirepick.client' => null,
-            'ged.sms.wirepick.password' => null,
+            'cosud.sms.provider' => 'wirepick',
+            'cosud.sms.wirepick.client' => null,
+            'cosud.sms.wirepick.password' => null,
         ]);
 
         Http::fake();
@@ -56,9 +56,9 @@ class SmsServiceTest extends TestCase
     public function test_est_configure_des_que_client_et_mot_de_passe_sont_renseignes(): void
     {
         config([
-            'ged.sms.provider' => 'wirepick',
-            'ged.sms.wirepick.client' => 'mukinayiseth',
-            'ged.sms.wirepick.password' => '123456789@123456789',
+            'cosud.sms.provider' => 'wirepick',
+            'cosud.sms.wirepick.client' => 'mukinayiseth',
+            'cosud.sms.wirepick.password' => '123456789@123456789',
         ]);
 
         $this->assertTrue(app(SmsService::class)->isConfigured());

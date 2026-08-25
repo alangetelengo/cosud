@@ -64,15 +64,17 @@ class CourrierNotificationsEtRetardsTest extends TestCase
             ])
             ->assertRedirect();
 
-        // Un circuit est attaché : seule l’étape réellement atteinte notifie (pas de
-        // notification « enregistrement » redondante en plus).
+        // Un circuit facture est attaché : le DG reçoit la notif métier dédiée (pas ETAPE_CIRCUIT).
         Notification::assertSentTo($dg, CourrierWorkflowNotification::class, function ($n) {
-            return $n->type === CourrierNotificationService::ETAPE_CIRCUIT;
+            return $n->type === CourrierNotificationService::FACTURE_ENREGISTREE_DG;
         });
         Notification::assertSentTo($particuliere, CourrierWorkflowNotification::class, function ($n) {
             return $n->type === CourrierNotificationService::ETAPE_CIRCUIT;
         });
         Notification::assertSentToTimes($dg, CourrierWorkflowNotification::class, 1);
+        Notification::assertNotSentTo($dg, CourrierWorkflowNotification::class, function ($n) {
+            return $n->type === CourrierNotificationService::ETAPE_CIRCUIT;
+        });
         Notification::assertNotSentTo($dg, CourrierWorkflowNotification::class, function ($n) {
             return $n->type === CourrierNotificationService::ENREGISTREMENT_ARRIVEE;
         });
@@ -168,7 +170,7 @@ class CourrierNotificationsEtRetardsTest extends TestCase
         app(CircuitCourrierMoteurService::class)->demarrer($courrier, $circuit, $admin);
 
         $courrier->refresh();
-        $courrier->circuit_etape_depuis = now()->subHours(config('ged.circuit_retard_heures', 48) + 2);
+        $courrier->circuit_etape_depuis = now()->subHours(config('cosud.circuit_retard_heures', 48) + 2);
         $courrier->dernier_alerte_retard_at = null;
         $courrier->save();
 

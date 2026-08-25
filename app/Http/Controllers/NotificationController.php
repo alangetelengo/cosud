@@ -19,6 +19,7 @@ class NotificationController extends Controller
             ->get()
             ->map(function ($n) {
                 $msg = $n->data['message'] ?? $n->data['message_title'] ?? $n->data['subject'] ?? class_basename($n->type);
+
                 return [
                     'id' => $n->id,
                     'message' => is_string($msg) ? $msg : json_encode($msg),
@@ -70,7 +71,7 @@ class NotificationController extends Controller
     {
         $count = $request->user()->unreadNotifications->count();
         $request->user()->unreadNotifications->markAsRead();
-        Log::channel('eged')->info('Toutes les notifications marquées comme lues', ['user_id' => $request->user()->id, 'count' => $count]);
+        Log::channel('cosud')->info('Toutes les notifications marquées comme lues', ['user_id' => $request->user()->id, 'count' => $count]);
 
         return back()->with('success', 'Toutes les notifications ont été marquées comme lues.');
     }

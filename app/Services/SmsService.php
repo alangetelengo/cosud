@@ -15,13 +15,13 @@ class SmsService
         $provider = $this->provider();
 
         if ($provider === 'infobip') {
-            return filled(config('ged.sms.infobip.api_key'))
-                && filled(config('ged.sms.infobip.send_url'));
+            return filled(config('cosud.sms.infobip.api_key'))
+                && filled(config('cosud.sms.infobip.send_url'));
         }
 
         if ($provider === 'wirepick') {
-            $client = config('ged.sms.wirepick.client');
-            $password = config('ged.sms.wirepick.password');
+            $client = config('cosud.sms.wirepick.client');
+            $password = config('cosud.sms.wirepick.password');
 
             return filled($client) && filled($password);
         }
@@ -38,18 +38,18 @@ class SmsService
         $content = $this->sanitizeSmsText($content);
         $phoneNorm = $this->normalizeSmsPhone($to);
 
-        Log::channel('eged')->info('SMS send (entrée)', [
+        Log::channel('cosud')->info('SMS send (entrée)', [
             'provider' => $provider,
             'to_brut' => $to,
             'phone_normalise' => $phoneNorm,
             'phone_masque' => $this->maskMsisdnForLog($phoneNorm),
-            'from_config' => config('ged.sms.sender_id'),
+            'from_config' => config('cosud.sms.sender_id'),
             'texte_apercu' => mb_substr($content, 0, 240),
             'texte_longueur' => mb_strlen($content),
         ]);
 
         if ($phoneNorm === '') {
-            Log::channel('eged')->warning('SMS: numéro vide ou invalide après normalisation Congo', [
+            Log::channel('cosud')->warning('SMS: numéro vide ou invalide après normalisation Congo', [
                 'to_brut' => $to,
             ]);
 
@@ -57,7 +57,7 @@ class SmsService
         }
 
         if (! $this->isConfigured()) {
-            Log::channel('eged')->warning('SMS: fournisseur non configuré — renseigner GED_SMS_* dans .env', [
+            Log::channel('cosud')->warning('SMS: fournisseur non configuré — renseigner COSUD_SMS_* dans .env', [
                 'provider' => $provider,
             ]);
 
@@ -65,8 +65,8 @@ class SmsService
         }
 
         if ($provider === 'wirepick'
-            && config('ged.sms.wirepick.password') === '123456789@123456789') {
-            Log::channel('eged')->warning('Wirepick: mot de passe encore par défaut — vérifier GED_SMS_WIREPICK_PASSWORD');
+            && config('cosud.sms.wirepick.password') === '123456789@123456789') {
+            Log::channel('cosud')->warning('Wirepick: mot de passe encore par défaut — vérifier COSUD_SMS_WIREPICK_PASSWORD');
         }
 
         return $provider === 'infobip'
@@ -193,21 +193,21 @@ class SmsService
 
     protected function provider(): string
     {
-        return strtolower((string) config('ged.sms.provider', 'wirepick'));
+        return strtolower((string) config('cosud.sms.provider', 'wirepick'));
     }
 
     protected function sendWirepick(string $phone, string $content): bool
     {
-        $from = (string) config('ged.sms.sender_id', 'ACSI-GED');
+        $from = (string) config('cosud.sms.sender_id', 'ACSI-COSUD');
         $data = [
-            'client' => config('ged.sms.wirepick.client'),
-            'password' => config('ged.sms.wirepick.password'),
+            'client' => config('cosud.sms.wirepick.client'),
+            'password' => config('cosud.sms.wirepick.password'),
             'phone' => $phone,
             'from' => $from,
             'text' => $content,
         ];
-        $endpoint = (string) config('ged.sms.wirepick.endpoint', 'https://api.wirepick.com/httpsms/send');
-        $method = strtolower((string) config('ged.sms.wirepick.http_method', 'get'));
+        $endpoint = (string) config('cosud.sms.wirepick.endpoint', 'https://api.wirepick.com/httpsms/send');
+        $method = strtolower((string) config('cosud.sms.wirepick.http_method', 'get'));
 
         $http = Http::withOptions([
             'curl' => [
@@ -224,7 +224,7 @@ class SmsService
         $wirepick = $this->parseWirepickResponseDetails($body);
         $status = $wirepick['status'];
 
-        Log::channel('eged')->info('Wirepick SMS (réponse)', [
+        Log::channel('cosud')->info('Wirepick SMS (réponse)', [
             'http_method' => $method,
             'from_envoye' => $from,
             'phone_masque' => $this->maskMsisdnForLog($phone),
@@ -236,7 +236,7 @@ class SmsService
         ]);
 
         if ($status !== null && strtoupper($status) !== 'ACT') {
-            Log::channel('eged')->warning('Wirepick: statut autre que ACT', [
+            Log::channel('cosud')->warning('Wirepick: statut autre que ACT', [
                 'wirepick_status' => $status,
                 'phone_masque' => $this->maskMsisdnForLog($phone),
             ]);
@@ -249,9 +249,9 @@ class SmsService
 
     protected function sendInfobip(string $phone, string $content): bool
     {
-        $endpoint = (string) config('ged.sms.infobip.send_url');
-        $token = (string) config('ged.sms.infobip.api_key');
-        $from = (string) config('ged.sms.sender_id', 'ACSI-GED');
+        $endpoint = (string) config('cosud.sms.infobip.send_url');
+        $token = (string) config('cosud.sms.infobip.api_key');
+        $from = (string) config('cosud.sms.sender_id', 'ACSI-COSUD');
 
         $payload = [
             'messages' => [
@@ -273,7 +273,7 @@ class SmsService
             ->timeout(30)
             ->post($endpoint, $payload);
 
-        Log::channel('eged')->info('Infobip SMS (réponse)', [
+        Log::channel('cosud')->info('Infobip SMS (réponse)', [
             'from_envoye' => $from,
             'phone_masque' => $this->maskMsisdnForLog($phone),
             'texte_longueur' => mb_strlen($content),

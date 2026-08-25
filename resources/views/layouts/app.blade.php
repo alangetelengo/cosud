@@ -6,7 +6,7 @@
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <meta name="color-scheme" content="light dark">
 
-        <title>@yield('title', config('app.name', 'GED'))</title>
+        <title>@yield('title', config('app.name', 'COSUD'))</title>
 
         @include('partials.favicon')
         <link rel="preconnect" href="https://fonts.bunny.net">
@@ -22,7 +22,7 @@
         <div id="main-wrapper" style="display: flex; flex-direction: column; min-height: 100vh;">
         {{-- Preloader (comme Progcaisse) --}}
         @include('partials.preload')
-        {{-- Layout GED : logo (nav-header) + header (hamburger) + sidebar --}}
+        {{-- Layout COSUD : logo (nav-header) + header (hamburger) + sidebar --}}
         @include('partials.nav-header')
         @include('partials.header')
         @include('partials.sidebar')

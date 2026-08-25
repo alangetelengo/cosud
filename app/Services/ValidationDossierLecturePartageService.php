@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\CosudSetting;
 use App\Models\Document;
 use App\Models\DossierPartage;
-use App\Models\GedSetting;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -17,7 +17,7 @@ class ValidationDossierLecturePartageService
 
     public function syncPourUtilisateurs(Document $document, iterable $userIds, int $partageParUserId): void
     {
-        if (! GedSetting::lectureDossierLorsPartageDocument()) {
+        if (! CosudSetting::lectureDossierLorsPartageDocument()) {
             return;
         }
         $dossierId = $document->dossier_id ? (int) $document->dossier_id : 0;
@@ -63,7 +63,7 @@ class ValidationDossierLecturePartageService
             $ids = array_values(array_diff($ids, [$docId]));
             if ($ids === []) {
                 $partage->delete();
-                Log::channel('eged')->debug('Partage dossier auto validation révoqué (suppression)', [
+                Log::channel('cosud')->debug('Partage dossier auto validation révoqué (suppression)', [
                     'dossier_partage_id' => $partage->id,
                     'document_id' => $docId,
                     'dossier_id' => $dossierId,
@@ -72,7 +72,7 @@ class ValidationDossierLecturePartageService
                 $partage->update([
                     'commentaire' => self::COMMENTAIRE_PREFIX.implode(',', $ids),
                 ]);
-                Log::channel('eged')->debug('Partage dossier auto validation révoqué (retrait document)', [
+                Log::channel('cosud')->debug('Partage dossier auto validation révoqué (retrait document)', [
                     'dossier_partage_id' => $partage->id,
                     'document_id' => $docId,
                     'dossier_id' => $dossierId,
@@ -135,7 +135,7 @@ class ValidationDossierLecturePartageService
                 'partage_par_id' => $partageParUserId,
             ]);
 
-            Log::channel('eged')->info('Partage dossier lecture (validation) mis à jour', [
+            Log::channel('cosud')->info('Partage dossier lecture (validation) mis à jour', [
                 'dossier_id' => $dossierId,
                 'user_id' => $userId,
                 'document_id' => $docId,
@@ -156,7 +156,7 @@ class ValidationDossierLecturePartageService
             'commentaire' => self::COMMENTAIRE_PREFIX.$docId,
         ]);
 
-        Log::channel('eged')->info('Partage dossier lecture (validation) créé', [
+        Log::channel('cosud')->info('Partage dossier lecture (validation) créé', [
             'dossier_id' => $dossierId,
             'user_id' => $userId,
             'document_id' => $docId,

@@ -53,9 +53,9 @@
 
     {{-- Zone accueil --}}
     <div class="bg-white dark:bg-slate-800 rounded-xl p-8 shadow-md border border-slate-100 dark:border-slate-700">
-        <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Bienvenue sur GED</h2>
+        <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Bienvenue sur COSUD</h2>
         <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
-            GED est le système de <strong>Gestion Électronique des Documents</strong> développé par l'Agence Congolaise des Systèmes d'Information (ACSI).
+            COSUD est le système de <strong>Courrier et Suivi des Dépenses</strong> développé par l'Agence Congolaise des Systèmes d'Information (ACSI).
         </p>
         <p class="text-slate-600 dark:text-slate-300 leading-relaxed mt-4">
             Utilisez le menu à gauche pour naviguer dans les différentes sections : Documents, Dossiers, Types de documents, Recherche et Administration.

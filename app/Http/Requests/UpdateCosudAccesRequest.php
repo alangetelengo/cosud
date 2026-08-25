@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateGedAccesRequest extends FormRequest
+class UpdateCosudAccesRequest extends FormRequest
 {
     public function authorize(): bool
     {

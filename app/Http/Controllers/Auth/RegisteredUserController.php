@@ -49,7 +49,7 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-        Log::channel('eged')->info('Inscription', ['user_id' => $user->id, 'email' => $user->email]);
+        Log::channel('cosud')->info('Inscription', ['user_id' => $user->id, 'email' => $user->email]);
 
         return redirect(route('home', absolute: false));
     }

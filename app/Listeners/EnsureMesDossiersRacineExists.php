@@ -42,7 +42,7 @@ class EnsureMesDossiersRacineExists
         try {
             $this->mesDossiersRacine->createDefaultRacinePourCommande($user);
         } catch (\Throwable $e) {
-            Log::channel('eged')->warning('Création auto de la racine Mes dossiers impossible', [
+            Log::channel('cosud')->warning('Création auto de la racine Mes dossiers impossible', [
                 'user_id' => $user->id,
                 'exception' => $e->getMessage(),
             ]);

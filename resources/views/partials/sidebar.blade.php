@@ -114,7 +114,7 @@
             <li>
                 <a href="{{ route('suivi-factures-fournisseurs.index') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->routeIs('suivi-factures-fournisseurs.*') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
                     <span class="text-lg flex-shrink-0">📁</span>
-                    <span class="nav-text">Factures fournisseurs</span>
+                    <span class="nav-text">Factures fournisseurs <br> Prestataires</span>
                 </a>
             </li>
             @endcan

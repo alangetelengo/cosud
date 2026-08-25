@@ -37,7 +37,7 @@ return [
     'courriers.voir-depenses' => 'Voir les courriers de dépenses (MAD). Seul = uniquement les MAD. Avec voir-factures = flux factures+MAD + registre local.',
     'suivi-paiements.view' => 'Menu Suivi de dépense (liste unifiée + exports).',
     'suivi-paiements.create' => 'Enregistrer une dépense manuelle (formulaire Suivi de dépense).',
-    'suivi-factures.view' => 'Menu Factures fournisseurs (suivi / classement Taty).',
+    'suivi-factures.view' => 'Menu Factures fournisseurs et Prestataires (suivi / classement Taty).',
     'bordereau-transmission.view' => 'Menu Bordereau de transmission (chèques AC : en signature et déchargés).',
     'dashboard.view' => 'Menu Tableau de bord.',
     'organigramme.view' => 'Menu Organigramme (structures en lecture).',
