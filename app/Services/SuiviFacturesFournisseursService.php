@@ -223,8 +223,8 @@ class SuiviFacturesFournisseursService
                     $courrier->date_orientation?->format('d/m/Y') ?? '',
                     $courrier->expediteur_libelle ?? '',
                     $courrier->objet,
-                    $suivi?->montant !== null
-                        ? number_format((float) $suivi->montant, 0, ',', ' ')
+                    ($courrier->montant_facture ?? $suivi?->montant) !== null
+                        ? number_format((float) ($courrier->montant_facture ?? $suivi->montant), 0, ',', ' ')
                         : '',
                     $suivi?->numero_piece ?? '',
                     $suivi?->banque ?? '',
@@ -260,7 +260,8 @@ class SuiviFacturesFournisseursService
     public function totalMontants(Collection $lignes): float
     {
         return (float) $lignes->sum(function (array $ligne): float {
-            $montant = $ligne['courrier']->suiviPaiement?->montant;
+            $montant = $ligne['courrier']->montant_facture
+                ?? $ligne['courrier']->suiviPaiement?->montant;
 
             return $montant !== null ? (float) $montant : 0.0;
         });

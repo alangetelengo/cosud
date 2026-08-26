@@ -8,7 +8,7 @@
 ">
     <div class="copyright" style="padding: 1rem 1.5rem;">
         <p style="text-align: center; margin: 0; font-size: 0.875rem; color: #fff;">
-            © {{ date('Y') }} — COSUD | Développée par l'Agence Congolaise des Systèmes d'Information (ACSI)
+            © {{ date('Y') }} — COSUD v{{ config('cosud.version') }} | Développée par l'Agence Congolaise des Systèmes d'Information (ACSI)
             <a href="https://acsi.cg/" target="_blank" rel="noopener" style="color: #c4b5fd; text-decoration: none; font-weight: 600;">ACSI</a>
         </p>
     </div>

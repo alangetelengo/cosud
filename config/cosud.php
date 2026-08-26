@@ -2,6 +2,17 @@
 
 return [
     /**
+     * Version applicative COSUD (sémantique MAJEUR.MINEUR.CATCH).
+     * Incrémenter à chaque livraison : tag Git vX.Y.Z + entrée CHANGELOG.md.
+     */
+    'version' => env('COSUD_VERSION', '1.0.0'),
+
+    /**
+     * Date de la version courante (mise en production ou release).
+     */
+    'released_at' => env('COSUD_RELEASED_AT', '2026-08-26'),
+
+    /**
      * Valeurs par défaut si la clé est absente en base (ex. avant migration).
      * lecture_dossier_lors_partage_document : si true, un partage / envoi document
      * peut accorder automatiquement la lecture du dossier parent (hors « une seule pièce »).
@@ -76,6 +87,34 @@ return [
         'infobip' => [
             'api_key' => env('COSUD_SMS_INFOBIP_API_KEY'),
             'send_url' => env('COSUD_SMS_INFOBIP_SEND_URL', 'https://mpn66j.api.infobip.com/sms/2/text/advanced'),
+        ],
+    ],
+
+    /**
+     * WhatsApp multi-driver :
+     * - log : simulation locale (aucun envoi, logs cosud) — pour tester le flux sans compte
+     * - meta : Meta Cloud API (sandbox gratuit developers.facebook.com)
+     * - infobip : Infobip WhatsApp Business
+     * also_sms : si
+     * true, envoie aussi le SMS quand WhatsApp est actif.
+     */
+    'whatsapp' => [
+        'driver' => env('COSUD_WHATSAPP_DRIVER', 'log'),
+        'also_sms' => filter_var(env('COSUD_WHATSAPP_ALSO_SMS', false), FILTER_VALIDATE_BOOLEAN),
+        'webhook_secret' => env('COSUD_WHATSAPP_WEBHOOK_SECRET'),
+        'meta' => [
+            'token' => env('COSUD_WHATSAPP_META_TOKEN'),
+            'phone_number_id' => env('COSUD_WHATSAPP_META_PHONE_NUMBER_ID'),
+            'api_version' => env('COSUD_WHATSAPP_META_API_VERSION', 'v21.0'),
+            'template_name' => env('COSUD_WHATSAPP_META_TEMPLATE_NAME'),
+            'template_language' => env('COSUD_WHATSAPP_META_TEMPLATE_LANGUAGE', 'fr'),
+        ],
+        'infobip' => [
+            'api_key' => env('COSUD_WHATSAPP_INFOBIP_API_KEY'),
+            'base_url' => env('COSUD_WHATSAPP_INFOBIP_BASE_URL', 'https://mpn66j.api.infobip.com'),
+            'from' => env('COSUD_WHATSAPP_FROM'),
+            'template_name' => env('COSUD_WHATSAPP_TEMPLATE_NAME'),
+            'template_language' => env('COSUD_WHATSAPP_TEMPLATE_LANGUAGE', 'fr'),
         ],
     ],
 ];

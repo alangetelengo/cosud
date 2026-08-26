@@ -119,6 +119,24 @@
             </li>
             @endcan
 
+            @can('factures-regularisation.create')
+            <li>
+                <a href="{{ route('factures-regularisation.index') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->routeIs('factures-regularisation.*') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
+                    <span class="text-lg flex-shrink-0">🗂️</span>
+                    <span class="nav-text">Régularisation <br> factures</span>
+                </a>
+            </li>
+            @endcan
+
+            @can('moratoires.view')
+            <li>
+                <a href="{{ route('moratoires.index') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->routeIs('moratoires.*') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
+                    <span class="text-lg flex-shrink-0">📅</span>
+                    <span class="nav-text">Moratoires / paiements <br> progressifs</span>
+                </a>
+            </li>
+            @endcan
+
             @can('courriers.recevoir')
             <li>
                 <a href="{{ route('courriers.a-recevoir') }}" class="flex items-center gap-3 px-5 py-3 rounded-lg text-white/80 hover:bg-[rgba(0,234,255,0.1)] hover:text-white transition-all {{ request()->is('courriers-a-recevoir') ? 'bg-gradient-to-r from-[#06a269] to-[#1c4d3b] text-white font-semibold' : '' }}">
@@ -232,7 +250,7 @@
             <span class="flex-shrink-0">🔑</span>
             <span class="nav-text">Déconnexion</span>
         </a>
-        <form id="logout-form" action="{{ route('logout') }}" method="POST" class="hidden">@csrf</form>
+        <form id="logout-form" action="{{ route('logout') }}" method="POST" class="hidden" data-skip-submit-loading="1">@csrf</form>
         @else
         <a href="{{ url('/login') }}" class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#00b464]/80 text-white font-semibold hover:bg-[#00b464] transition-colors">
             <span class="flex-shrink-0">🔑</span>

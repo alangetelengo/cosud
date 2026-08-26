@@ -159,6 +159,14 @@ class User extends Authenticatable
         return filled($telephone) ? (string) $telephone : null;
     }
 
+    /**
+     * Destinataire WhatsApp COSUD (canal cosud_whatsapp) — même numéro que le SMS.
+     */
+    public function routeNotificationForCosudWhatsapp(): ?string
+    {
+        return $this->routeNotificationForCosudSms();
+    }
+
     public function structure(): BelongsTo
     {
         return $this->belongsTo(Structure::class);

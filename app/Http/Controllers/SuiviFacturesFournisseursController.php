@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\FournisseurDetteService;
 use App\Services\SuiviFacturesFournisseursService;
 use App\Support\MontantFcfa;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -13,6 +14,7 @@ class SuiviFacturesFournisseursController extends Controller
 {
     public function __construct(
         private readonly SuiviFacturesFournisseursService $service,
+        private readonly FournisseurDetteService $detteService,
     ) {}
 
     public function index(Request $request): View
@@ -37,6 +39,7 @@ class SuiviFacturesFournisseursController extends Controller
             'mois' => $request->get('mois', now()->format('Y-m')),
             'annee' => (int) $request->get('annee', now()->year),
             'service' => $this->service,
+            'dettes' => $this->detteService->dettesParFournisseur(),
         ]);
     }
 

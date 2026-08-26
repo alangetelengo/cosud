@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CategorieDepense;
 use App\Models\Courrier;
+use App\Models\MoratoireEcheance;
 use App\Models\SuiviPaiement;
 use App\Models\User;
 use App\Support\MontantFcfa;
@@ -188,6 +189,84 @@ class SuiviPaiementService
 
             return $ligne->fresh(['dossier', 'categorieDepense']);
         });
+    }
+
+    /**
+     * Comptabilise une échéance de moratoire dans le Suivi de dépense (Eleni).
+     */
+    public function creerDepuisMoratoireEcheance(MoratoireEcheance $echeance, User $acteur): SuiviPaiement
+    {
+        $echeance->loadMissing('moratoire');
+        $moratoire = $echeance->moratoire;
+        if (! $moratoire) {
+            throw new InvalidArgumentException('Moratoire introuvable pour cette échéance.');
+        }
+
+        if ($echeance->suivi_paiement_id) {
+            throw new InvalidArgumentException('Cette échéance est déjà comptabilisée.');
+        }
+
+        $categorieId = CategorieDepense::idPourCode(CategorieDepense::CODE_FACTURE);
+        if (! $categorieId) {
+            throw new InvalidArgumentException('Catégorie de dépense « facture » introuvable.');
+        }
+
+        $datePaiement = $echeance->date_paiement?->toDateString() ?? now()->toDateString();
+        $annee = (int) Carbon::parse($datePaiement)->year;
+
+        return DB::transaction(function () use ($echeance, $moratoire, $acteur, $categorieId, $datePaiement, $annee): SuiviPaiement {
+            $numeroLigne = (int) SuiviPaiement::query()
+                ->where('categorie_depense_id', $categorieId)
+                ->where('numero_annee', $annee)
+                ->lockForUpdate()
+                ->max('numero_ligne') + 1;
+
+            return SuiviPaiement::query()->create([
+                'courrier_id' => null,
+                'type' => SuiviPaiement::TYPE_FSP_FACTURE,
+                'categorie_depense_id' => $categorieId,
+                'origine' => SuiviPaiement::ORIGINE_MORATOIRE,
+                'numero_ligne' => $numeroLigne,
+                'numero_annee' => $annee,
+                'date_suivi' => $datePaiement,
+                'date_decharge' => $datePaiement,
+                'intitule' => 'Moratoire '.$moratoire->fournisseur_libelle.' — échéance n° '.$echeance->numero,
+                'montant' => $echeance->montant_echeance,
+                'numero_piece' => $echeance->numero_cheque,
+                'banque' => $echeance->banque,
+                'fournisseur_libelle' => $moratoire->fournisseur_libelle,
+                'observation' => $echeance->observation ?? 'Paiement progressif (moratoire).',
+                'etabli_par_id' => $acteur->id,
+                'controle_par_id' => $acteur->hasRole('responsable_suivi_depenses') ? $acteur->id : null,
+                'controle_at' => $acteur->hasRole('responsable_suivi_depenses') ? now() : null,
+            ]);
+        });
+    }
+
+    /**
+     * Met à jour la ligne Suivi de dépense liée à une échéance de moratoire.
+     */
+    public function mettreAJourDepuisMoratoireEcheance(MoratoireEcheance $echeance): SuiviPaiement
+    {
+        $echeance->loadMissing(['moratoire', 'suiviPaiement']);
+        $suivi = $echeance->suiviPaiement;
+        if (! $suivi) {
+            throw new InvalidArgumentException('Aucune ligne de suivi liée à cette échéance.');
+        }
+
+        $datePaiement = $echeance->date_paiement?->toDateString() ?? $suivi->date_suivi?->toDateString() ?? now()->toDateString();
+
+        $suivi->update([
+            'date_suivi' => $datePaiement,
+            'date_decharge' => $datePaiement,
+            'montant' => $echeance->montant_echeance,
+            'numero_piece' => $echeance->numero_cheque,
+            'banque' => $echeance->banque,
+            'observation' => $echeance->observation ?? $suivi->observation,
+            'fournisseur_libelle' => $echeance->moratoire?->fournisseur_libelle ?? $suivi->fournisseur_libelle,
+        ]);
+
+        return $suivi->fresh();
     }
 
     public function typeLegacyDepuisCategorie(CategorieDepense $categorie): string
@@ -444,7 +523,7 @@ class SuiviPaiementService
                     $ligne->beneficiaire_libelle ?: ($ligne->fournisseur_libelle ?? ''),
                     $ligne->instruction_dg ?? '',
                     $ligne->observation ?? '',
-                    $ligne->origine === SuiviPaiement::ORIGINE_CIRCUIT_CHEQUE ? 'Circuit chèque' : 'Saisie manuelle',
+                    $ligne->libelleOrigine(),
                 ], ';');
             }
 

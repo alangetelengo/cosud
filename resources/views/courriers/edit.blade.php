@@ -9,8 +9,6 @@
 @endphp
 
 @section('content')
-@include('partials.form-submit-loading')
-
 @include('partials.flash-session', ['class' => 'mb-5'])
 
 @if($errors->any())
@@ -54,12 +52,14 @@
                         @php
                             $necessiteServiceDemandeur = in_array($t->code, ['facture', 'mad'], true);
                             $telephoneObligatoire = in_array($t->code, ['facture', 'demande'], true);
+                            $necessiteMontantFacture = $t->code === 'facture';
                         @endphp
                         <option
                             value="{{ $t->id }}"
                             data-code="{{ $t->code }}"
                             data-service-demandeur="{{ $necessiteServiceDemandeur ? '1' : '0' }}"
                             data-telephone-requis="{{ $telephoneObligatoire ? '1' : '0' }}"
+                            data-montant-facture="{{ $necessiteMontantFacture ? '1' : '0' }}"
                             @selected(old('type_courrier_id', $courrier->type_courrier_id) == $t->id)
                         >{{ $t->libelle }}</option>
                         @endforeach
@@ -88,6 +88,19 @@
                 @error('service_demandeur_structure_id')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
             </div>
             @endif
+
+            <div id="bloc-montant-facture" class="{{ ($courrier->typeCourrier?->code === 'facture') ? '' : 'hidden' }}">
+                @include('partials.input-montant-fcfa', [
+                    'name' => 'montant_facture',
+                    'id' => 'montant_facture',
+                    'label' => 'Montant de la facture (FCFA)',
+                    'labelClass' => $label,
+                    'required' => $courrier->typeCourrier?->code === 'facture',
+                    'class' => $field,
+                    'placeholder' => 'Ex. : 1 500 000',
+                    'value' => old('montant_facture', $courrier->montant_facture),
+                ])
+            </div>
 
             <div class="grid sm:grid-cols-2 gap-4">
                 <div>
@@ -183,6 +196,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var typeSelect = document.getElementById('type_courrier_id');
     var blocService = document.getElementById('bloc-service-demandeur');
     var selectService = document.getElementById('service_demandeur_structure_id');
+    var blocMontantFacture = document.getElementById('bloc-montant-facture');
+    var inputMontantFacture = document.getElementById('montant_facture');
     var inputTelephone = document.getElementById('input-expediteur-telephone');
     var asterisqueTel = document.getElementById('asterisque-telephone');
     var hintTelOptionnel = document.getElementById('hint-telephone-optionnel');
@@ -195,10 +210,12 @@ document.addEventListener('DOMContentLoaded', function () {
         var code = opt ? (opt.getAttribute('data-code') || '') : '';
         var necessiteService = opt && opt.getAttribute('data-service-demandeur') === '1';
         var telRequis = opt && opt.getAttribute('data-telephone-requis') === '1';
+        var necessiteMontant = opt && opt.getAttribute('data-montant-facture') === '1';
 
         if (!code) {
             necessiteService = false;
             telRequis = false;
+            necessiteMontant = false;
         }
 
         if (blocService) {
@@ -208,6 +225,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 selectService.disabled = !necessiteService;
                 if (!necessiteService) {
                     selectService.value = '';
+                }
+            }
+        }
+
+        if (blocMontantFacture) {
+            blocMontantFacture.classList.toggle('hidden', !necessiteMontant);
+            if (inputMontantFacture) {
+                inputMontantFacture.required = !!necessiteMontant;
+                inputMontantFacture.disabled = !necessiteMontant;
+                if (!necessiteMontant) {
+                    inputMontantFacture.value = '';
                 }
             }
         }

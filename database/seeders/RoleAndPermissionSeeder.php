@@ -33,6 +33,10 @@ class RoleAndPermissionSeeder extends Seeder
             'suivi-paiements.view',
             'suivi-paiements.create',
             'suivi-factures.view',
+            'factures-regularisation.create',
+            'moratoires.view',
+            'moratoires.create',
+            'moratoires.update',
             'bordereau-transmission.view',
             'dashboard.view',
             'organigramme.view',
@@ -123,6 +127,7 @@ class RoleAndPermissionSeeder extends Seeder
                 'courriers.voir-depenses',
                 'suivi-paiements.view',
                 'suivi-factures.view',
+                'moratoires.view',
                 'bordereau-transmission.view',
             ]),
             'particulier_ac' => array_merge($permissionsSecretariatCourrier, [
@@ -133,12 +138,20 @@ class RoleAndPermissionSeeder extends Seeder
             'responsable_dossiers_prestataires' => array_merge($permissionsSecretariatCourrier, [
                 'courriers.voir-factures',
                 'suivi-factures.view',
+                'factures-regularisation.create',
+                'moratoires.view',
+                'moratoires.create',
+                'moratoires.update',
             ]),
             'responsable_suivi_depenses' => array_merge($permissionsSecretariatCourrier, [
                 'courriers.voir-depenses',
                 'suivi-paiements.view',
                 'suivi-paiements.create',
                 'bordereau-transmission.view',
+                'factures-regularisation.create',
+                'moratoires.view',
+                'moratoires.create',
+                'moratoires.update',
             ]),
             'agent_comptable' => array_merge($permissionsSecretariatCourrier, [
                 'courriers.voir-factures',
@@ -163,6 +176,10 @@ class RoleAndPermissionSeeder extends Seeder
             'suivi-paiements.view',
             'suivi-paiements.create',
             'suivi-factures.view',
+            'factures-regularisation.create',
+            'moratoires.view',
+            'moratoires.create',
+            'moratoires.update',
             'bordereau-transmission.view',
         ]);
 

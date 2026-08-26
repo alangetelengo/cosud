@@ -9,8 +9,6 @@
 @endphp
 
 @section('content')
-@include('partials.form-submit-loading')
-
 @if($errors->any())
 <div class="mb-5 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-sm">
     <p class="font-semibold mb-1">Veuillez corriger les erreurs ci-dessous.</p>
@@ -198,6 +196,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var circuitInfo = document.getElementById('circuit-du-type');
     var blocService = document.getElementById('bloc-service-demandeur');
     var selectService = document.getElementById('service_demandeur_structure_id');
+    var blocMontantFacture = document.getElementById('bloc-montant-facture');
+    var inputMontantFacture = document.getElementById('montant_facture');
     var blocContacts = document.getElementById('bloc-contacts-expediteur');
     var labelExpediteur = document.getElementById('label-expediteur');
     var inputExpediteur = document.getElementById('input-expediteur');
@@ -286,6 +286,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 selectService.disabled = !necessite;
                 if (!necessite) {
                     selectService.value = '';
+                }
+            }
+        }
+
+        var necessiteMontant = opt && opt.getAttribute('data-montant-facture') === '1';
+        if (blocMontantFacture) {
+            blocMontantFacture.classList.toggle('hidden', !necessiteMontant);
+            if (inputMontantFacture) {
+                inputMontantFacture.required = !!necessiteMontant;
+                inputMontantFacture.disabled = !necessiteMontant;
+                if (!necessiteMontant) {
+                    inputMontantFacture.value = '';
                 }
             }
         }

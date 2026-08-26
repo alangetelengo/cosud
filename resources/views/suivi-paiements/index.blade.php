@@ -23,7 +23,7 @@
             <h2 class="text-sm font-bold text-emerald-900 dark:text-emerald-100">Enregistrer une dépense</h2>
             <span class="text-emerald-700 dark:text-emerald-300 text-sm font-semibold" x-text="ouvert ? 'Fermer' : 'Ouvrir'"></span>
         </button>
-        <form x-show="ouvert" x-cloak method="post" action="{{ route('suivi-paiements.remise-dg') }}" enctype="multipart/form-data" class="mt-4 grid sm:grid-cols-2 gap-3">
+        <form x-show="ouvert" x-cloak method="post" action="{{ route('suivi-paiements.remise-dg') }}" enctype="multipart/form-data" data-loading-text="Enregistrement..." class="mt-4 grid sm:grid-cols-2 gap-3">
             @csrf
             <div>
                 <label class="block text-xs font-semibold mb-1">Catégorie <span class="text-red-500">*</span></label>
@@ -83,7 +83,7 @@
                 @error('justificatifs.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
             </div>
             <div class="sm:col-span-2">
-                <button type="submit" class="inline-flex items-center px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
+                <button type="submit" data-loading-text="Enregistrement..." class="inline-flex items-center px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
                     Enregistrer la dépense
                 </button>
             </div>
@@ -190,12 +190,12 @@
                         <td class="px-3 py-2 text-right tabular-nums font-semibold whitespace-nowrap">{{ number_format((float) $ligne->montant, 0, ',', ' ') }}</td>
                         <td class="px-3 py-2">{{ $ligne->beneficiaire_libelle ?: ($ligne->fournisseur_libelle ?? '—') }}</td>
                         <td class="px-3 py-2 text-xs text-slate-500">
-                            {{ $ligne->origine === \App\Models\SuiviPaiement::ORIGINE_CIRCUIT_CHEQUE ? 'Circuit' : 'Saisie' }}
+                            {{ $ligne->libelleOrigine() }}
                         </td>
                         <td class="px-3 py-2">
                             @if($ligne->courrier)
                                 @can('view', $ligne->courrier)
-                                    <a href="{{ route('courriers.show', $ligne->courrier) }}" class="text-emerald-700 dark:text-emerald-400 hover:underline no-underline text-xs font-semibold">Voir</a>
+                                    <x-table-action :href="route('courriers.show', $ligne->courrier)">Voir</x-table-action>
                                 @else
                                     —
                                 @endcan
@@ -206,7 +206,7 @@
                         <td class="px-3 py-2">
                             @if($estClasse && $dossierLigne)
                                 @can('view', $dossierLigne)
-                                    <a href="{{ route('dossiers.show', $dossierLigne) }}" class="text-emerald-700 dark:text-emerald-300 font-semibold no-underline hover:underline text-xs" title="{{ $dossierLigne->chemin_complet ?? $dossierLigne->nom }}">Classée</a>
+                                    <x-table-action :href="route('dossiers.show', $dossierLigne)" :title="$dossierLigne->chemin_complet ?? $dossierLigne->nom">Classée</x-table-action>
                                 @else
                                     <span class="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800">Classée</span>
                                 @endcan
@@ -216,20 +216,21 @@
                                 <span class="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">À classer</span>
                             @endif
                         </td>
-                        <td class="px-3 py-2 whitespace-nowrap text-xs">
+                        <td class="px-3 py-2 whitespace-nowrap">
+                            <div class="inline-flex flex-wrap items-center gap-1.5">
                             @can('classerDossier', $ligne)
-                                <a href="{{ route('suivi-paiements.classer', $ligne) }}" class="text-emerald-600 font-semibold no-underline hover:underline">{{ $estClasse ? 'Reclasser' : 'Classer' }}</a>
+                                <x-table-action :href="route('suivi-paiements.classer', $ligne)">{{ $estClasse ? 'Reclasser' : 'Classer' }}</x-table-action>
                             @endcan
                             @if($dossierLigne)
                                 @can('view', $dossierLigne)
-                                    @can('classerDossier', $ligne)<span class="text-slate-300 mx-1">·</span>@endcan
-                                    <a href="{{ route('dossiers.show', $dossierLigne) }}" class="text-sky-600 font-semibold no-underline hover:underline">Dossier</a>
+                                    <x-table-action :href="route('dossiers.show', $dossierLigne)" variant="sky">Dossier</x-table-action>
                                 @endcan
                             @elseif($ligne->courrier && $ligne->estClassementReserveFacturesPrestataires())
                                 @can('view', $ligne->courrier)
-                                    <a href="{{ route('courriers.show', ['courrier' => $ligne->courrier, 'classer' => 1]) }}" class="text-slate-500 font-semibold no-underline hover:underline" title="Classement via le courrier (responsable dossiers prestataires)">Voir courrier</a>
+                                    <x-table-action :href="route('courriers.show', ['courrier' => $ligne->courrier, 'classer' => 1])" variant="sky">Via courrier</x-table-action>
                                 @endcan
                             @endif
+                            </div>
                         </td>
                     </tr>
                     @empty

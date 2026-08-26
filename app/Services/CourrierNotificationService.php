@@ -224,30 +224,39 @@ class CourrierNotificationService
 
         $email = trim((string) ($courrier->expediteur_email ?? ''));
         $telephone = trim((string) ($courrier->expediteur_telephone ?? ''));
-        $smsOk = $telephone !== '' && app(SmsService::class)->isConfigured();
+        $whatsappOk = $telephone !== '' && app(WhatsAppService::class)->isConfigured();
+        $smsOk = $telephone !== ''
+            && app(SmsService::class)->isConfigured()
+            && (! $whatsappOk || (bool) config('cosud.whatsapp.also_sms'));
 
-        if ($email === '' && ! $smsOk) {
+        if ($email === '' && ! $whatsappOk && ! $smsOk) {
             return;
         }
 
         try {
-            if ($email !== '' && $smsOk) {
-                Notification::route('mail', $email)
-                    ->route('cosud_sms', $telephone)
-                    ->notify($notification);
-
-                return;
-            }
+            $onDemand = null;
 
             if ($email !== '') {
-                Notification::route('mail', $email)
-                    ->notify($notification);
+                $onDemand = Notification::route('mail', $email);
+            }
 
+            if ($whatsappOk) {
+                $onDemand = $onDemand
+                    ? $onDemand->route('cosud_whatsapp', $telephone)
+                    : Notification::route('cosud_whatsapp', $telephone);
+            }
+
+            if ($smsOk) {
+                $onDemand = $onDemand
+                    ? $onDemand->route('cosud_sms', $telephone)
+                    : Notification::route('cosud_sms', $telephone);
+            }
+
+            if ($onDemand === null) {
                 return;
             }
 
-            Notification::route('cosud_sms', $telephone)
-                ->notify($notification);
+            $onDemand->notify($notification);
         } catch (\Throwable $e) {
             Log::channel('cosud')->error('Notification expéditeur externe échouée', [
                 'courrier_id' => $courrier->id,

@@ -74,7 +74,7 @@
                              :style="menuStyle"
                              class="header-dropdown fixed w-48 bg-white rounded-lg shadow-xl py-1 border border-slate-200 z-[9999] min-w-[12rem]">
                             <a href="{{ route('profile.edit') }}" class="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">👤 Profil</a>
-                            <form method="POST" action="{{ route('logout') }}">
+                            <form method="POST" action="{{ route('logout') }}" data-skip-submit-loading="1">
                                 @csrf
                                 <button type="submit" class="flex items-center gap-2 w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 font-medium">🔑 Déconnexion</button>
                             </form>

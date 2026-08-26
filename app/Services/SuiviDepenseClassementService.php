@@ -123,6 +123,35 @@ class SuiviDepenseClassementService
     }
 
     /**
+     * Dépose les justificatifs dans le dossier d’attente ou les ajoute au dossier existant.
+     *
+     * @param  list<UploadedFile>  $fichiers
+     */
+    public function deposerOuAjouterJustificatifs(
+        SuiviPaiement $ligne,
+        User $acteur,
+        array $fichiers = [],
+    ): ?Dossier {
+        if ($fichiers === []) {
+            return null;
+        }
+
+        $ligne->loadMissing('dossier');
+
+        if ($ligne->dossier_id && $ligne->dossier) {
+            $proprietaire = $this->resoudreProprietaireClassementDepenses($acteur);
+
+            foreach ($fichiers as $fichier) {
+                $this->attacherJustificatif($ligne->dossier, $acteur, $proprietaire, $fichier, $ligne);
+            }
+
+            return $ligne->dossier;
+        }
+
+        return $this->deposerJustificatifsEnAttente($ligne, $acteur, $fichiers);
+    }
+
+    /**
      * Classement manuel (existant / nouveau), comme les factures fournisseurs.
      *
      * @param  array{mode: string, dossier_id?: int|null, nom_dossier?: string|null, parent_id?: int|null}  $data

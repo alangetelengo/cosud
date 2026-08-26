@@ -57,7 +57,7 @@
                     <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Le fichier actuel sera conservé dans l'historique des versions. Version actuelle : v{{ $document->versions->max('numero') ?? 1 }}</p>
                 </div>
 
-                <form action="{{ route('documents.nouvelle-version.store', $document) }}" method="POST" enctype="multipart/form-data" class="p-6 space-y-6">
+                <form action="{{ route('documents.nouvelle-version.store', $document) }}" method="POST" enctype="multipart/form-data" data-loading-text="Envoi..." class="p-6 space-y-6">
                     @csrf
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Nouveau fichier *</label>
@@ -90,7 +90,7 @@
                     </div>
 
                     <div class="flex flex-wrap items-center gap-4 pt-4">
-                        <button type="submit" id="btn-nouvelle-version-submit"
+                        <button type="submit" id="btn-nouvelle-version-submit" data-loading-text="Envoi..."
                                 class="inline-flex items-center justify-center gap-2 min-w-[240px] px-10 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md hover:shadow-lg focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all disabled:opacity-70">
                             <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                             Déposer la nouvelle version

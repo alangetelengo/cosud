@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Listeners\EnsureMesDossiersRacineExists;
 use App\Models\Courrier;
 use App\Notifications\Channels\CosudSmsChannel;
+use App\Notifications\Channels\CosudWhatsAppChannel;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Pagination\Paginator;
@@ -53,5 +54,6 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Notification::extend('cosud_sms', fn ($app) => $app->make(CosudSmsChannel::class));
+        Notification::extend('cosud_whatsapp', fn ($app) => $app->make(CosudWhatsAppChannel::class));
     }
 }

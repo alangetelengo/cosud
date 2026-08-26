@@ -95,6 +95,11 @@
                         <span class="px-2.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 font-semibold text-xs">{{ $courrier->sensCourrier->libelle }}</span>
                         <span class="px-2.5 py-0.5 rounded-md bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-200 text-xs font-semibold">{{ $courrier->statutCourrier->libelle }}</span>
                         <span class="px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs">{{ ucfirst($courrier->origine) }}</span>
+                        @if($courrier->estRegularisation())
+                        <span class="px-2.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 text-xs font-bold">
+                            Régularisation {{ $courrier->estRegularisationPayee() ? 'payée' : 'impayée' }}
+                        </span>
+                        @endif
                         @if($courrier->reference)
                         <span class="text-xs text-slate-500">Réf. {{ $courrier->reference }}</span>
                         @endif
@@ -126,6 +131,16 @@
                         <div>
                             <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Service demandeur</dt>
                             <dd class="mt-0.5 text-slate-700 dark:text-slate-200">{{ $courrier->serviceDemandeurStructure->nom }}</dd>
+                        </div>
+                        @endif
+                        @if($courrier->typeCourrier?->code === 'facture')
+                        <div>
+                            <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Montant facture</dt>
+                            <dd class="mt-0.5 font-semibold tabular-nums text-slate-800 dark:text-slate-100">
+                                {{ $courrier->montant_facture !== null
+                                    ? number_format((float) $courrier->montant_facture, 0, ',', ' ').' FCFA'
+                                    : '—' }}
+                            </dd>
                         </div>
                         @endif
                         <div>
@@ -396,6 +411,7 @@
                         @endif
 
                         <form x-show="form === 'classer-dossier'" x-cloak method="post" action="{{ route('courriers.classer-dossier', $courrier) }}"
+                              data-loading-text="Classement..."
                               class="space-y-2 pt-2 border-t border-emerald-200 dark:border-emerald-800">
                             @csrf
                             <p class="text-[11px] text-slate-500 leading-snug">
@@ -451,6 +467,7 @@
                             </div>
 
                             <button type="button"
+                                    data-loading-text="Classement..."
                                     onclick="flashAlert('Classer cette facture dans le dossier sélectionné ? Les pièces jointes y seront rattachées.', this.closest('form'), {icon:'📁', danger:false, confirmText:'Classer', title:'Classement dossier'})"
                                     class="w-full px-3 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm border border-emerald-700">
                                 Confirmer le classement
@@ -521,7 +538,7 @@
                             <strong>Rejeté par {{ $courrier->rejetePar?->name }} :</strong> {{ $courrier->motif_rejet }}
                         </p>
                         @endif
-                        <form x-show="form === 'soumettre-reponse'" x-cloak method="post" action="{{ route('courriers.circuit.soumettre-reponse', $courrier) }}" enctype="multipart/form-data" class="space-y-2 {{ $estActeurCircuitActuel ? '' : 'pt-1 border-t border-slate-100' }}">
+                        <form x-show="form === 'soumettre-reponse'" x-cloak method="post" action="{{ route('courriers.circuit.soumettre-reponse', $courrier) }}" enctype="multipart/form-data" data-loading-text="Envoi..." class="space-y-2 {{ $estActeurCircuitActuel ? '' : 'pt-1 border-t border-slate-100' }}">
                             @csrf
                             <p class="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Courrier de réponse à transmettre pour signature</p>
                             <div>
@@ -541,6 +558,7 @@
                                 @endif
                             </p>
                             <button type="button"
+                                    data-loading-text="Envoi..."
                                     onclick="flashAlert('Transmettre ce courrier de réponse au DG pour signature ?', this.closest('form'), {icon:'📎', danger:false, confirmText:'Transmettre', title:'Transmission pour signature'})"
                                     class="w-full px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold">
                                 Transmettre pour signature
@@ -600,7 +618,9 @@
                             $erreursCheque = $errors->hasAny(['montant', 'message', 'numero_piece', 'banque', 'beneficiaire_libelle', 'programmation']);
                             $montantChequeAffiche = old('montant') !== null && old('montant') !== ''
                                 ? number_format((float) preg_replace('/\s+/', '', (string) old('montant')), 0, ',', ' ')
-                                : '';
+                                : ($courrier->montant_facture !== null
+                                    ? number_format((float) $courrier->montant_facture, 0, ',', ' ')
+                                    : '');
                             $beneficiaireChequeDefaut = old('beneficiaire_libelle', $courrier->expediteur_libelle);
                             $beneficiaireChequeVerrouille = trim((string) ($courrier->expediteur_libelle ?? '')) !== '';
                             $inputChequeClass = 'w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900/80 px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition';
@@ -695,6 +715,7 @@
 
                                         <form method="post" action="{{ route('courriers.circuit.envoyer-cheque', $courrier) }}" enctype="multipart/form-data"
                                               id="form-envoyer-cheque-ac"
+                                              data-loading-text="Envoi..."
                                               class="flex flex-col flex-1 min-h-0 overflow-hidden">
                                             @csrf
                                             <div class="flex-1 overflow-y-auto overscroll-contain px-4 py-3.5 space-y-3.5">
@@ -772,6 +793,7 @@
                                                     Annuler
                                                 </button>
                                                 <button type="button"
+                                                        data-loading-text="Envoi..."
                                                         onclick="flashAlert('Transmettre ce chèque au DG pour signature ? Le circuit avancera automatiquement.', document.getElementById('form-envoyer-cheque-ac'), {icon:'✓', danger:false, confirmText:'Envoyer au DG', title:'Envoi du chèque'})"
                                                         class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition">
                                                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
@@ -831,7 +853,7 @@
                                 <p><strong>Programmation :</strong> {{ $suiviBordereau->programmation ?? '—' }}</p>
                             </div>
                             @endif
-                            <form method="post" action="{{ route('courriers.circuit.deposer-preuve-paiement', $courrier) }}" enctype="multipart/form-data" class="space-y-2">
+                            <form method="post" action="{{ route('courriers.circuit.deposer-preuve-paiement', $courrier) }}" enctype="multipart/form-data" data-loading-text="Enregistrement..." class="space-y-2">
                                 @csrf
                                 <div>
                                     <label class="block text-[11px] font-semibold mb-1">Date de décharge <span class="text-red-500">*</span></label>
@@ -850,6 +872,7 @@
                                     @error('observation')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
                                 <button type="button"
+                                        data-loading-text="Enregistrement..."
                                         onclick="flashAlert('Enregistrer la décharge et notifier le suivi des dépenses ?', this.closest('form'), {icon:'✓', danger:false, confirmText:'Enregistrer', title:'Décharge bénéficiaire'})"
                                         class="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold">
                                     Enregistrer la décharge / le paiement
@@ -869,7 +892,7 @@
                                 <p><strong>Programmation :</strong> {{ $courrier->suiviPaiement->programmation ?? '—' }}</p>
                             </div>
                             @endif
-                            <form method="post" action="{{ route('courriers.circuit.confirmer-controle-depense', $courrier) }}" enctype="multipart/form-data" class="space-y-2">
+                            <form method="post" action="{{ route('courriers.circuit.confirmer-controle-depense', $courrier) }}" enctype="multipart/form-data" data-loading-text="Enregistrement..." class="space-y-2">
                                 @csrf
                                 <div>
                                     <label class="block text-[11px] font-semibold mb-1">Pièces complémentaires <span class="font-normal text-slate-400">(facultatif)</span></label>
@@ -883,6 +906,7 @@
                                     @error('message')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
                                 <button type="button"
+                                        data-loading-text="Enregistrement..."
                                         onclick="flashAlert('Confirmer le contrôle des pièces physiques ?', this.closest('form'), {icon:'✓', danger:false, confirmText:'Confirmer le contrôle', title:'Contrôle dépense'})"
                                         class="w-full px-3 py-2 rounded-lg bg-sky-600 text-white text-xs font-semibold">
                                     Confirmer le contrôle
@@ -1190,6 +1214,7 @@
                     @endif
                     @if($peutCreerReponseDirecte)
                     <form x-show="form === 'reponse-directe'" x-cloak method="post" action="{{ route('courriers.creer-reponse', $courrier) }}" enctype="multipart/form-data"
+                          data-loading-text="Envoi..."
                           x-data="{ confidentiel: false }" class="space-y-2 pt-2 border-t border-slate-100">
                         @csrf
                         <input type="hidden" name="signer_immediatement" value="1">
@@ -1226,6 +1251,7 @@
                             </div>
                         </template>
                         <button type="button"
+                                data-loading-text="Envoi..."
                                 onclick="flashAlert('Créer et signer directement ce courrier départ réponse ?', this.closest('form'), {icon:'✍️', danger:false, confirmText:'Créer et signer', title:'Réponse directe'})"
                                 class="w-full px-3 py-2 rounded-lg bg-slate-700 text-white text-xs font-semibold">
                             Créer et signer
@@ -1237,7 +1263,7 @@
                     @endcan
 
                     @can('transmettre', $courrier)
-                    <form x-show="form === 'transmettre'" x-cloak method="post" action="{{ route('courriers.transmettre', $courrier) }}" enctype="multipart/form-data" class="space-y-2 pt-2 border-t border-slate-100">
+                    <form x-show="form === 'transmettre'" x-cloak method="post" action="{{ route('courriers.transmettre', $courrier) }}" enctype="multipart/form-data" data-loading-text="Transmission..." class="space-y-2 pt-2 border-t border-slate-100">
                         @csrf
                         @if($courrier->estDepart())
                         <p class="text-[11px] text-slate-500">Trace d’envoi après expédition.</p>
@@ -1259,6 +1285,7 @@
                         <textarea name="commentaire" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Commentaire…"></textarea>
                         @endif
                         <button type="button"
+                                data-loading-text="Transmission..."
                                 onclick="flashAlert('Enregistrer cette transmission dans le registre ?', this.closest('form'), {icon:'📋', danger:false, confirmText:'Enregistrer', title:'Transmission'})"
                                 class="w-full px-3 py-2 rounded-lg bg-slate-800 text-white text-xs font-semibold">Enregistrer</button>
                     </form>

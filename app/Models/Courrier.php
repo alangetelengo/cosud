@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\CourrierVisibiliteService;
+use App\Services\FactureRegularisationService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -43,6 +44,9 @@ class Courrier extends Model
         'structure_destinataire_id',
         'service_demandeur_structure_id',
         'objet',
+        'montant_facture',
+        'est_regularisation',
+        'regularisation_paiement',
         'est_confidentiel',
         'orientation_mode',
         'nombre_pieces',
@@ -84,6 +88,8 @@ class Courrier extends Model
             'est_confidentiel' => 'boolean',
             'reponse_confidentielle' => 'boolean',
             'nombre_pieces' => 'integer',
+            'montant_facture' => 'decimal:2',
+            'est_regularisation' => 'boolean',
             'delai_execution_jours' => 'integer',
             'circuit_etape_depuis' => 'datetime',
             'dernier_alerte_retard_at' => 'datetime',
@@ -354,6 +360,17 @@ class Courrier extends Model
     public function estOrigineExterne(): bool
     {
         return $this->origine === self::ORIGINE_EXTERNE;
+    }
+
+    public function estRegularisation(): bool
+    {
+        return (bool) $this->est_regularisation;
+    }
+
+    public function estRegularisationPayee(): bool
+    {
+        return $this->estRegularisation()
+            && $this->regularisation_paiement === FactureRegularisationService::PAIEMENT_PAYEE;
     }
 
     /**

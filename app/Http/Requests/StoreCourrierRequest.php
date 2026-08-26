@@ -59,6 +59,12 @@ class StoreCourrierRequest extends FormRequest
                 }),
             ],
             'objet' => ['required', 'string', 'max:500'],
+            'montant_facture' => [
+                Rule::requiredIf(fn () => $this->typeCourrierCodeDans(['facture'])),
+                'nullable',
+                'numeric',
+                'min:1',
+            ],
             'fichier' => [
                 'nullable',
                 'file',
@@ -80,6 +86,15 @@ class StoreCourrierRequest extends FormRequest
             'nouveaux_fichiers' => ['nullable', 'array'],
             'nouveaux_fichiers.*' => ['file', 'max:10240'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('montant_facture')) {
+            $this->merge([
+                'montant_facture' => preg_replace('/\s+/', '', (string) $this->input('montant_facture')),
+            ]);
+        }
     }
 
     public function withValidator($validator): void
@@ -147,6 +162,9 @@ class StoreCourrierRequest extends FormRequest
             'service_demandeur_structure_id.exists' => 'Choisissez une direction ou antenne départementale valide.',
             'expediteur_telephone.required' => 'Le téléphone de l’expéditeur est obligatoire pour une facture ou une demande (SMS / notification).',
             'numero_fulgurant.required' => 'Le n° de registre (saisi par le secrétariat) est obligatoire.',
+            'montant_facture.required' => 'Le montant de la facture est obligatoire.',
+            'montant_facture.numeric' => 'Le montant de la facture doit être un nombre.',
+            'montant_facture.min' => 'Le montant de la facture doit être supérieur à zéro.',
         ];
     }
 

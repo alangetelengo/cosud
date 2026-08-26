@@ -25,7 +25,7 @@
         <p class="text-sm font-semibold text-emerald-900 dark:text-emerald-100">Classement prestataire / bénéficiaire</p>
 
     </div>
-    <form method="post" action="{{ route('suivi-paiements.classer.store', $ligne) }}" class="p-5 space-y-4">
+    <form method="post" action="{{ route('suivi-paiements.classer.store', $ligne) }}" data-loading-text="Classement..." class="p-5 space-y-4">
         @csrf
         <div class="text-sm text-slate-600 dark:text-slate-300 space-y-1">
             <p><span class="font-semibold text-slate-800 dark:text-slate-100">Bénéficiaire :</span> {{ $ligne->beneficiaire_libelle ?: ($ligne->fournisseur_libelle ?: '—') }}</p>
@@ -75,7 +75,7 @@
             </div>
         </div>
 
-        <button type="submit" class="inline-flex items-center px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
+        <button type="submit" data-loading-text="Classement..." class="inline-flex items-center px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
             Confirmer le classement
         </button>
     </form>

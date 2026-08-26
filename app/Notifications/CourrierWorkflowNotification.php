@@ -6,6 +6,7 @@ use App\Models\Courrier;
 use App\Models\User;
 use App\Services\CourrierNotificationService;
 use App\Services\SmsService;
+use App\Services\WhatsAppService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -29,10 +30,19 @@ class CourrierWorkflowNotification extends Notification
             $channels[] = 'mail';
         }
 
-        if ($this->doitEnvoyerSms()
-            && $notifiable->routeNotificationFor('cosud_sms')
-            && app(SmsService::class)->isConfigured()) {
-            $channels[] = 'cosud_sms';
+        if ($this->doitEnvoyerSms()) {
+            $whatsappOk = $notifiable->routeNotificationFor('cosud_whatsapp')
+                && app(WhatsAppService::class)->isConfigured();
+            if ($whatsappOk) {
+                $channels[] = 'cosud_whatsapp';
+            }
+
+            $smsOk = $notifiable->routeNotificationFor('cosud_sms')
+                && app(SmsService::class)->isConfigured()
+                && (! $whatsappOk || (bool) config('cosud.whatsapp.also_sms'));
+            if ($smsOk) {
+                $channels[] = 'cosud_sms';
+            }
         }
 
         return $channels;
@@ -198,6 +208,11 @@ class CourrierWorkflowNotification extends Notification
         };
 
         return app(SmsService::class)->sanitizeSmsText($texte);
+    }
+
+    public function toCosudWhatsapp(object $notifiable): string
+    {
+        return $this->toCosudSms($notifiable);
     }
 
     private function texteSmsBonPourAccordAc(string $numero, string $fournisseurCourt): string

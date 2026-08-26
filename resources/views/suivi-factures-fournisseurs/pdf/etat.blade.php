@@ -116,7 +116,7 @@ table.paiement tr:nth-child(odd) { background-color: #fff; }
 <td>{{ $c->expediteur_libelle ?? '—' }}</td>
 <td>{{ $c->objet }}</td>
 <td>{{ $ligne['libelle_statut'] }}</td>
-<td class="text-right">{{ $service->formaterMontant($c->suiviPaiement?->montant) }}</td>
+<td class="text-right">{{ $service->formaterMontant($c->montant_facture ?? $c->suiviPaiement?->montant) }}</td>
 </tr>
 @endforeach
 

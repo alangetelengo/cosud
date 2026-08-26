@@ -2,15 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Models\CategorieDepense;
 use App\Models\CircuitCourrier;
 use App\Models\Courrier;
 use App\Models\PrioriteCourrier;
 use App\Models\SensCourrier;
 use App\Models\StatutCourrier;
 use App\Models\Structure;
+use App\Models\SuiviPaiement;
 use App\Models\TypeCourrier;
 use App\Models\User;
 use App\Services\CircuitCourrierMoteurService;
+use Database\Seeders\CategorieDepenseSeeder;
 use Database\Seeders\CircuitCourrierSeeder;
 use Database\Seeders\CourrierReferentielSeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
@@ -30,6 +33,7 @@ class SuiviFacturesFournisseursTest extends TestCase
             StructureSeeder::class,
             CourrierReferentielSeeder::class,
             CircuitCourrierSeeder::class,
+            CategorieDepenseSeeder::class,
         ]);
     }
 
@@ -147,6 +151,43 @@ class SuiviFacturesFournisseursTest extends TestCase
             ->assertOk()
             ->assertSee('Facture annee courante', false)
             ->assertDontSee('Facture annee precedente', false);
+    }
+
+    public function test_export_csv_privilegie_montant_facture_sur_suivi(): void
+    {
+        $taty = User::factory()->create();
+        $taty->assignRole('responsable_dossiers_prestataires');
+
+        $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+
+        $moteur = app(CircuitCourrierMoteurService::class);
+        $courrier = $moteur->instruire($this->demarrerFacture($dg, 'Facture montant csv'), $dg, 'BPA.', $ac->id);
+        $courrier->forceFill(['montant_facture' => 3_200_000])->save();
+
+        $catFacture = CategorieDepense::query()->where('code', CategorieDepense::CODE_FACTURE)->firstOrFail();
+        SuiviPaiement::query()->create([
+            'courrier_id' => $courrier->id,
+            'type' => SuiviPaiement::TYPE_FSP_FACTURE,
+            'categorie_depense_id' => $catFacture->id,
+            'origine' => SuiviPaiement::ORIGINE_CIRCUIT_CHEQUE,
+            'numero_ligne' => 1,
+            'numero_annee' => (int) now()->year,
+            'date_suivi' => now()->toDateString(),
+            'intitule' => $courrier->objet,
+            'montant' => 1_000_000,
+            'fournisseur_libelle' => $courrier->expediteur_libelle,
+            'etabli_par_id' => $ac->id,
+        ]);
+
+        $content = $this->actingAs($taty)
+            ->get(route('suivi-factures-fournisseurs.export', ['periode' => 'tous'], absolute: false))
+            ->assertOk()
+            ->streamedContent();
+
+        $this->assertStringContainsString('3 200 000', $content);
+        $this->assertStringNotContainsString('1 000 000', $content);
     }
 
     private function creerDg(): User

@@ -193,6 +193,9 @@ class CourrierController extends Controller
             'structure_destinataire_id' => $request->structure_destinataire_id,
             'service_demandeur_structure_id' => $request->service_demandeur_structure_id,
             'objet' => $request->objet,
+            'montant_facture' => $request->filled('montant_facture')
+                ? $request->montant_facture
+                : null,
             'createur_id' => auth()->id(),
             'structure_id' => auth()->user()->structure_id,
         ]);
@@ -330,6 +333,9 @@ class CourrierController extends Controller
     {
         $courrier->update([
             'objet' => $request->objet,
+            'montant_facture' => $request->filled('montant_facture')
+                ? $request->montant_facture
+                : null,
             'type_courrier_id' => $request->type_courrier_id,
             'priorite_courrier_id' => $request->priorite_courrier_id,
             'date_reception' => $request->date_reception,

@@ -64,7 +64,7 @@
                     </td>
                     <td class="py-3 text-right">
                         @if($fc->id !== $courrier->id)
-                        <a href="{{ route('courriers.show', $fc) }}" class="text-emerald-600 text-xs font-semibold no-underline">Ouvrir</a>
+                        <x-table-action :href="route('courriers.show', $fc)">Ouvrir</x-table-action>
                         @else
                         <span class="text-xs text-emerald-600 font-semibold">Courant</span>
                         @endif

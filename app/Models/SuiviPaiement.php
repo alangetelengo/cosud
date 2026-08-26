@@ -24,6 +24,10 @@ class SuiviPaiement extends Model
 
     public const ORIGINE_REMISE_DG = 'remise_dg';
 
+    public const ORIGINE_REGULARISATION = 'regularisation';
+
+    public const ORIGINE_MORATOIRE = 'moratoire';
+
     /**
      * @return list<string>
      */
@@ -187,5 +191,16 @@ class SuiviPaiement extends Model
     {
         return $this->origine === self::ORIGINE_REMISE_DG
             || in_array($this->type, self::typesRemiseDg(), true);
+    }
+
+    public function libelleOrigine(): string
+    {
+        return match ($this->origine) {
+            self::ORIGINE_CIRCUIT_CHEQUE => 'Circuit',
+            self::ORIGINE_REGULARISATION => 'Régularisation',
+            self::ORIGINE_MORATOIRE => 'Moratoire',
+            self::ORIGINE_REMISE_DG => 'Saisie',
+            default => 'Saisie',
+        };
     }
 }

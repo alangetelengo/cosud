@@ -22,6 +22,7 @@
                         // MAD : pas de contacts externes. Facture / demande : téléphone obligatoire (SMS / mail).
                         $afficheContacts = ! in_array($t->code, ['mad'], true);
                         $telephoneObligatoire = in_array($t->code, ['facture', 'demande'], true);
+                        $necessiteMontantFacture = $t->code === 'facture';
                     @endphp
                     <option
                         value="{{ $t->id }}"
@@ -30,6 +31,7 @@
                         data-service-demandeur="{{ $necessiteServiceDemandeur ? '1' : '0' }}"
                         data-contacts="{{ $afficheContacts ? '1' : '0' }}"
                         data-telephone-requis="{{ $telephoneObligatoire ? '1' : '0' }}"
+                        data-montant-facture="{{ $necessiteMontantFacture ? '1' : '0' }}"
                         @selected(old('type_courrier_id') == $t->id)
                     >{{ $t->libelle }}</option>
                     @endforeach
@@ -56,6 +58,22 @@
             </select>
             <p class="text-xs text-slate-500 mt-1.5">Direction ou antenne départementale à l’origine de la demande.</p>
             @error('service_demandeur_structure_id')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
+        </div>
+        @endif
+
+        @if($sensCode === 'arrivee')
+        <div id="bloc-montant-facture" class="hidden">
+            @include('partials.input-montant-fcfa', [
+                'name' => 'montant_facture',
+                'id' => 'montant_facture',
+                'label' => 'Montant de la facture (FCFA)',
+                'labelClass' => $label,
+                'required' => true,
+                'class' => $field,
+                'placeholder' => 'Ex. : 1 500 000',
+                'value' => old('montant_facture'),
+            ])
+            <p class="text-xs text-slate-500 mt-1.5">Saisi à l’enregistrement pour cumuler la dette fournisseur dans COSUD.</p>
         </div>
         @endif
     </div>

@@ -24,6 +24,12 @@ class UpdateCourrierArriveeRequest extends FormRequest
     {
         return [
             'objet' => ['required', 'string', 'max:500'],
+            'montant_facture' => [
+                Rule::requiredIf(fn () => $this->typeCourrierCodeDans(['facture'])),
+                'nullable',
+                'numeric',
+                'min:1',
+            ],
             'date_reception' => ['nullable', 'date'],
             'date_courrier' => ['nullable', 'date'],
             'expediteur_libelle' => ['nullable', 'string', 'max:255'],
@@ -49,6 +55,15 @@ class UpdateCourrierArriveeRequest extends FormRequest
                 }),
             ],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('montant_facture')) {
+            $this->merge([
+                'montant_facture' => preg_replace('/\s+/', '', (string) $this->input('montant_facture')),
+            ]);
+        }
     }
 
     public function withValidator($validator): void
@@ -90,6 +105,9 @@ class UpdateCourrierArriveeRequest extends FormRequest
             'expediteur_telephone.required' => 'Le téléphone de l’expéditeur est obligatoire pour une facture ou une demande (SMS / notification).',
             'service_demandeur_structure_id.required' => 'Le service demandeur (direction) est obligatoire pour une facture ou une MAD.',
             'service_demandeur_structure_id.exists' => 'Choisissez une direction ou antenne départementale valide.',
+            'montant_facture.required' => 'Le montant de la facture est obligatoire.',
+            'montant_facture.numeric' => 'Le montant de la facture doit être un nombre.',
+            'montant_facture.min' => 'Le montant de la facture doit être supérieur à zéro.',
         ];
     }
 

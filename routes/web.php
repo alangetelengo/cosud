@@ -9,8 +9,10 @@ use App\Http\Controllers\CourrierController;
 use App\Http\Controllers\CourrierRegistreController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DossierController;
+use App\Http\Controllers\FactureRegularisationController;
 use App\Http\Controllers\FonctionController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\MoratoireController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ParametresController;
 use App\Http\Controllers\PermissionController;
@@ -27,8 +29,12 @@ use App\Http\Controllers\TypeDossierController;
 use App\Http\Controllers\TypeMetadonneeController;
 use App\Http\Controllers\UserAffectationController;
 use App\Http\Controllers\UtilisateurController;
+use App\Http\Controllers\Webhooks\InfobipWhatsAppWebhookController;
 use App\Http\Controllers\WorkflowEtapeController;
 use Illuminate\Support\Facades\Route;
+
+Route::post('/webhooks/infobip/whatsapp', InfobipWhatsAppWebhookController::class)
+    ->name('webhooks.infobip.whatsapp');
 
 Route::get('/', HomeController::class)->middleware(['auth', 'verified', '2fa'])->name('home');
 
@@ -167,6 +173,17 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::get('/suivi-factures-fournisseurs', [SuiviFacturesFournisseursController::class, 'index'])->name('suivi-factures-fournisseurs.index');
     Route::get('/suivi-factures-fournisseurs/export', [SuiviFacturesFournisseursController::class, 'export'])->name('suivi-factures-fournisseurs.export');
     Route::get('/suivi-factures-fournisseurs/imprimer', [SuiviFacturesFournisseursController::class, 'print'])->name('suivi-factures-fournisseurs.print');
+
+    Route::get('/factures-regularisation', [FactureRegularisationController::class, 'index'])->name('factures-regularisation.index');
+    Route::get('/factures-regularisation/create', [FactureRegularisationController::class, 'create'])->name('factures-regularisation.create');
+    Route::post('/factures-regularisation', [FactureRegularisationController::class, 'store'])->name('factures-regularisation.store');
+
+    Route::get('/moratoires', [MoratoireController::class, 'index'])->name('moratoires.index');
+    Route::get('/moratoires/create', [MoratoireController::class, 'create'])->name('moratoires.create');
+    Route::post('/moratoires', [MoratoireController::class, 'store'])->name('moratoires.store');
+    Route::get('/moratoires/{moratoire}', [MoratoireController::class, 'show'])->name('moratoires.show');
+    Route::get('/moratoires/{moratoire}/imprimer', [MoratoireController::class, 'print'])->name('moratoires.print');
+    Route::patch('/moratoires/{moratoire}/echeances/{echeance}', [MoratoireController::class, 'updateEcheance'])->name('moratoires.echeances.update');
     Route::get('/courriers', [CourrierController::class, 'index'])->name('courriers.index');
     Route::get('/courriers/create', [CourrierController::class, 'create'])->name('courriers.create');
     Route::post('/courriers', [CourrierController::class, 'store'])->name('courriers.store');

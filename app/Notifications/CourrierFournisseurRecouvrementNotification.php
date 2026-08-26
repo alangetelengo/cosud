@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\Courrier;
 use App\Services\SmsService;
+use App\Services\WhatsAppService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -28,7 +29,16 @@ class CourrierFournisseurRecouvrementNotification extends Notification
             $channels[] = 'mail';
         }
 
-        if ($notifiable->routeNotificationFor('cosud_sms') && app(SmsService::class)->isConfigured()) {
+        $whatsappOk = $notifiable->routeNotificationFor('cosud_whatsapp')
+            && app(WhatsAppService::class)->isConfigured();
+        if ($whatsappOk) {
+            $channels[] = 'cosud_whatsapp';
+        }
+
+        $smsOk = $notifiable->routeNotificationFor('cosud_sms')
+            && app(SmsService::class)->isConfigured()
+            && (! $whatsappOk || (bool) config('cosud.whatsapp.also_sms'));
+        if ($smsOk) {
             $channels[] = 'cosud_sms';
         }
 
@@ -54,6 +64,11 @@ class CourrierFournisseurRecouvrementNotification extends Notification
     {
         return 'COSUD n°'.$this->numero().' : chèque SIGNÉ. '
             .'Présentez-vous à l’ACSI pour le RECOUVREMENT (rappeler ce n°).';
+    }
+
+    public function toCosudWhatsapp(object $notifiable): string
+    {
+        return $this->toCosudSms($notifiable);
     }
 
     /**

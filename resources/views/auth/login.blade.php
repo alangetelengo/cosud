@@ -59,6 +59,7 @@
             </div>
             <h1>{{ config('app.name') }}</h1>
             <p>Courrier et Suivi des Dépenses</p>
+            <p style="margin-top: 6px; font-size: 0.8rem; color: #94a3b8;">v{{ config('cosud.version') }}</p>
         </section>
         <section class="form">
             <h2>Connexion</h2>

@@ -85,7 +85,7 @@
     <div id="doc-edit-grid" class="flex flex-col gap-6 md:flex-row md:gap-8 md:items-start">
         {{-- BLOC GAUCHE : Formulaire — 5/12 --}}
         <div id="doc-edit-form" class="w-full min-w-0 md:w-5/12 md:shrink-0 flex flex-col">
-            <form id="form-document-edit" action="{{ route('documents.update', $document) }}" method="POST" class="flex flex-col">
+            <form id="form-document-edit" action="{{ route('documents.update', $document) }}" method="POST" data-loading-text="Enregistrement..." class="flex flex-col">
                 @csrf
                 @method('PUT')
             <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
@@ -158,7 +158,7 @@
 
                 {{-- Boutons — sous la carte, comme sur la page Déposer --}}
                 <div class="flex flex-wrap items-center gap-4 mt-6">
-                    <button type="submit" id="btn-document-edit-submit"
+                    <button type="submit" id="btn-document-edit-submit" data-loading-text="Enregistrement..."
                             class="inline-flex items-center justify-center gap-2 min-w-[280px] px-10 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md hover:shadow-lg focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all disabled:opacity-70 whitespace-nowrap">
                         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                         <span>Enregistrer les modifications</span>

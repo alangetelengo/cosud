@@ -34,8 +34,61 @@
         <p class="text-xs mt-1 text-emerald-800/90 dark:text-emerald-200/90 leading-snug">
             Factures ayant reçu le <strong>Bon pour accord</strong> du DG.
             Suivez l’état du paiement, classez les dossiers, et exportez les rapports (semaine / mois / année) ou imprimez l’état.
+            @can('factures-regularisation.create')
+            · <a href="{{ route('factures-regularisation.index') }}" class="font-semibold underline text-emerald-900 dark:text-emerald-100">Régularisation hors circuit</a>
+            @endcan
+            @can('moratoires.view')
+            · <a href="{{ route('moratoires.index') }}" class="font-semibold underline text-emerald-900 dark:text-emerald-100">Dettes &amp; moratoires</a>
+            @endcan
         </p>
     </div>
+
+    @if(isset($dettes) && $dettes->isNotEmpty())
+    <div class="rounded-xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-amber-100 dark:border-amber-900/40 bg-amber-50/80 dark:bg-amber-900/20">
+            <h2 class="text-sm font-bold text-amber-900 dark:text-amber-100 uppercase tracking-wide">Dettes par fournisseur</h2>
+            <p class="text-xs text-amber-800/90 dark:text-amber-200/80 mt-0.5">Cumul des montants facture − paiements (chèques déchargés / échéances renseignées).</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+                <thead class="bg-slate-100 dark:bg-slate-900/60 text-slate-700 dark:text-slate-200">
+                    <tr>
+                        <th class="px-3 py-2 text-left font-bold">Fournisseur</th>
+                        <th class="px-3 py-2 text-right font-bold whitespace-nowrap">Factures</th>
+                        <th class="px-3 py-2 text-right font-bold whitespace-nowrap">Facturé</th>
+                        <th class="px-3 py-2 text-right font-bold whitespace-nowrap">Payé</th>
+                        <th class="px-3 py-2 text-right font-bold whitespace-nowrap">Dette</th>
+                        <th class="px-3 py-2 text-left font-bold whitespace-nowrap">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                    @foreach($dettes as $dette)
+                    <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/20 {{ $loop->even ? 'bg-emerald-50/30 dark:bg-emerald-900/5' : '' }}">
+                        <td class="px-3 py-2 font-semibold text-slate-800 dark:text-slate-100">{{ $dette['fournisseur_libelle'] }}</td>
+                        <td class="px-3 py-2 text-right text-slate-700 dark:text-slate-200">{{ $dette['nb_factures'] }}</td>
+                        <td class="px-3 py-2 text-right tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-200">{{ number_format($dette['montant_facture'], 0, ',', ' ') }}</td>
+                        <td class="px-3 py-2 text-right tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-200">{{ number_format($dette['montant_paye'], 0, ',', ' ') }}</td>
+                        <td class="px-3 py-2 text-right tabular-nums font-bold whitespace-nowrap text-slate-900 dark:text-slate-100">{{ number_format($dette['dette'], 0, ',', ' ') }}</td>
+                        <td class="px-3 py-2 whitespace-nowrap">
+                            <div class="inline-flex flex-wrap items-center gap-1.5">
+                            @can('moratoires.view')
+                                @if($dette['moratoire_actif_id'])
+                                    <x-table-action :href="route('moratoires.show', $dette['moratoire_actif_id'])">Plan</x-table-action>
+                                @elseif($dette['dette'] > 0)
+                                    @can('moratoires.create')
+                                    <x-table-action :href="route('moratoires.create', ['fournisseur' => $dette['fournisseur_libelle']])">Moratoire</x-table-action>
+                                    @endcan
+                                @endif
+                            @endcan
+                            </div>
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+    @endif
 
     <div class="flex flex-wrap items-center gap-2">
         <a href="{{ route('suivi-factures-fournisseurs.index', array_merge(request()->except(['periode', 'mois', 'annee']), ['periode' => 'tous'])) }}"
@@ -135,7 +188,7 @@
                             <td class="px-3 py-2">{{ $c->expediteur_libelle ?? '—' }}</td>
                             <td class="px-3 py-2 leading-snug max-w-[220px]">{{ $c->objet }}</td>
                             <td class="px-3 py-2 text-right font-semibold tabular-nums whitespace-nowrap">
-                                {{ $service->formaterMontant($c->suiviPaiement?->montant) }}
+                                {{ $service->formaterMontant($c->montant_facture ?? $c->suiviPaiement?->montant) }}
                             </td>
                             <td class="px-3 py-2">
                                 <span class="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold {{ $badge }}">
@@ -146,22 +199,20 @@
                             <td class="px-3 py-2">{{ $c->serviceDemandeurStructure?->nom ?? '—' }}</td>
                             <td class="px-3 py-2">
                                 @if($c->dossier_id)
-                                    <a href="{{ route('dossiers.show', $c->dossier_id) }}" class="text-emerald-700 dark:text-emerald-300 font-semibold no-underline hover:underline" title="{{ $c->dossier?->chemin_complet }}">
-                                        Classée
-                                    </a>
+                                    <x-table-action :href="route('dossiers.show', $c->dossier_id)" :title="$c->dossier?->chemin_complet">Classée</x-table-action>
                                 @else
                                     <span class="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">À classer</span>
                                 @endif
                             </td>
                             <td class="px-3 py-2 whitespace-nowrap">
-                                <a href="{{ route('courriers.show', $c) }}" class="text-emerald-600 font-semibold no-underline hover:underline">Ouvrir</a>
-                                @if(! $c->dossier_id)
-                                    <span class="text-slate-300 mx-1">·</span>
-                                    <a href="{{ route('courriers.show', ['courrier' => $c, 'classer' => 1]) }}" class="text-emerald-600 font-semibold no-underline hover:underline">Classer</a>
-                                @elseif($c->dossier_id)
-                                    <span class="text-slate-300 mx-1">·</span>
-                                    <a href="{{ route('dossiers.show', $c->dossier_id) }}" class="text-sky-600 font-semibold no-underline hover:underline">Dossier</a>
-                                @endif
+                                <div class="inline-flex flex-wrap items-center gap-1.5">
+                                    <x-table-action :href="route('courriers.show', $c)">Ouvrir</x-table-action>
+                                    @if(! $c->dossier_id)
+                                        <x-table-action :href="route('courriers.show', ['courrier' => $c, 'classer' => 1])">Classer</x-table-action>
+                                    @elseif($c->dossier_id)
+                                        <x-table-action :href="route('dossiers.show', $c->dossier_id)" variant="sky">Dossier</x-table-action>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @empty
