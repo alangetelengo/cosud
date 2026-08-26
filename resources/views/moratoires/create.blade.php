@@ -7,7 +7,7 @@
 @include('partials.flash-session', ['class' => 'mb-4'])
 
 <div class="max-w-2xl">
-    <form method="post" action="{{ route('moratoires.store') }}" data-loading-text="Génération..."
+    <form method="post" action="{{ route('moratoires.store') }}" enctype="multipart/form-data" data-loading-text="Génération..."
           class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-5 space-y-4">
         @csrf
         <p class="text-sm text-slate-600 dark:text-slate-300">
@@ -61,6 +61,15 @@
         <div>
             <label class="block text-xs font-semibold mb-1">Observation</label>
             <textarea name="observation" rows="2" class="w-full rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2 text-sm dark:bg-slate-900">{{ old('observation') }}</textarea>
+        </div>
+
+        <div>
+            <label class="block text-xs font-semibold mb-1">Pièces justificatives de la dette <span class="text-red-500">*</span></label>
+            <input type="file" name="fichiers[]" accept=".pdf,.jpg,.jpeg,.png" multiple required
+                   class="w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-white file:font-semibold">
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Obligatoire — PDF ou images (facture, état de dette, etc.). Plusieurs fichiers possibles.</p>
+            @error('fichiers')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            @error('fichiers.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
         </div>
 
         <div class="flex flex-wrap gap-3 pt-2">

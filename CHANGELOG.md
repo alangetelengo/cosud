@@ -3,6 +3,17 @@
 Toutes les évolutions notables de COSUD sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et [Versionnement sémantique](https://semver.org/lang/fr/).
 
+## [1.0.1] - 2026-08-26
+
+### Corrigé
+
+- Driver WhatsApp `log` : ne masque plus les SMS réels (`isConfigured()` = false ; `canSend()` pour la simulation)
+- Échéancier moratoire : erreur explicite si plus de 500 échéances (plus de création tronquée)
+
+### Ajouté
+
+- Pièces justificatives obligatoires à la création d’un moratoire (liaison documents)
+
 ## [1.0.0] - 2026-08-26
 
 ### Ajouté

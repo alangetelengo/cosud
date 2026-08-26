@@ -20,11 +20,11 @@ class WhatsAppTestCommand extends Command
         $driver = $whatsapp->driver();
 
         $this->info("Driver : {$driver}");
-        $this->line('Configuré : '.($whatsapp->isConfigured() ? 'oui' : 'non'));
+        $this->line('Canal réel configuré : '.($whatsapp->isConfigured() ? 'oui' : 'non'));
 
-        if (! $whatsapp->isConfigured()) {
+        if (! $whatsapp->canSend()) {
             $this->error('WhatsApp non configuré pour ce driver.');
-            $this->line('log     → toujours OK (simulation)');
+            $this->line('log     → simulation locale (ne masque pas les SMS)');
             $this->line('meta    → COSUD_WHATSAPP_META_TOKEN + COSUD_WHATSAPP_META_PHONE_NUMBER_ID');
             $this->line('infobip → COSUD_WHATSAPP_FROM + clé API Infobip');
 
@@ -32,7 +32,7 @@ class WhatsAppTestCommand extends Command
         }
 
         if ($driver === 'log') {
-            $this->warn('Mode log : aucun message ne partira sur WhatsApp. Consultez storage/logs/cosud.log');
+            $this->warn('Mode log : simulation uniquement (SMS restent actifs). Consultez storage/logs/cosud.log');
         }
 
         $ok = $whatsapp->send($telephone, $message);

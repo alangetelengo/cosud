@@ -17,10 +17,14 @@ class WhatsAppService
         return strtolower((string) config('cosud.whatsapp.driver', 'log'));
     }
 
+    /**
+     * True si un canal WhatsApp réel (Meta / Infobip) est prêt à délivrer.
+     * Le driver « log » n’est jamais « configuré » : il ne doit pas masquer les SMS.
+     */
     public function isConfigured(): bool
     {
         return match ($this->driver()) {
-            'log' => true,
+            'log' => false,
             'meta' => filled(config('cosud.whatsapp.meta.token'))
                 && filled(config('cosud.whatsapp.meta.phone_number_id')),
             'infobip' => filled($this->infobipApiKey())
@@ -28,6 +32,14 @@ class WhatsAppService
                 && filled(config('cosud.whatsapp.infobip.base_url')),
             default => false,
         };
+    }
+
+    /**
+     * True si un envoi peut être tenté (simulation log ou canal réel configuré).
+     */
+    public function canSend(): bool
+    {
+        return $this->driver() === 'log' || $this->isConfigured();
     }
 
     /**
@@ -56,7 +68,7 @@ class WhatsAppService
             return false;
         }
 
-        if (! $this->isConfigured()) {
+        if (! $this->canSend()) {
             Log::channel('cosud')->warning('WhatsApp: driver non configuré', [
                 'driver' => $driver,
             ]);
@@ -78,7 +90,7 @@ class WhatsAppService
     public function sendTemplate(string $to, string $templateName, array $placeholders = []): bool
     {
         $phoneNorm = $this->sms->normalizeSmsPhone($to);
-        if ($phoneNorm === '' || ! $this->isConfigured()) {
+        if ($phoneNorm === '' || ! $this->canSend()) {
             return false;
         }
 
@@ -93,7 +105,7 @@ class WhatsAppService
     public function sendText(string $to, string $content): bool
     {
         $phoneNorm = $this->sms->normalizeSmsPhone($to);
-        if ($phoneNorm === '' || ! $this->isConfigured()) {
+        if ($phoneNorm === '' || ! $this->canSend()) {
             return false;
         }
 

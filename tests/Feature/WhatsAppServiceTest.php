@@ -8,13 +8,16 @@ use Tests\TestCase;
 
 class WhatsAppServiceTest extends TestCase
 {
-    public function test_driver_log_simule_un_envoi(): void
+    public function test_driver_log_simule_un_envoi_sans_masquer_sms(): void
     {
         config(['cosud.whatsapp.driver' => 'log']);
         Http::fake();
 
-        $this->assertTrue(app(WhatsAppService::class)->isConfigured());
-        $this->assertTrue(app(WhatsAppService::class)->send('+242044164337', 'Test COSUD'));
+        $whatsapp = app(WhatsAppService::class);
+
+        $this->assertFalse($whatsapp->isConfigured());
+        $this->assertTrue($whatsapp->canSend());
+        $this->assertTrue($whatsapp->send('+242044164337', 'Test COSUD'));
         Http::assertNothingSent();
     }
 

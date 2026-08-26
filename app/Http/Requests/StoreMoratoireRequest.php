@@ -25,6 +25,8 @@ class StoreMoratoireRequest extends FormRequest
             'date_document' => ['nullable', 'date'],
             'signataire_libelle' => ['nullable', 'string', 'max:255'],
             'observation' => ['nullable', 'string', 'max:2000'],
+            'fichiers' => ['required', 'array', 'min:1', 'max:20'],
+            'fichiers.*' => ['file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ];
     }
 
@@ -50,6 +52,10 @@ class StoreMoratoireRequest extends FormRequest
             'montant_dette_initial.min' => 'La dette doit être supérieure à zéro.',
             'montant_echeance_defaut.required' => 'Le montant d’échéance est obligatoire.',
             'montant_echeance_defaut.min' => 'L’échéance doit être supérieure à zéro.',
+            'fichiers.required' => 'Au moins une pièce justificative de la dette est obligatoire.',
+            'fichiers.min' => 'Au moins une pièce justificative de la dette est obligatoire.',
+            'fichiers.*.mimes' => 'Chaque justificatif doit être un PDF ou une image (JPG, PNG).',
+            'fichiers.*.max' => 'Chaque justificatif ne doit pas dépasser 10 Mo.',
         ];
     }
 }

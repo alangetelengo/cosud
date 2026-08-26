@@ -11,14 +11,14 @@ class CosudVersionTest extends TestCase
 
     public function test_cosud_version_config_has_semantic_default(): void
     {
-        $this->assertSame('1.0.0', config('cosud.version'));
+        $this->assertSame('1.0.1', config('cosud.version'));
         $this->assertSame('2026-08-26', config('cosud.released_at'));
     }
 
     public function test_cosud_version_command_displays_version(): void
     {
         $this->artisan('cosud:version')
-            ->expectsOutputToContain('COSUD 1.0.0')
+            ->expectsOutputToContain('COSUD 1.0.1')
             ->assertSuccessful();
     }
 
@@ -27,6 +27,6 @@ class CosudVersionTest extends TestCase
         $response = $this->get(route('login'));
 
         $response->assertOk();
-        $response->assertSee('v1.0.0', false);
+        $response->assertSee('v1.0.1', false);
     }
 }

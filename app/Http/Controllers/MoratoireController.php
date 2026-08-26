@@ -62,7 +62,11 @@ class MoratoireController extends Controller
     public function store(StoreMoratoireRequest $request): RedirectResponse
     {
         try {
-            $moratoire = $this->moratoireService->creer($request->user(), $request->validated());
+            $moratoire = $this->moratoireService->creer(
+                $request->user(),
+                $request->safe()->except('fichiers'),
+                array_values(array_filter((array) $request->file('fichiers', []))),
+            );
         } catch (InvalidArgumentException $e) {
             return back()->withInput()->withErrors(['fournisseur_libelle' => $e->getMessage()]);
         }
@@ -76,7 +80,7 @@ class MoratoireController extends Controller
     {
         $this->authorize('view', $moratoire);
 
-        $moratoire->load(['echeances.suiviPaiement', 'createur']);
+        $moratoire->load(['echeances.suiviPaiement', 'createur', 'documents']);
 
         return view('moratoires.show', [
             'moratoire' => $moratoire,

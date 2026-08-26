@@ -90,6 +90,34 @@ class FournisseurDetteEtMoratoireTest extends TestCase
         $this->assertEquals($lignes[10]['solde'], $lignes[11]['montant_dette']);
     }
 
+    public function test_generation_echeancier_refuse_plus_de_500_lignes(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('500 échéances');
+
+        app(MoratoireService::class)->genererLignesEcheancier(1_000_000, 1);
+    }
+
+    public function test_creation_moratoire_exige_pieces_justificatives_dette(): void
+    {
+        Storage::fake('public');
+
+        $eleni = User::factory()->create();
+        $eleni->assignRole('responsable_suivi_depenses');
+
+        $this->actingAs($eleni)
+            ->from(route('moratoires.create', absolute: false))
+            ->post(route('moratoires.store', absolute: false), [
+                'fournisseur_libelle' => 'ETABLISSEMENT JAY',
+                'montant_dette_initial' => '17 989 516',
+                'montant_echeance_defaut' => '1 500 000',
+            ])
+            ->assertRedirect(route('moratoires.create', absolute: false))
+            ->assertSessionHasErrors('fichiers');
+
+        $this->assertSame(0, Moratoire::query()->count());
+    }
+
     public function test_responsable_peut_creer_moratoire_et_saisir_cheque(): void
     {
         Storage::fake('public');
@@ -104,12 +132,17 @@ class FournisseurDetteEtMoratoireTest extends TestCase
                 'montant_echeance_defaut' => '1 500 000',
                 'lieu' => 'Brazzaville',
                 'signataire_libelle' => $eleni->name,
+                'fichiers' => [
+                    UploadedFile::fake()->create('etat-dette.pdf', 100, 'application/pdf'),
+                ],
             ])
             ->assertRedirect();
 
         $moratoire = Moratoire::query()->first();
         $this->assertNotNull($moratoire);
         $this->assertSame(12, $moratoire->echeances()->count());
+        $this->assertCount(1, $moratoire->documents);
+        $this->assertSame('etat-dette.pdf', $moratoire->documents->first()->nom_original);
 
         $echeance = $moratoire->echeances()->where('numero', 1)->first();
         $this->assertNotNull($echeance);

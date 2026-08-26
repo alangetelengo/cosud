@@ -5,7 +5,7 @@ return [
      * Version applicative COSUD (sémantique MAJEUR.MINEUR.CATCH).
      * Incrémenter à chaque livraison : tag Git vX.Y.Z + entrée CHANGELOG.md.
      */
-    'version' => env('COSUD_VERSION', '1.0.0'),
+    'version' => env('COSUD_VERSION', '1.0.1'),
 
     /**
      * Date de la version courante (mise en production ou release).
@@ -92,11 +92,10 @@ return [
 
     /**
      * WhatsApp multi-driver :
-     * - log : simulation locale (aucun envoi, logs cosud) — pour tester le flux sans compte
+     * - log : simulation locale (logs cosud) — isConfigured() = false pour ne pas masquer les SMS
      * - meta : Meta Cloud API (sandbox gratuit developers.facebook.com)
      * - infobip : Infobip WhatsApp Business
-     * also_sms : si
-     * true, envoie aussi le SMS quand WhatsApp est actif.
+     * also_sms : si true, envoie aussi le SMS quand un canal WhatsApp réel (meta/infobip) est actif.
      */
     'whatsapp' => [
         'driver' => env('COSUD_WHATSAPP_DRIVER', 'log'),

@@ -140,6 +140,33 @@
         </div>
     </div>
 
+    @if($moratoire->documents->isNotEmpty())
+    <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-700/30">
+            <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide">Pièces justificatives de la dette</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ $moratoire->documents->count() }} fichier(s)</p>
+        </div>
+        <ul class="divide-y divide-slate-100 dark:divide-slate-700">
+            @foreach($moratoire->documents as $document)
+            <li class="px-4 py-2.5 flex items-center justify-between gap-3 text-sm">
+                <span class="min-w-0 truncate text-slate-700 dark:text-slate-200" title="{{ $document->nom_original }}">
+                    {{ $document->nom_original }}
+                    @if($document->pivot?->est_principal)
+                        <span class="ml-1 text-[10px] font-semibold uppercase text-emerald-700 dark:text-emerald-300">principal</span>
+                    @endif
+                </span>
+                @can('view', $document)
+                <a href="{{ route('documents.show', $document) }}"
+                   class="shrink-0 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:underline no-underline">
+                    Ouvrir
+                </a>
+                @endcan
+            </li>
+            @endforeach
+        </ul>
+    </div>
+    @endif
+
     <p class="text-sm">
         <x-table-action :href="route('moratoires.index')">← Retour à la liste</x-table-action>
     </p>

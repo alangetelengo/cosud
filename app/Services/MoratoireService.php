@@ -2,8 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Document;
 use App\Models\Moratoire;
 use App\Models\MoratoireEcheance;
+use App\Models\StatutDocument;
+use App\Models\TypeDocument;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -27,15 +30,21 @@ class MoratoireService
      *     signataire_libelle?: ?string,
      *     observation?: ?string
      * }  $donnees
+     * @param  list<UploadedFile>  $fichiers
      */
-    public function creer(User $acteur, array $donnees): Moratoire
+    public function creer(User $acteur, array $donnees, array $fichiers = []): Moratoire
     {
         $fournisseur = trim($donnees['fournisseur_libelle']);
         $dette = (float) $donnees['montant_dette_initial'];
         $echeance = (float) $donnees['montant_echeance_defaut'];
+        $fichiers = array_values(array_filter($fichiers));
 
         if ($fournisseur === '' || $dette <= 0 || $echeance <= 0) {
             throw new InvalidArgumentException('Fournisseur, dette initiale et échéance doivent être renseignés.');
+        }
+
+        if ($fichiers === []) {
+            throw new InvalidArgumentException('Au moins une pièce justificative de la dette est obligatoire.');
         }
 
         if ($echeance > $dette) {
@@ -55,7 +64,7 @@ class MoratoireService
 
         $lignes = $this->genererLignesEcheancier($dette, $echeance);
 
-        return DB::transaction(function () use ($acteur, $donnees, $fournisseur, $normalise, $dette, $echeance, $lignes): Moratoire {
+        return DB::transaction(function () use ($acteur, $donnees, $fournisseur, $normalise, $dette, $echeance, $lignes, $fichiers): Moratoire {
             $moratoire = Moratoire::query()->create([
                 'fournisseur_libelle' => $fournisseur,
                 'fournisseur_normalise' => $normalise,
@@ -73,7 +82,11 @@ class MoratoireService
                 $moratoire->echeances()->create($ligne);
             }
 
-            return $moratoire->load('echeances');
+            foreach ($fichiers as $index => $fichier) {
+                $this->attacherJustificatifDette($moratoire, $acteur, $fichier, $index === 0);
+            }
+
+            return $moratoire->load(['echeances', 'documents']);
         });
     }
 
@@ -110,6 +123,12 @@ class MoratoireService
 
             $reste = $solde;
             $numero++;
+        }
+
+        if ($reste > 0) {
+            throw new InvalidArgumentException(
+                'L’échéancier dépasse 500 échéances : augmentez le montant d’échéance ou réduisez la dette initiale.'
+            );
         }
 
         return $lignes;
@@ -167,5 +186,46 @@ class MoratoireService
 
             return $echeance->fresh(['suiviPaiement']);
         });
+    }
+
+    private function attacherJustificatifDette(
+        Moratoire $moratoire,
+        User $acteur,
+        UploadedFile $fichier,
+        bool $principal,
+    ): void {
+        $typeDoc = TypeDocument::query()
+            ->whereIn('code', ['PDF', 'COURRIER_IN', 'COURRIER', 'LETTRE'])
+            ->where('actif', true)
+            ->orderByRaw("CASE WHEN code = 'PDF' THEN 0 WHEN code LIKE 'COURRIER_%' THEN 1 ELSE 2 END")
+            ->first();
+
+        if (! $typeDoc) {
+            throw new \RuntimeException('Aucun type de document disponible pour les justificatifs de dette.');
+        }
+
+        $statut = StatutDocument::query()->where('code', 'brouillon')->first();
+        $chemin = $fichier->store('documents/moratoires/'.date('Y/m'), 'public');
+
+        $document = Document::query()->create([
+            'type_document_id' => $typeDoc->id,
+            'user_id' => $acteur->id,
+            'createur_id' => $acteur->id,
+            'proprietaire_id' => $acteur->id,
+            'dossier_id' => null,
+            'nom_original' => $fichier->getClientOriginalName(),
+            'chemin' => $chemin,
+            'extension' => $fichier->getClientOriginalExtension(),
+            'taille_octets' => $fichier->getSize(),
+            'mime_type' => $fichier->getMimeType(),
+            'titre' => 'Justificatif dette — '.$moratoire->fournisseur_libelle,
+            'description' => 'Pièce justificative de la dette jointe à la création du moratoire',
+            'statut' => 'brouillon',
+            'statut_document_id' => $statut?->id,
+            'en_corbeille' => false,
+            'confidentiel' => false,
+        ]);
+
+        $moratoire->documents()->attach($document->id, ['est_principal' => $principal]);
     }
 }

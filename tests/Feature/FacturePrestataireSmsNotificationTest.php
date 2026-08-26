@@ -41,7 +41,7 @@ class FacturePrestataireSmsNotificationTest extends TestCase
         $sms->shouldReceive('isConfigured')->andReturn(true);
         $this->app->instance(SmsService::class, $sms);
 
-        config(['cosud.whatsapp.driver' => '']);
+        config(['cosud.whatsapp.driver' => 'log']);
     }
 
     public function test_enregistrement_facture_envoie_sms_au_dg(): void
