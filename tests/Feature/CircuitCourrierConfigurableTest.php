@@ -45,7 +45,7 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->assertDatabaseHas('circuit_courriers', ['code' => 'courrier_general', 'actif' => true]);
 
         $facture = CircuitCourrier::where('code', 'facture_prestataire')->firstOrFail();
-        $this->assertGreaterThanOrEqual(9, $facture->etapesActives()->count());
+        $this->assertSame(5, $facture->etapesActives()->count());
         $this->assertDatabaseHas('circuit_courrier_etapes', [
             'circuit_courrier_id' => $facture->id,
             'code' => 'preuve_paiement',
@@ -532,8 +532,9 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->actingAs($secretaire)
             ->get(route('courriers.show', $courrier->fresh(), absolute: false))
             ->assertOk()
-            ->assertSee('En attente des instructions du DG / directeur.', false)
-            ->assertDontSee('A — Instruire', false)
+            ->assertSee('Circuit métier', false)
+            ->assertSee('Bon pour accord / instructions DG', false)
+            ->assertDontSee('A — Instruire le dossier', false)
             ->assertDontSee('Répondre moi-même et signer', false);
     }
 
@@ -793,6 +794,7 @@ class CircuitCourrierConfigurableTest extends TestCase
             'service_demandeur_structure_id' => in_array($typeCode, ['facture', 'mad'], true)
                 ? Structure::where('code', 'DAF')->value('id')
                 : null,
+            'montant_facture' => in_array($typeCode, ['facture', 'mad'], true) ? 500_000 : null,
         ]);
     }
 }

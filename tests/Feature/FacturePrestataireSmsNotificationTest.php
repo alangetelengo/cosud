@@ -40,6 +40,8 @@ class FacturePrestataireSmsNotificationTest extends TestCase
         $sms = Mockery::mock(SmsService::class)->makePartial();
         $sms->shouldReceive('isConfigured')->andReturn(true);
         $this->app->instance(SmsService::class, $sms);
+
+        config(['cosud.whatsapp.driver' => '']);
     }
 
     public function test_enregistrement_facture_envoie_sms_au_dg(): void
@@ -170,6 +172,7 @@ class FacturePrestataireSmsNotificationTest extends TestCase
             'createur_id' => $createur->id,
             'structure_id' => Structure::where('code', 'SEC-DIR')->value('id'),
             'service_demandeur_structure_id' => Structure::where('code', 'DAF')->value('id'),
+            'montant_facture' => 1_000_000,
         ]);
     }
 }

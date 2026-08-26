@@ -53,6 +53,7 @@ class CourrierPiecesMultiplesTest extends TestCase
                 'expediteur_telephone' => '+242060000001',
                 'date_reception' => now()->toDateString(),
                 'service_demandeur_structure_id' => Structure::where('code', 'DAF')->value('id'),
+                'montant_facture' => '500000',
                 'fichiers' => [
                     UploadedFile::fake()->create('facture.pdf', 50, 'application/pdf'),
                     UploadedFile::fake()->create('bon-pour-accord.pdf', 30, 'application/pdf'),
@@ -116,6 +117,7 @@ class CourrierPiecesMultiplesTest extends TestCase
             'createur_id' => $acteur->id,
             'structure_id' => Structure::where('code', 'SEC-DIR')->value('id'),
             'service_demandeur_structure_id' => Structure::where('code', 'DAF')->value('id'),
+            'montant_facture' => 500_000,
         ]);
 
         $circuit = CircuitCourrier::where('code', 'facture_prestataire')->firstOrFail();

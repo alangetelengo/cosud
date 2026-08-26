@@ -170,6 +170,16 @@ class CourrierVisibiliteService
                                     fn (Builder $e) => $e->whereJsonContains('notifie_roles', $role)
                                 );
                             }
+
+                            if (in_array('responsable_suivi_depenses', $roleNames, true)) {
+                                foreach ($roleNames as $role) {
+                                    $implique->orWhereHas(
+                                        'circuit.etapes',
+                                        fn (Builder $e) => $e->where('actif', true)
+                                            ->whereJsonContains('notifie_roles', $role)
+                                    );
+                                }
+                            }
                         });
                 });
             }
@@ -205,7 +215,24 @@ class CourrierVisibiliteService
         $courrier->loadMissing('circuitEtapeActuelle');
         $notifie = $courrier->circuitEtapeActuelle?->notifie_roles ?? [];
 
-        return is_array($notifie) && array_intersect($roleNames, $notifie) !== [];
+        if (is_array($notifie) && array_intersect($roleNames, $notifie) !== []) {
+            return true;
+        }
+
+        // Eleni est notifiée à l’étape « preuve_paiement » : elle peut suivre la facture en amont.
+        if (! $user->hasRole('responsable_suivi_depenses')) {
+            return false;
+        }
+
+        return CircuitCourrierEtape::query()
+            ->where('circuit_courrier_id', $courrier->circuit_courrier_id)
+            ->where('actif', true)
+            ->where(function (Builder $q) use ($roleNames): void {
+                foreach ($roleNames as $role) {
+                    $q->orWhereJsonContains('notifie_roles', $role);
+                }
+            })
+            ->exists();
     }
 
     public function estVisible(Courrier $courrier, User $user): bool

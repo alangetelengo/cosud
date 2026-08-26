@@ -49,6 +49,7 @@ class CourrierExpediteurContactClotureTest extends TestCase
             'cosud.sms.provider' => 'wirepick',
             'cosud.sms.wirepick.client' => 'test-client',
             'cosud.sms.wirepick.password' => 'secret-password',
+            'cosud.whatsapp.driver' => '',
         ]);
 
         $secretaire = $this->creerSecretaire();
@@ -91,6 +92,7 @@ class CourrierExpediteurContactClotureTest extends TestCase
             'cosud.sms.provider' => 'wirepick',
             'cosud.sms.wirepick.client' => 'test-client',
             'cosud.sms.wirepick.password' => 'secret-password',
+            'cosud.whatsapp.driver' => '',
         ]);
 
         $dg = $this->creerDg();
@@ -139,6 +141,7 @@ class CourrierExpediteurContactClotureTest extends TestCase
             'cosud.sms.provider' => 'wirepick',
             'cosud.sms.wirepick.client' => 'test-client',
             'cosud.sms.wirepick.password' => 'secret-password',
+            'cosud.whatsapp.driver' => '',
         ]);
 
         $dg = $this->creerDg();

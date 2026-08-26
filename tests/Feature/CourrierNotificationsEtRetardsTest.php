@@ -60,6 +60,7 @@ class CourrierNotificationsEtRetardsTest extends TestCase
                 'date_reception' => now()->toDateString(),
                 'type_courrier_id' => $type->id,
                 'service_demandeur_structure_id' => Structure::where('code', 'DAF')->value('id'),
+                'montant_facture' => '600000',
                 'fichier' => UploadedFile::fake()->create('f.pdf', 20, 'application/pdf'),
             ])
             ->assertRedirect();

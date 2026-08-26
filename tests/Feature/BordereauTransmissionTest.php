@@ -115,7 +115,7 @@ class BordereauTransmissionTest extends TestCase
                 'montant' => 100000,
             ])
             ->assertRedirect(route('courriers.show', $courrier, absolute: false))
-            ->assertSessionHasErrors(['numero_piece', 'banque', 'beneficiaire_libelle']);
+            ->assertSessionHasErrors(['numero_piece', 'banque']);
     }
 
     private function creerChequeEnSignature(string $numeroPiece, string $beneficiaire): Courrier
@@ -179,6 +179,7 @@ class BordereauTransmissionTest extends TestCase
             'createur_id' => $acteur->id,
             'structure_id' => Structure::where('code', 'SEC-DIR')->value('id'),
             'service_demandeur_structure_id' => Structure::where('code', 'DAF')->value('id'),
+            'montant_facture' => 594_500,
         ]);
     }
 }

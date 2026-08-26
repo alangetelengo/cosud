@@ -108,6 +108,7 @@ class SuiviPaiementTest extends TestCase
                 'date_reception' => now()->toDateString(),
                 'type_courrier_id' => $type->id,
                 'service_demandeur_structure_id' => $daf->id,
+                'montant_facture' => '750000',
                 'fichier' => UploadedFile::fake()->create('f.pdf', 20, 'application/pdf'),
             ])
             ->assertRedirect();

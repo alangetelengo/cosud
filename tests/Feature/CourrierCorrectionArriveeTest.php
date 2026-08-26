@@ -55,6 +55,7 @@ class CourrierCorrectionArriveeTest extends TestCase
                 'date_reception' => now()->toDateString(),
                 'type_courrier_id' => $courrier->type_courrier_id,
                 'service_demandeur_structure_id' => $dafId,
+                'montant_facture' => '1250000',
             ])
             ->assertRedirect(route('courriers.show', $courrier, absolute: false));
 
@@ -81,6 +82,7 @@ class CourrierCorrectionArriveeTest extends TestCase
                 'numero_fulgurant' => $courrier->numero_fulgurant,
                 'type_courrier_id' => $courrier->type_courrier_id,
                 'service_demandeur_structure_id' => $dafId,
+                'montant_facture' => '1250000',
             ])
             ->assertRedirect(route('courriers.show', $courrier, absolute: false));
 
@@ -102,6 +104,7 @@ class CourrierCorrectionArriveeTest extends TestCase
                 'numero_fulgurant' => $courrier->numero_fulgurant,
                 'type_courrier_id' => $courrier->type_courrier_id,
                 'service_demandeur_structure_id' => $dafId,
+                'montant_facture' => '1250000',
             ])
             ->assertRedirect()
             ->assertSessionHasErrors('expediteur_telephone');
@@ -120,6 +123,7 @@ class CourrierCorrectionArriveeTest extends TestCase
                 'expediteur_telephone' => '+242060000099',
                 'numero_fulgurant' => $courrier->numero_fulgurant,
                 'type_courrier_id' => $courrier->type_courrier_id,
+                'montant_facture' => '1250000',
             ])
             ->assertRedirect()
             ->assertSessionHasErrors('service_demandeur_structure_id');
@@ -255,6 +259,7 @@ class CourrierCorrectionArriveeTest extends TestCase
             'date_reception' => now()->toDateString(),
             'expediteur_libelle' => 'EEC',
             'objet' => 'Facture électricité',
+            'montant_facture' => 1_250_000,
             'createur_id' => $user->id,
             'structure_id' => $user->structure_id,
         ]);
