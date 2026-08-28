@@ -45,6 +45,7 @@ class DatabaseSeeder extends Seeder
             CourrierActeursDgSeeder::class,
             TypeMetadonneeSeeder::class,
             PlanClassementSeeder::class,
+            FournisseurPrestataireSeeder::class,
             // Le seeder ACSI projet est conservé pour neutraliser d'anciens circuits "acsi_service_*".
             ACSIProjectFunctionWorkflowSeeder::class,
         ]);

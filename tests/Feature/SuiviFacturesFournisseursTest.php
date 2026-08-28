@@ -153,7 +153,7 @@ class SuiviFacturesFournisseursTest extends TestCase
             ->assertDontSee('Facture annee precedente', false);
     }
 
-    public function test_export_csv_privilegie_montant_facture_sur_suivi(): void
+    public function test_export_csv_affiche_montant_facture_paye_et_reliquat(): void
     {
         $taty = User::factory()->create();
         $taty->assignRole('responsable_dossiers_prestataires');
@@ -186,8 +186,56 @@ class SuiviFacturesFournisseursTest extends TestCase
             ->assertOk()
             ->streamedContent();
 
+        $this->assertStringContainsString('Montant facture', $content);
+        $this->assertStringContainsString('Montant payé', $content);
+        $this->assertStringContainsString('Reliquat', $content);
         $this->assertStringContainsString('3 200 000', $content);
-        $this->assertStringNotContainsString('1 000 000', $content);
+        $this->assertStringContainsString('1 000 000', $content);
+        $this->assertStringContainsString('2 200 000', $content);
+    }
+
+    public function test_suivi_affiche_reliquat_quand_cheque_inferieur_a_la_facture(): void
+    {
+        $taty = User::factory()->create();
+        $taty->assignRole('responsable_dossiers_prestataires');
+
+        $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+
+        $moteur = app(CircuitCourrierMoteurService::class);
+        $courrier = $moteur->instruire($this->demarrerFacture($dg, 'Facture reliquat partiel'), $dg, 'BPA.', $ac->id);
+        $courrier->forceFill([
+            'montant_facture' => 2_500_000,
+            'circuit_etape_actuelle_id' => null,
+        ])->save();
+
+        $catFacture = CategorieDepense::query()->where('code', CategorieDepense::CODE_FACTURE)->firstOrFail();
+        SuiviPaiement::query()->create([
+            'courrier_id' => $courrier->id,
+            'type' => SuiviPaiement::TYPE_FSP_FACTURE,
+            'categorie_depense_id' => $catFacture->id,
+            'origine' => SuiviPaiement::ORIGINE_CIRCUIT_CHEQUE,
+            'numero_ligne' => 2,
+            'numero_annee' => (int) now()->year,
+            'date_suivi' => now()->toDateString(),
+            'date_decharge' => now()->toDateString(),
+            'controle_at' => now(),
+            'intitule' => $courrier->objet,
+            'montant' => 1_500_000,
+            'fournisseur_libelle' => $courrier->expediteur_libelle,
+            'etabli_par_id' => $ac->id,
+        ]);
+
+        $this->actingAs($taty)
+            ->get(route('suivi-factures-fournisseurs.index', absolute: false))
+            ->assertOk()
+            ->assertSee('Montant facture', false)
+            ->assertSee('Reliquat', false)
+            ->assertSee('2 500 000', false)
+            ->assertSee('1 500 000', false)
+            ->assertSee('1 000 000', false)
+            ->assertSee('Reliquat à payer', false);
     }
 
     private function creerDg(): User

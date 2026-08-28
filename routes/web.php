@@ -11,6 +11,7 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DossierController;
 use App\Http\Controllers\FactureRegularisationController;
 use App\Http\Controllers\FonctionController;
+use App\Http\Controllers\FournisseurPrestataireController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MoratoireController;
 use App\Http\Controllers\NotificationController;
@@ -174,13 +175,30 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::get('/suivi-factures-fournisseurs/export', [SuiviFacturesFournisseursController::class, 'export'])->name('suivi-factures-fournisseurs.export');
     Route::get('/suivi-factures-fournisseurs/imprimer', [SuiviFacturesFournisseursController::class, 'print'])->name('suivi-factures-fournisseurs.print');
 
+    Route::get('/fournisseurs-prestataires', [FournisseurPrestataireController::class, 'index'])->name('fournisseurs-prestataires.index');
+    Route::get('/fournisseurs-prestataires/imprimer', [FournisseurPrestataireController::class, 'print'])->name('fournisseurs-prestataires.print');
+    Route::get('/fournisseurs-prestataires/create', [FournisseurPrestataireController::class, 'create'])->name('fournisseurs-prestataires.create');
+    Route::post('/fournisseurs-prestataires', [FournisseurPrestataireController::class, 'store'])->name('fournisseurs-prestataires.store');
+    Route::get('/fournisseurs-prestataires/{fournisseur_prestataire}', [FournisseurPrestataireController::class, 'show'])->name('fournisseurs-prestataires.show');
+    Route::get('/fournisseurs-prestataires/{fournisseur_prestataire}/edit', [FournisseurPrestataireController::class, 'edit'])->name('fournisseurs-prestataires.edit');
+    Route::put('/fournisseurs-prestataires/{fournisseur_prestataire}', [FournisseurPrestataireController::class, 'update'])->name('fournisseurs-prestataires.update');
+    Route::delete('/fournisseurs-prestataires/{fournisseur_prestataire}', [FournisseurPrestataireController::class, 'destroy'])->name('fournisseurs-prestataires.destroy');
+
     Route::get('/factures-regularisation', [FactureRegularisationController::class, 'index'])->name('factures-regularisation.index');
     Route::get('/factures-regularisation/create', [FactureRegularisationController::class, 'create'])->name('factures-regularisation.create');
     Route::post('/factures-regularisation', [FactureRegularisationController::class, 'store'])->name('factures-regularisation.store');
+    Route::get('/factures-regularisation/{courrier}/edit', [FactureRegularisationController::class, 'edit'])->name('factures-regularisation.edit');
+    Route::put('/factures-regularisation/{courrier}', [FactureRegularisationController::class, 'update'])->name('factures-regularisation.update');
+    Route::delete('/factures-regularisation/{courrier}', [FactureRegularisationController::class, 'destroy'])->name('factures-regularisation.destroy');
+    Route::get('/factures-regularisation/{courrier}/payer', [FactureRegularisationController::class, 'payerForm'])->name('factures-regularisation.payer');
+    Route::post('/factures-regularisation/{courrier}/payer', [FactureRegularisationController::class, 'payer'])->name('factures-regularisation.payer.store');
 
     Route::get('/moratoires', [MoratoireController::class, 'index'])->name('moratoires.index');
     Route::get('/moratoires/create', [MoratoireController::class, 'create'])->name('moratoires.create');
     Route::post('/moratoires', [MoratoireController::class, 'store'])->name('moratoires.store');
+    Route::get('/moratoires/dettes/detail', [MoratoireController::class, 'detailDettes'])->name('moratoires.dettes.detail');
+    Route::get('/moratoires/imprimer-dettes', [MoratoireController::class, 'printDettes'])->name('moratoires.print-dettes');
+    Route::get('/moratoires/imprimer-plans', [MoratoireController::class, 'printPlans'])->name('moratoires.print-plans');
     Route::get('/moratoires/{moratoire}', [MoratoireController::class, 'show'])->name('moratoires.show');
     Route::get('/moratoires/{moratoire}/imprimer', [MoratoireController::class, 'print'])->name('moratoires.print');
     Route::patch('/moratoires/{moratoire}/echeances/{echeance}', [MoratoireController::class, 'updateEcheance'])->name('moratoires.echeances.update');
@@ -190,6 +208,7 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::get('/courriers/{courrier}', [CourrierController::class, 'show'])->name('courriers.show');
     Route::get('/courriers/{courrier}/edit', [CourrierController::class, 'edit'])->name('courriers.edit');
     Route::put('/courriers/{courrier}', [CourrierController::class, 'update'])->name('courriers.update');
+    Route::delete('/courriers/{courrier}', [CourrierController::class, 'destroy'])->name('courriers.destroy');
     Route::post('/courriers/{courrier}/parapheur', [CourrierController::class, 'mettreEnParapheur'])->name('courriers.parapheur');
     Route::post('/courriers/{courrier}/orienter', [CourrierController::class, 'orienter'])->name('courriers.orienter');
     Route::post('/courriers/{courrier}/ventiler', [CourrierController::class, 'ventiler'])->name('courriers.ventiler');
@@ -200,7 +219,7 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::post('/courriers/{courrier}/transmettre', [CourrierController::class, 'transmettre'])->name('courriers.transmettre');
     Route::post('/courriers/{courrier}/transmettre-directeur', [CourrierController::class, 'transmettreAuDirecteur'])->name('courriers.transmettre-directeur');
     Route::post('/courriers/{courrier}/rejeter-depart', [CourrierController::class, 'rejeterDepart'])->name('courriers.rejeter-depart');
-    Route::post('/courriers/{courrier}/annuler', [CourrierController::class, 'annulerDepart'])->name('courriers.annuler');
+    Route::post('/courriers/{courrier}/annuler', [CourrierController::class, 'annuler'])->name('courriers.annuler');
     Route::post('/courriers/{courrier}/expedier-interne', [CourrierController::class, 'expedierVersSecretariat'])->name('courriers.expedier-interne');
     Route::post('/courriers-depart/{courrier}/accepter-reception', [CourrierController::class, 'accepterReceptionInterne'])->name('courriers.accepter-reception');
     Route::post('/courriers-depart/{courrier}/refuser-reception', [CourrierController::class, 'refuserReceptionInterne'])->name('courriers.refuser-reception');
@@ -214,6 +233,7 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::post('/courriers/{courrier}/circuit/envoyer-cheque', [CircuitCourrierController::class, 'envoyerCheque'])->name('courriers.circuit.envoyer-cheque');
     Route::post('/courriers/{courrier}/circuit/signer-cheque', [CircuitCourrierController::class, 'signerCheque'])->name('courriers.circuit.signer-cheque');
     Route::post('/courriers/{courrier}/circuit/deposer-preuve-paiement', [CircuitCourrierController::class, 'deposerPreuvePaiement'])->name('courriers.circuit.deposer-preuve-paiement');
+    Route::post('/courriers/{courrier}/circuit/payer-reliquat', [CircuitCourrierController::class, 'payerReliquat'])->name('courriers.circuit.payer-reliquat');
     Route::post('/courriers/{courrier}/circuit/confirmer-controle-depense', [CircuitCourrierController::class, 'confirmerControleDepense'])->name('courriers.circuit.confirmer-controle-depense');
 
     // Notifications

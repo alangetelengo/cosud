@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@use('App\Support\ReturnUrl')
 
 @section('content-container-class', 'w-full max-w-none px-4 sm:px-6 lg:px-8')
 @section('page-title', 'Utilisateurs')
@@ -13,7 +14,7 @@
         </a>
         @endcan
         @can('utilisateurs.create')
-        <a href="{{ route('utilisateurs.create') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#00b464] text-white font-semibold hover:bg-[#00a055] shadow-sm hover:shadow transition-all no-underline">
+        <a href="{{ route('utilisateurs.create', ReturnUrl::forRoute()) }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#00b464] text-white font-semibold hover:bg-[#00a055] shadow-sm hover:shadow transition-all no-underline">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
             Nouvel utilisateur
         </a>
@@ -132,7 +133,7 @@
                     <td class="px-4 py-4"><input type="checkbox" form="usersBulk2faForm" name="user_ids[]" value="{{ $user->id }}" class="user-2fa-cb rounded border-slate-300 dark:border-slate-600 text-[#00b464] focus:ring-[#00b464]/25"></td>
                     @endcan
                     <td class="px-6 py-4">
-                        <a href="{{ route('utilisateurs.show', $user) }}" class="flex items-center gap-4 group/link">
+                        <a href="{{ route('utilisateurs.show', ReturnUrl::forRoute($user)) }}" class="flex items-center gap-4 group/link">
                             <div class="relative">
                                 <img src="https://ui-avatars.com/api/?name={{ urlencode($user->name) }}&background=00b464&color=fff&size=44" alt="" class="w-11 h-11 rounded-xl flex-shrink-0 ring-2 ring-slate-100 dark:ring-slate-600 group-hover/link:ring-[#00b464]/40 group-hover/link:scale-105 transition-all duration-200">
                             </div>
@@ -180,15 +181,15 @@
                     <td class="px-6 py-4">
                         <div class="flex items-center justify-end gap-1">
                             @can('utilisateurs.view')
-                            <a href="{{ route('utilisateurs.show', $user) }}" class="p-2.5 rounded-xl text-slate-400 hover:text-[#00b464] hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all duration-200" title="Voir">
+                            <a href="{{ route('utilisateurs.show', ReturnUrl::forRoute($user)) }}" class="p-2.5 rounded-xl text-slate-400 hover:text-[#00b464] hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all duration-200" title="Voir">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                             </a>
                             @endcan
                             @can('utilisateurs.edit')
-                            <a href="{{ route('utilisateurs.edit', $user) }}#structures" class="p-2.5 rounded-xl text-slate-400 hover:text-[#00b464] hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all duration-200" title="Structures & fonctions (édition utilisateur)">
+                            <a href="{{ route('utilisateurs.edit', ReturnUrl::forRoute($user)) }}#structures" class="p-2.5 rounded-xl text-slate-400 hover:text-[#00b464] hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all duration-200" title="Structures & fonctions (édition utilisateur)">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
                             </a>
-                            <a href="{{ route('utilisateurs.edit', $user) }}"
+                            <a href="{{ route('utilisateurs.edit', ReturnUrl::forRoute($user)) }}"
                                x-data="{ loading: false }"
                                @click.prevent="if(!loading){ loading=true; window.location.href=$el.href }"
                                class="relative inline-flex items-center justify-center min-w-[2.5rem] min-h-[2.5rem] p-2.5 rounded-xl text-slate-400 hover:text-[#00b464] hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all duration-200"
@@ -224,7 +225,7 @@
                                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Commencez par créer un nouvel utilisateur</p>
                             </div>
                             @can('utilisateurs.create')
-                            <a href="{{ route('utilisateurs.create') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00b464] text-white text-sm font-semibold hover:bg-[#00a055] shadow-sm hover:shadow transition-all no-underline">
+                            <a href="{{ route('utilisateurs.create', ReturnUrl::forRoute()) }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00b464] text-white text-sm font-semibold hover:bg-[#00a055] shadow-sm hover:shadow transition-all no-underline">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                                 Nouvel utilisateur
                             </a>

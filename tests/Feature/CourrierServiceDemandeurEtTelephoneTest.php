@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\FournisseurPrestataire;
 use App\Models\Structure;
 use App\Models\TypeCourrier;
 use App\Models\User;
@@ -66,6 +67,11 @@ class CourrierServiceDemandeurEtTelephoneTest extends TestCase
         $madId = TypeCourrier::where('code', 'mad')->value('id');
         $daf = Structure::where('code', 'DAF')->value('id');
         $ant = Structure::where('code', 'ANT')->value('id');
+        $fiche = FournisseurPrestataire::factory()->create([
+            'nom' => 'AF.COM',
+            'telephone' => null,
+            'email' => null,
+        ]);
 
         $this->actingAs($user)
             ->post(route('courriers.store', absolute: false), [
@@ -73,7 +79,8 @@ class CourrierServiceDemandeurEtTelephoneTest extends TestCase
                 'numero_fulgurant' => 'REG-f572c02f/2026',
                 'type_courrier_id' => $factureId,
                 'objet' => 'Facture sans téléphone',
-                'expediteur_libelle' => 'AF.COM',
+                'fournisseur_prestataire_id' => $fiche->id,
+                'montant_facture' => '100000',
                 'service_demandeur_structure_id' => $daf,
                 'date_reception' => now()->toDateString(),
                 'fichier' => UploadedFile::fake()->create('f.pdf', 20, 'application/pdf'),

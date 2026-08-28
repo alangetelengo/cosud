@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CategorieDepense;
 use App\Models\Courrier;
+use App\Models\Moratoire;
 use App\Models\MoratoireEcheance;
 use App\Models\SuiviPaiement;
 use App\Models\User;
@@ -213,8 +214,13 @@ class SuiviPaiementService
 
         $datePaiement = $echeance->date_paiement?->toDateString() ?? now()->toDateString();
         $annee = (int) Carbon::parse($datePaiement)->year;
+        $periodeLabel = $echeance->libellePeriode();
+        $intitule = 'Moratoire '.$moratoire->fournisseur_libelle.' — échéance n° '.$echeance->numero;
+        if ($periodeLabel) {
+            $intitule .= ' ('.$periodeLabel.')';
+        }
 
-        return DB::transaction(function () use ($echeance, $moratoire, $acteur, $categorieId, $datePaiement, $annee): SuiviPaiement {
+        return DB::transaction(function () use ($echeance, $moratoire, $acteur, $categorieId, $datePaiement, $annee, $intitule, $periodeLabel): SuiviPaiement {
             $numeroLigne = (int) SuiviPaiement::query()
                 ->where('categorie_depense_id', $categorieId)
                 ->where('numero_annee', $annee)
@@ -230,12 +236,14 @@ class SuiviPaiementService
                 'numero_annee' => $annee,
                 'date_suivi' => $datePaiement,
                 'date_decharge' => $datePaiement,
-                'intitule' => 'Moratoire '.$moratoire->fournisseur_libelle.' — échéance n° '.$echeance->numero,
+                'intitule' => $intitule,
                 'montant' => $echeance->montant_echeance,
-                'numero_piece' => $echeance->numero_cheque,
+                'numero_piece' => $echeance->mode_paiement === MoratoireEcheance::MODE_ESPECE
+                    ? 'Espèces'
+                    : $echeance->numero_cheque,
                 'banque' => $echeance->banque,
                 'fournisseur_libelle' => $moratoire->fournisseur_libelle,
-                'observation' => $echeance->observation ?? 'Paiement progressif (moratoire).',
+                'observation' => trim(($echeance->observation ? $echeance->observation.' — ' : '').($periodeLabel ? 'Période : '.$periodeLabel : 'Paiement progressif (moratoire).')),
                 'etabli_par_id' => $acteur->id,
                 'controle_par_id' => $acteur->hasRole('responsable_suivi_depenses') ? $acteur->id : null,
                 'controle_at' => $acteur->hasRole('responsable_suivi_depenses') ? now() : null,
@@ -255,14 +263,22 @@ class SuiviPaiementService
         }
 
         $datePaiement = $echeance->date_paiement?->toDateString() ?? $suivi->date_suivi?->toDateString() ?? now()->toDateString();
+        $periodeLabel = $echeance->libellePeriode();
+        $intitule = 'Moratoire '.($echeance->moratoire?->fournisseur_libelle ?? $suivi->fournisseur_libelle).' — échéance n° '.$echeance->numero;
+        if ($periodeLabel) {
+            $intitule .= ' ('.$periodeLabel.')';
+        }
 
         $suivi->update([
             'date_suivi' => $datePaiement,
             'date_decharge' => $datePaiement,
             'montant' => $echeance->montant_echeance,
-            'numero_piece' => $echeance->numero_cheque,
+            'numero_piece' => $echeance->mode_paiement === MoratoireEcheance::MODE_ESPECE
+                ? 'Espèces'
+                : $echeance->numero_cheque,
             'banque' => $echeance->banque,
-            'observation' => $echeance->observation ?? $suivi->observation,
+            'intitule' => $intitule,
+            'observation' => trim(($echeance->observation ? $echeance->observation.' — ' : '').($periodeLabel ? 'Période : '.$periodeLabel : ($suivi->observation ?? 'Paiement progressif (moratoire).'))),
             'fournisseur_libelle' => $echeance->moratoire?->fournisseur_libelle ?? $suivi->fournisseur_libelle,
         ]);
 
@@ -378,6 +394,168 @@ class SuiviPaiementService
     }
 
     /**
+     * AC : enregistre un paiement de reliquat (hors circuit DG) et clôture la décharge.
+     *
+     * @param  array{
+     *     montant: float|int|string,
+     *     numero_piece: string,
+     *     banque: string,
+     *     beneficiaire_libelle: string,
+     *     programmation?: ?string,
+     *     date_decharge: string,
+     *     observation?: ?string
+     * }  $donnees
+     */
+    public function creerPaiementReliquat(Courrier $courrier, User $acteur, array $donnees): SuiviPaiement
+    {
+        if (! $this->peutEnregistrerPaiementReliquat($acteur, $courrier)) {
+            throw new InvalidArgumentException('Ce reliquat ne peut pas être payé pour le moment.');
+        }
+
+        $courrier->loadMissing([
+            'typeCourrier',
+            'structure',
+            'structureDestinataire',
+            'serviceDemandeurStructure',
+            'suiviPaiements',
+        ]);
+
+        $montants = app(SuiviFacturesFournisseursService::class)->montantsSurFacture($courrier);
+        $montant = MontantFcfa::versFloat($donnees['montant']);
+        if ($montant <= 0) {
+            throw new InvalidArgumentException('Le montant du paiement doit être strictement positif.');
+        }
+
+        if ($montant - $montants['reliquat'] > 0.009) {
+            throw new InvalidArgumentException(
+                'Le montant ne peut pas dépasser le reliquat ('.MontantFcfa::formater($montants['reliquat']).' FCFA).'
+            );
+        }
+
+        $fournisseur = trim((string) ($courrier->expediteur_libelle ?? ''));
+        if ($fournisseur !== '' && $this->fournisseurAMoratoireCouvrant($fournisseur)) {
+            throw new InvalidArgumentException(
+                'Un plan de paiement progressif (actif ou soldé) existe pour ce fournisseur. Le reliquat doit être soldé via les échéances du moratoire — pas de paiement direct.'
+            );
+        }
+
+        $type = $this->resoudreTypePourCourrier($courrier);
+        $annee = (int) Carbon::parse($donnees['date_decharge'])->year;
+        $serviceDemandeur = $courrier->serviceDemandeurStructure?->nom
+            ?? $courrier->structureDestinataire?->nom
+            ?? $courrier->structure?->nom;
+
+        return DB::transaction(function () use ($courrier, $acteur, $donnees, $montant, $type, $annee, $serviceDemandeur): SuiviPaiement {
+            Courrier::query()->whereKey($courrier->id)->lockForUpdate()->first();
+
+            $categorieDepenseId = CategorieDepense::idPourCode(
+                CategorieDepense::codeDepuisTypeLegacy($type)
+            );
+
+            $numeroLigne = (int) SuiviPaiement::query()
+                ->where('categorie_depense_id', $categorieDepenseId)
+                ->where('numero_annee', $annee)
+                ->lockForUpdate()
+                ->max('numero_ligne') + 1;
+
+            $observation = trim((string) ($donnees['observation'] ?? ''));
+
+            $data = [
+                'courrier_id' => $courrier->id,
+                'type' => $type,
+                'categorie_depense_id' => $categorieDepenseId,
+                'origine' => SuiviPaiement::ORIGINE_RELIQUAT,
+                'numero_ligne' => $numeroLigne,
+                'numero_annee' => $annee,
+                'date_suivi' => $donnees['date_decharge'],
+                'date_decharge' => $donnees['date_decharge'],
+                'intitule' => (string) $courrier->objet.' — paiement reliquat',
+                'montant' => $montant,
+                'numero_piece' => $donnees['numero_piece'],
+                'banque' => $donnees['banque'],
+                'beneficiaire_libelle' => $donnees['beneficiaire_libelle'],
+                'programmation' => $donnees['programmation'] ?? null,
+                'instruction_dg' => $courrier->instructions_dg,
+                'observation' => $observation !== '' ? $observation : 'Paiement du reliquat (AC).',
+                'etabli_par_id' => $acteur->id,
+            ];
+
+            if ($type === SuiviPaiement::TYPE_FSP_MAD) {
+                $data['demandeur_libelle'] = $serviceDemandeur
+                    ?? $courrier->expediteur_libelle;
+                $data['responsable_dossier_id'] = $courrier->agent_confie_id
+                    ?? $courrier->createur_id;
+            } else {
+                $data['fournisseur_libelle'] = $courrier->expediteur_libelle;
+                $data['service_demandeur_libelle'] = $serviceDemandeur;
+            }
+
+            if ($courrier->dossier_id) {
+                $data['dossier_id'] = $courrier->dossier_id;
+            }
+
+            return SuiviPaiement::query()->create($data);
+        });
+    }
+
+    /**
+     * L’AC peut payer le reliquat hors circuit une fois le premier paiement déchargé.
+     */
+    public function peutEnregistrerPaiementReliquat(User $user, Courrier $courrier): bool
+    {
+        if (! $user->can('view', $courrier)) {
+            return false;
+        }
+
+        if (! $user->aAccesTotal()
+            && ! $user->hasRole('admin')
+            && ! $user->hasRole('agent_comptable')) {
+            return false;
+        }
+
+        if ($courrier->circuit_etape_actuelle_id !== null) {
+            return false;
+        }
+
+        $courrier->loadMissing(['typeCourrier', 'suiviPaiements']);
+        if ($courrier->typeCourrier?->code !== 'facture') {
+            return false;
+        }
+
+        $aDecharge = $courrier->suiviPaiements->contains(
+            fn (SuiviPaiement $suivi): bool => $suivi->date_decharge !== null
+        );
+        if (! $aDecharge) {
+            return false;
+        }
+
+        $montants = app(SuiviFacturesFournisseursService::class)->montantsSurFacture($courrier);
+        if (! $montants['a_reliquat']) {
+            return false;
+        }
+
+        $fournisseur = trim((string) ($courrier->expediteur_libelle ?? ''));
+        if ($fournisseur !== '' && $this->fournisseurAMoratoireCouvrant($fournisseur)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Moratoire actif ou soldé : le fournisseur est déjà couvert par un plan (évite un double paiement).
+     */
+    private function fournisseurAMoratoireCouvrant(string $fournisseurLibelle): bool
+    {
+        $cle = app(FournisseurDetteService::class)->normaliserLibelle($fournisseurLibelle);
+
+        return Moratoire::query()
+            ->whereIn('statut', [Moratoire::STATUT_ACTIF, Moratoire::STATUT_SOLDE])
+            ->where('fournisseur_normalise', $cle)
+            ->exists();
+    }
+
+    /**
      * Enregistre la date de décharge (+ observation) sans modifier les références du chèque.
      *
      * @param  array{
@@ -387,7 +565,17 @@ class SuiviPaiementService
      */
     public function enregistrerDechargeBordereau(Courrier $courrier, array $donnees): SuiviPaiement
     {
-        $suivi = SuiviPaiement::query()->where('courrier_id', $courrier->id)->first();
+        $suivi = SuiviPaiement::query()
+            ->where('courrier_id', $courrier->id)
+            ->where('origine', SuiviPaiement::ORIGINE_CIRCUIT_CHEQUE)
+            ->whereNull('date_decharge')
+            ->orderBy('id')
+            ->first()
+            ?? SuiviPaiement::query()
+                ->where('courrier_id', $courrier->id)
+                ->whereNull('date_decharge')
+                ->orderBy('id')
+                ->first();
 
         if (! $suivi) {
             throw new InvalidArgumentException('Aucune fiche de suivi des paiements pour ce courrier.');

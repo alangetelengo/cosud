@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\FournisseurPrestataire;
 use App\Models\TypeCourrier;
 use App\Services\CourrierDoublonService;
 use Illuminate\Foundation\Http\FormRequest;
@@ -40,6 +41,12 @@ class UpdateCourrierArriveeRequest extends FormRequest
                 'string',
                 'max:40',
             ],
+            'fournisseur_prestataire_id' => [
+                Rule::requiredIf(fn () => $this->typeCourrierCodeDans(['facture'])),
+                'nullable',
+                'integer',
+                Rule::exists('fournisseur_prestataires', 'id')->where('actif', true),
+            ],
             'numero_fulgurant' => ['required', 'string', 'max:100'],
             'reference' => ['nullable', 'string', 'max:100'],
             'nombre_pieces' => ['nullable', 'integer', 'min:0', 'max:9999'],
@@ -63,6 +70,23 @@ class UpdateCourrierArriveeRequest extends FormRequest
             $this->merge([
                 'montant_facture' => preg_replace('/\s+/', '', (string) $this->input('montant_facture')),
             ]);
+        }
+
+        if ($this->filled('fournisseur_prestataire_id') && $this->typeCourrierCodeDans(['facture'])) {
+            $fiche = FournisseurPrestataire::query()
+                ->actifs()
+                ->find($this->input('fournisseur_prestataire_id'));
+
+            if ($fiche) {
+                $merge = ['expediteur_libelle' => $fiche->nom];
+                if (! $this->filled('expediteur_email') && filled($fiche->email)) {
+                    $merge['expediteur_email'] = $fiche->email;
+                }
+                if (! $this->filled('expediteur_telephone') && filled($fiche->telephone)) {
+                    $merge['expediteur_telephone'] = $fiche->telephone;
+                }
+                $this->merge($merge);
+            }
         }
     }
 
@@ -103,6 +127,8 @@ class UpdateCourrierArriveeRequest extends FormRequest
             'objet.required' => 'L’objet du courrier est obligatoire.',
             'numero_fulgurant.required' => 'Le n° de registre (saisi par le secrétariat) est obligatoire.',
             'expediteur_telephone.required' => 'Le téléphone de l’expéditeur est obligatoire pour une facture ou une demande (SMS / notification).',
+            'fournisseur_prestataire_id.required' => 'Choisissez le fournisseur ou prestataire dans le référentiel.',
+            'fournisseur_prestataire_id.exists' => 'Ce fournisseur ou prestataire n’est pas valide (ou a été désactivé).',
             'service_demandeur_structure_id.required' => 'Le service demandeur (direction) est obligatoire pour une facture ou une MAD.',
             'service_demandeur_structure_id.exists' => 'Choisissez une direction ou antenne départementale valide.',
             'montant_facture.required' => 'Le montant de la facture est obligatoire.',

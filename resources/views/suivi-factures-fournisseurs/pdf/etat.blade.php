@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Suivi factures fournisseurs et Prestataires — {{ $annee }}</title>
 <style>
-@page { size: A4 portrait; margin: 18mm 12mm 16mm 12mm; }
+@page { size: A4 portrait; margin: 18mm 12mm 16mm 18mm; }
 
 body {
     font-family: DejaVu Sans, Arial, sans-serif;
@@ -16,6 +16,12 @@ body {
     background-size: cover;
     background-repeat: no-repeat;
     background-position: top center;
+}
+
+/* Décalage pour ne pas chevaucher la bande rouge/jaune de la Charte */
+main {
+    margin-left: 32px;
+    margin-right: 4px;
 }
 
 .zone0 {
@@ -30,7 +36,7 @@ body {
 .zone1 {
     font-size: 10px;
     font-weight: bold;
-    margin: 10px 10px 10px 45px;
+    margin: 10px 10px 10px 0;
     color: #000;
 }
 
@@ -41,8 +47,8 @@ body {
 }
 
 table.paiement {
-    width: 92%;
-    margin: 12px auto 0;
+    width: 100%;
+    margin: 12px 0 0;
     border-collapse: collapse;
     font-size: 9.5px;
 }
@@ -72,9 +78,9 @@ table.paiement tr:nth-child(odd) { background-color: #fff; }
 
 .arrete {
     margin-top: 10px;
-    width: 92%;
-    margin-left: auto;
-    margin-right: auto;
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
     font-size: 11px;
 }
 
@@ -98,12 +104,14 @@ table.paiement tr:nth-child(odd) { background-color: #fff; }
 <thead>
 <tr>
 <th style="width:4%;">N°</th>
-<th style="width:10%;">Date BPA</th>
-<th style="width:12%;">N° registre</th>
-<th style="width:16%;">Fournisseur</th>
-<th style="width:24%;">Objet</th>
-<th style="width:14%;">Statut</th>
-<th style="width:12%;">Montant</th>
+<th style="width:9%;">Date BPA</th>
+<th style="width:11%;">N° registre</th>
+<th style="width:14%;">Fournisseur</th>
+<th style="width:18%;">Objet</th>
+<th style="width:11%;">Statut</th>
+<th style="width:11%;">Montant facture</th>
+<th style="width:11%;">Payé</th>
+<th style="width:11%;">Reliquat</th>
 </tr>
 </thead>
 <tbody>
@@ -116,13 +124,17 @@ table.paiement tr:nth-child(odd) { background-color: #fff; }
 <td>{{ $c->expediteur_libelle ?? '—' }}</td>
 <td>{{ $c->objet }}</td>
 <td>{{ $ligne['libelle_statut'] }}</td>
-<td class="text-right">{{ $service->formaterMontant($c->montant_facture ?? $c->suiviPaiement?->montant) }}</td>
+<td class="text-right">{{ $service->formaterMontant($ligne['montant_facture']) }}</td>
+<td class="text-right">{{ $ligne['montant_paye'] > 0 ? $service->formaterMontant($ligne['montant_paye']) : '—' }}</td>
+<td class="text-right">{{ $service->formaterMontant($ligne['reliquat']) }}</td>
 </tr>
 @endforeach
 
 <tr class="total-row">
-<td colspan="6" class="text-right">TOTAL GÉNÉRAL</td>
-<td class="text-right">{{ number_format((float) $totalMontant, 0, ',', ' ') }} FCFA</td>
+<td colspan="6" class="text-right">TOTAL FACTURES</td>
+<td class="text-right">{{ number_format((float) $totalMontant, 0, ',', ' ') }}</td>
+<td class="text-right">{{ number_format((float) $totalPaye, 0, ',', ' ') }}</td>
+<td class="text-right">{{ number_format((float) $totalReliquat, 0, ',', ' ') }}</td>
 </tr>
 </tbody>
 </table>
@@ -130,7 +142,10 @@ table.paiement tr:nth-child(odd) { background-color: #fff; }
 <p class="arrete">
 Arrêté le présent état à la somme de :
 <strong>{{ $montantEnLettres }} francs CFA</strong>
-({{ number_format((float) $totalMontant, 0, ',', ' ') }} FCFA — {{ $lignes->count() }} facture(s)).
+({{ number_format((float) $totalMontant, 0, ',', ' ') }} FCFA de factures —
+{{ number_format((float) $totalPaye, 0, ',', ' ') }} FCFA payés —
+{{ number_format((float) $totalReliquat, 0, ',', ' ') }} FCFA de reliquats —
+{{ $lignes->count() }} facture(s)).
 </p>
 
 <div class="signature">

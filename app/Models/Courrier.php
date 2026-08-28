@@ -36,6 +36,7 @@ class Courrier extends Model
         'date_courrier',
         'numero_fulgurant',
         'expediteur_libelle',
+        'fournisseur_prestataire_id',
         'expediteur_email',
         'expediteur_telephone',
         'destinataire_libelle',
@@ -47,6 +48,12 @@ class Courrier extends Model
         'montant_facture',
         'est_regularisation',
         'regularisation_paiement',
+        'regularisation_mode_paiement',
+        'regularisation_date_programmation',
+        'regularisation_numero_piece',
+        'regularisation_banque',
+        'regularisation_montant_mensuel',
+        'regularisation_nb_mois_impayes',
         'est_confidentiel',
         'orientation_mode',
         'nombre_pieces',
@@ -90,6 +97,9 @@ class Courrier extends Model
             'nombre_pieces' => 'integer',
             'montant_facture' => 'decimal:2',
             'est_regularisation' => 'boolean',
+            'regularisation_montant_mensuel' => 'decimal:2',
+            'regularisation_nb_mois_impayes' => 'integer',
+            'regularisation_date_programmation' => 'date',
             'delai_execution_jours' => 'integer',
             'circuit_etape_depuis' => 'datetime',
             'dernier_alerte_retard_at' => 'datetime',
@@ -99,6 +109,15 @@ class Courrier extends Model
     public function typeCourrier(): BelongsTo
     {
         return $this->belongsTo(TypeCourrier::class);
+    }
+
+    public function estTypeFacture(): bool
+    {
+        if ($this->relationLoaded('typeCourrier')) {
+            return $this->typeCourrier?->code === 'facture';
+        }
+
+        return $this->typeCourrier()->where('code', 'facture')->exists();
     }
 
     public function circuit(): BelongsTo
@@ -139,6 +158,11 @@ class Courrier extends Model
     public function createur(): BelongsTo
     {
         return $this->belongsTo(User::class, 'createur_id');
+    }
+
+    public function fournisseurPrestataire(): BelongsTo
+    {
+        return $this->belongsTo(FournisseurPrestataire::class, 'fournisseur_prestataire_id');
     }
 
     public function signataire(): BelongsTo
@@ -316,9 +340,20 @@ class Courrier extends Model
             ->withTimestamps();
     }
 
+    /**
+     * Dernier paiement enregistré (compatibilité circuit / affichage courant).
+     */
     public function suiviPaiement(): HasOne
     {
-        return $this->hasOne(SuiviPaiement::class);
+        return $this->hasOne(SuiviPaiement::class)->latestOfMany();
+    }
+
+    /**
+     * Tous les paiements liés à la facture (chèque initial + reliquats).
+     */
+    public function suiviPaiements(): HasMany
+    {
+        return $this->hasMany(SuiviPaiement::class)->orderBy('id');
     }
 
     public function orientations(): HasMany
@@ -371,6 +406,40 @@ class Courrier extends Model
     {
         return $this->estRegularisation()
             && $this->regularisation_paiement === FactureRegularisationService::PAIEMENT_PAYEE;
+    }
+
+    public function estRegularisationProgrammee(): bool
+    {
+        return $this->estRegularisation()
+            && $this->regularisation_paiement === FactureRegularisationService::PAIEMENT_PROGRAMMEE;
+    }
+
+    public function estRegularisationImpayee(): bool
+    {
+        return $this->estRegularisation()
+            && $this->regularisation_paiement === FactureRegularisationService::PAIEMENT_IMPAYEE;
+    }
+
+    public function estRegularisationContratMensuel(): bool
+    {
+        return $this->estRegularisation()
+            && $this->regularisation_paiement === FactureRegularisationService::PAIEMENT_CONTRAT_MENSUEL;
+    }
+
+    /**
+     * Régularisation encore modifiable / supprimable par Taty (pas encore payée).
+     */
+    public function regularisationModifiable(): bool
+    {
+        if (! $this->estRegularisation() || $this->estRegularisationPayee()) {
+            return false;
+        }
+
+        if ($this->relationLoaded('suiviPaiement')) {
+            return $this->suiviPaiement === null;
+        }
+
+        return ! $this->suiviPaiement()->exists();
     }
 
     /**
@@ -505,6 +574,125 @@ class Courrier extends Model
             || $user->hasRole('responsable_dossiers_prestataires');
     }
 
+    public function peutAnnulerEnregistrement(User $user): bool
+    {
+        if (in_array($this->statutCourrier?->code, ['cloture', 'archive', 'annule'], true)) {
+            return false;
+        }
+
+        if ($this->estArrivee()) {
+            if (! $this->peutTransitionnerVers('annule')) {
+                return false;
+            }
+
+            if (! $user->can('courriers.edit')) {
+                return false;
+            }
+
+            return $user->aAccesTotal()
+                || $user->hasRole('particulier_dg')
+                || $user->hasRole('responsable_dossiers_prestataires');
+        }
+
+        if ($this->estDepart()) {
+            $code = $this->statutCourrier?->code ?? '';
+
+            if ($code === 'transmis_directeur') {
+                return $user->can('courriers.rejeter')
+                    && (int) $this->directeur_en_attente_id === (int) $user->id;
+            }
+
+            if (in_array($code, ['brouillon', 'rejete_directeur'], true)) {
+                return $user->can('courriers.edit')
+                    && $user->gereCourrierSecretariat()
+                    && (int) $this->structure_id === (int) $user->structure_id;
+            }
+        }
+
+        return false;
+    }
+
+    public function peutSupprimerEnregistrement(): bool
+    {
+        if ($this->est_regularisation) {
+            return false;
+        }
+
+        if ($this->courrier_parent_id !== null) {
+            return false;
+        }
+
+        if ($this->reponsesDepart()->exists()) {
+            return false;
+        }
+
+        if ($this->suiviPaiements()->exists()) {
+            return false;
+        }
+
+        if (self::query()->where('courrier_arrivee_lie_id', $this->id)->exists()) {
+            return false;
+        }
+
+        if ($this->estArrivee()) {
+            return in_array($this->statutCourrier?->code, ['recu', 'annule'], true);
+        }
+
+        if ($this->estDepart()) {
+            return in_array($this->statutCourrier?->code, ['brouillon', 'rejete_directeur', 'annule'], true);
+        }
+
+        return false;
+    }
+
+    public function peutSupprimerEnregistrementPar(User $user): bool
+    {
+        if (! $this->peutSupprimerEnregistrement()) {
+            return false;
+        }
+
+        if ($this->estArrivee()) {
+            return $user->aAccesTotal()
+                || $user->hasRole('particulier_dg')
+                || $user->hasRole('responsable_dossiers_prestataires');
+        }
+
+        if ($this->estDepart()) {
+            return $user->aAccesTotal()
+                || $user->gereCourrierSecretariat()
+                || $user->hasRole('particulier_dg');
+        }
+
+        return false;
+    }
+
+    public function motifAnnulationRequis(): bool
+    {
+        if ($this->estDepart() && $this->statutCourrier?->code === 'transmis_directeur') {
+            return true;
+        }
+
+        return $this->estArrivee()
+            && in_array($this->statutCourrier?->code, ['oriente', 'ventile'], true);
+    }
+
+    public function cleFormulaireAnnulation(): ?string
+    {
+        if ($this->estArrivee()) {
+            return 'annuler-arrivee';
+        }
+
+        if ($this->estDepart()) {
+            return match ($this->statutCourrier?->code) {
+                'transmis_directeur' => 'annuler-directeur',
+                'brouillon', 'rejete_directeur' => 'annuler-brouillon',
+                default => null,
+            };
+        }
+
+        return null;
+    }
+
     public function peutEnregistrerTransmission(): bool
     {
         $code = $this->statutCourrier?->code ?? '';
@@ -540,11 +728,12 @@ class Courrier extends Model
     {
         $transitions = $this->estArrivee()
             ? [
-                'recu' => ['en_parapheur'],
-                'en_parapheur' => ['oriente', 'attente_reponse_particuliere'],
-                'attente_reponse_particuliere' => ['oriente', 'cloture'],
-                'oriente' => ['ventile', 'cloture'],
-                'ventile' => ['cloture'],
+                'recu' => ['en_parapheur', 'annule'],
+                'en_parapheur' => ['oriente', 'attente_reponse_particuliere', 'annule'],
+                'attente_reponse_particuliere' => ['oriente', 'cloture', 'annule'],
+                'oriente' => ['ventile', 'cloture', 'annule'],
+                'ventile' => ['cloture', 'annule'],
+                'annule' => [],
             ]
             : [
                 'brouillon' => ['transmis_directeur', 'annule'],

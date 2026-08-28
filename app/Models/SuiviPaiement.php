@@ -28,6 +28,8 @@ class SuiviPaiement extends Model
 
     public const ORIGINE_MORATOIRE = 'moratoire';
 
+    public const ORIGINE_RELIQUAT = 'reliquat';
+
     /**
      * @return list<string>
      */
@@ -78,6 +80,7 @@ class SuiviPaiement extends Model
         'beneficiaire_libelle',
         'programmation',
         'fournisseur_libelle',
+        'fournisseur_prestataire_id',
         'service_demandeur_libelle',
         'demandeur_libelle',
         'responsable_dossier_id',
@@ -156,6 +159,11 @@ class SuiviPaiement extends Model
         return $this->belongsTo(Courrier::class);
     }
 
+    public function fournisseurPrestataire(): BelongsTo
+    {
+        return $this->belongsTo(FournisseurPrestataire::class, 'fournisseur_prestataire_id');
+    }
+
     public function responsableDossier(): BelongsTo
     {
         return $this->belongsTo(User::class, 'responsable_dossier_id');
@@ -200,6 +208,7 @@ class SuiviPaiement extends Model
             self::ORIGINE_REGULARISATION => 'Régularisation',
             self::ORIGINE_MORATOIRE => 'Moratoire',
             self::ORIGINE_REMISE_DG => 'Saisie',
+            self::ORIGINE_RELIQUAT => 'Reliquat',
             default => 'Saisie',
         };
     }

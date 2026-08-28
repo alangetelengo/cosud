@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Document;
+use App\Models\FournisseurPrestataire;
 use App\Models\Moratoire;
 use App\Models\MoratoireEcheance;
 use App\Models\StatutDocument;
@@ -35,23 +36,35 @@ class MoratoireService
     public function creer(User $acteur, array $donnees, array $fichiers = []): Moratoire
     {
         $fournisseur = trim($donnees['fournisseur_libelle']);
-        $dette = (float) $donnees['montant_dette_initial'];
         $echeance = (float) $donnees['montant_echeance_defaut'];
         $fichiers = array_values(array_filter($fichiers));
 
-        if ($fournisseur === '' || $dette <= 0 || $echeance <= 0) {
-            throw new InvalidArgumentException('Fournisseur, dette initiale et échéance doivent être renseignés.');
+        if ($fournisseur === '' || $echeance <= 0) {
+            throw new InvalidArgumentException('Fournisseur et échéance doivent être renseignés.');
         }
 
+        $detteInfo = $this->detteService->dettePourFournisseur($fournisseur);
+        if (! $detteInfo || $detteInfo['dette'] <= 0) {
+            throw new InvalidArgumentException(
+                'Ce fournisseur n’a pas de dette enregistrée. Les dettes sont issues des factures saisies par le responsable Factures / prestataires.'
+            );
+        }
+
+        if ($detteInfo['moratoire_actif_id']) {
+            throw new InvalidArgumentException('Un moratoire actif existe déjà pour ce fournisseur.');
+        }
+
+        $fournisseur = $detteInfo['fournisseur_libelle'];
+        $dette = (float) $detteInfo['dette'];
+        $normalise = $detteInfo['fournisseur_normalise'];
+
         if ($fichiers === []) {
-            throw new InvalidArgumentException('Au moins une pièce justificative de la dette est obligatoire.');
+            throw new InvalidArgumentException('Au moins une pièce d’instruction du DG est obligatoire.');
         }
 
         if ($echeance > $dette) {
             throw new InvalidArgumentException('Le montant d’échéance ne peut pas dépasser la dette initiale.');
         }
-
-        $normalise = $this->detteService->normaliserLibelle($fournisseur);
 
         $existant = Moratoire::query()
             ->where('fournisseur_normalise', $normalise)
@@ -65,9 +78,14 @@ class MoratoireService
         $lignes = $this->genererLignesEcheancier($dette, $echeance);
 
         return DB::transaction(function () use ($acteur, $donnees, $fournisseur, $normalise, $dette, $echeance, $lignes, $fichiers): Moratoire {
+            $fiche = FournisseurPrestataire::query()
+                ->where('nom_normalise', $normalise)
+                ->first();
+
             $moratoire = Moratoire::query()->create([
                 'fournisseur_libelle' => $fournisseur,
                 'fournisseur_normalise' => $normalise,
+                'fournisseur_prestataire_id' => $fiche?->id,
                 'montant_dette_initial' => $dette,
                 'montant_echeance_defaut' => $echeance,
                 'statut' => Moratoire::STATUT_ACTIF,
@@ -136,10 +154,13 @@ class MoratoireService
 
     /**
      * @param  array{
+     *     mode_paiement?: ?string,
      *     numero_cheque?: ?string,
      *     banque?: ?string,
      *     observation?: ?string,
-     *     date_paiement?: ?string
+     *     date_paiement?: ?string,
+     *     periode_mois?: ?string,
+     *     periode_annee?: int|string|null
      * }  $donnees
      * @param  list<UploadedFile>  $fichiers
      */
@@ -151,12 +172,19 @@ class MoratoireService
     ): MoratoireEcheance {
         return DB::transaction(function () use ($echeance, $acteur, $donnees, $fichiers): MoratoireEcheance {
             $echeance->update([
+                'mode_paiement' => isset($donnees['mode_paiement'])
+                    ? $donnees['mode_paiement']
+                    : ($echeance->mode_paiement ?? MoratoireEcheance::MODE_CHEQUE),
                 'numero_cheque' => isset($donnees['numero_cheque']) ? trim((string) $donnees['numero_cheque']) : $echeance->numero_cheque,
                 'banque' => isset($donnees['banque']) ? trim((string) $donnees['banque']) : $echeance->banque,
                 'observation' => array_key_exists('observation', $donnees)
                     ? $donnees['observation']
                     : $echeance->observation,
                 'date_paiement' => $donnees['date_paiement'] ?? $echeance->date_paiement,
+                'periode_mois' => $donnees['periode_mois'] ?? $echeance->periode_mois,
+                'periode_annee' => isset($donnees['periode_annee'])
+                    ? (int) $donnees['periode_annee']
+                    : $echeance->periode_annee,
             ]);
 
             $echeance->refresh();
@@ -201,7 +229,7 @@ class MoratoireService
             ->first();
 
         if (! $typeDoc) {
-            throw new \RuntimeException('Aucun type de document disponible pour les justificatifs de dette.');
+            throw new \RuntimeException('Aucun type de document disponible pour l’instruction du DG.');
         }
 
         $statut = StatutDocument::query()->where('code', 'brouillon')->first();
@@ -218,7 +246,7 @@ class MoratoireService
             'extension' => $fichier->getClientOriginalExtension(),
             'taille_octets' => $fichier->getSize(),
             'mime_type' => $fichier->getMimeType(),
-            'titre' => 'Justificatif dette — '.$moratoire->fournisseur_libelle,
+            'titre' => 'Instruction DG — '.$moratoire->fournisseur_libelle,
             'description' => 'Pièce justificative de la dette jointe à la création du moratoire',
             'statut' => 'brouillon',
             'statut_document_id' => $statut?->id,

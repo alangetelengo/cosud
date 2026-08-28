@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Courrier;
-use App\Models\SuiviPaiement;
 use App\Models\User;
 use App\Services\FournisseurDetteService;
 use Database\Seeders\CategorieDepenseSeeder;
@@ -70,48 +69,48 @@ class FactureRegularisationTest extends TestCase
         $this->assertEquals(5_000_000.0, $dette['dette']);
     }
 
-    public function test_regularisation_payee_cree_suivi_et_n_augmente_pas_la_dette(): void
+    public function test_contrat_mensuel_calcule_dette_initiale_en_une_ligne(): void
     {
         Storage::fake('public');
 
+        $taty = User::factory()->create();
+        $taty->assignRole('responsable_dossiers_prestataires');
+
+        $this->actingAs($taty)
+            ->post(route('factures-regularisation.store', absolute: false), [
+                'fournisseur_libelle' => 'Chauffeur DG',
+                'montant_mensuel_contrat' => '250000',
+                'nb_mois_impayes' => 2,
+                'paiement' => 'contrat_mensuel',
+                'fichiers' => [UploadedFile::fake()->create('contrat.pdf', 100, 'application/pdf')],
+            ])
+            ->assertRedirect(route('factures-regularisation.index', absolute: false));
+
+        $courrier = Courrier::query()->where('est_regularisation', true)->firstOrFail();
+        $this->assertTrue($courrier->estRegularisationContratMensuel());
+        $this->assertEquals(500_000.0, (float) $courrier->montant_facture);
+        $this->assertEquals(250_000.0, (float) $courrier->regularisation_montant_mensuel);
+        $this->assertSame(2, $courrier->regularisation_nb_mois_impayes);
+        $this->assertStringContainsString('Contrat mensuel', $courrier->objet);
+
+        $dette = app(FournisseurDetteService::class)->dettePourFournisseur('Chauffeur DG');
+        $this->assertNotNull($dette);
+        $this->assertEquals(500_000.0, $dette['dette']);
+        $this->assertSame(1, $dette['nb_factures']);
+    }
+
+    public function test_eleni_ne_peut_pas_creer_une_regularisation(): void
+    {
         $eleni = User::factory()->create();
         $eleni->assignRole('responsable_suivi_depenses');
 
         $this->actingAs($eleni)
-            ->post(route('factures-regularisation.store', absolute: false), [
-                'fournisseur_libelle' => 'AF.COM',
-                'montant_facture' => '2500000',
-                'paiement' => 'payee',
-                'numero_piece' => 'CHQ-HIST-01',
-                'banque' => 'BCH',
-                'date_paiement' => '2025-06-15',
-                'fichiers' => [UploadedFile::fake()->create('facture.pdf', 100, 'application/pdf')],
-            ])
-            ->assertRedirect(route('factures-regularisation.index', absolute: false));
-
-        $courrier = Courrier::query()->where('est_regularisation', true)->first();
-        $this->assertNotNull($courrier);
-        $this->assertNull($courrier->circuit_courrier_id);
-        $this->assertTrue($courrier->estRegularisationPayee());
-
-        $suivi = $courrier->suiviPaiement;
-        $this->assertNotNull($suivi);
-        $this->assertSame(SuiviPaiement::ORIGINE_REGULARISATION, $suivi->origine);
-        $this->assertNotNull($suivi->date_decharge);
-        $this->assertEquals(2_500_000.0, (float) $suivi->montant);
-        $this->assertNotNull($suivi->dossier_id);
+            ->get(route('factures-regularisation.create', absolute: false))
+            ->assertForbidden();
 
         $this->actingAs($eleni)
-            ->get(route('suivi-paiements.index', absolute: false))
-            ->assertOk()
-            ->assertSee('Régularisation', false)
-            ->assertSee('AF.COM', false);
-
-        $dette = app(FournisseurDetteService::class)->dettePourFournisseur('AF.COM');
-        $this->assertNotNull($dette);
-        $this->assertEquals(2_500_000.0, $dette['montant_facture']);
-        $this->assertEquals(2_500_000.0, $dette['montant_paye']);
-        $this->assertEquals(0.0, $dette['dette']);
+            ->get(route('factures-regularisation.index', absolute: false))
+            ->assertOk();
     }
 
     public function test_utilisateur_sans_permission_ne_peut_pas_regulariser(): void
@@ -121,6 +120,10 @@ class FactureRegularisationTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('factures-regularisation.create', absolute: false))
+            ->assertForbidden();
+
+        $this->actingAs($user)
+            ->get(route('factures-regularisation.index', absolute: false))
             ->assertForbidden();
     }
 }

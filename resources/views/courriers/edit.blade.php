@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@use('App\Support\ReturnUrl')
 @section('content-container-class', 'w-full px-4 sm:px-6 lg:px-8')
 @section('page-title', 'Corriger le courrier n° '.$courrier->numeroRegistreComplet())
 @section('page-title-info', $courrier->estArrivee() ? 'Correction de l’enregistrement d’arrivée' : 'Correction avant retransmission au directeur')
@@ -115,16 +116,39 @@
                 </div>
             </div>
 
-            <div>
-                <label class="{{ $label }}">Expéditeur</label>
-                <input type="text" name="expediteur_libelle" value="{{ old('expediteur_libelle', $courrier->expediteur_libelle) }}" class="{{ $field }}">
+            <div id="bloc-fournisseur-prestataire" class="{{ ($courrier->typeCourrier?->code === 'facture') ? '' : 'hidden' }}">
+                <label class="{{ $label }}">Fournisseur ou prestataire <span class="text-red-500 normal-case tracking-normal">*</span></label>
+                <select name="fournisseur_prestataire_id" id="select-fournisseur-prestataire" class="{{ $field }}">
+                    <option value="">— Choisir dans le référentiel —</option>
+                    @foreach(($fournisseursPrestataires ?? collect()) as $fp)
+                    <option
+                        value="{{ $fp->id }}"
+                        data-nom="{{ $fp->nom }}"
+                        data-email="{{ $fp->email }}"
+                        data-telephone="{{ $fp->telephone }}"
+                        @selected((int) old('fournisseur_prestataire_id', $courrier->fournisseur_prestataire_id) === (int) $fp->id)
+                    >{{ $fp->nom }}</option>
+                    @endforeach
+                </select>
+                <p class="text-xs text-slate-500 mt-1.5">
+                    Obligatoire pour une facture.
+                    @can('create', App\Models\FournisseurPrestataire::class)
+                    <a href="{{ route('fournisseurs-prestataires.create') }}" target="_blank" class="text-emerald-600 font-semibold no-underline hover:underline">Ajouter une fiche</a>
+                    @endcan
+                </p>
+                @error('fournisseur_prestataire_id')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
+            </div>
+
+            <div id="bloc-expediteur-libre" class="{{ ($courrier->typeCourrier?->code === 'facture') ? 'hidden' : '' }}">
+                <label class="{{ $label }}" id="label-expediteur">Expéditeur</label>
+                <input type="text" name="expediteur_libelle" id="input-expediteur" value="{{ old('expediteur_libelle', $courrier->expediteur_libelle) }}" class="{{ $field }}" placeholder="Organisme ou personne émettrice" @disabled($courrier->typeCourrier?->code === 'facture')>
                 @error('expediteur_libelle')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
             </div>
 
-            <div class="grid sm:grid-cols-2 gap-4">
+            <div id="bloc-contacts-expediteur" class="grid sm:grid-cols-2 gap-4">
                 <div>
                     <label class="{{ $label }}">E-mail expéditeur <span class="text-slate-400 normal-case tracking-normal font-medium">(optionnel)</span></label>
-                    <input type="email" name="expediteur_email" value="{{ old('expediteur_email', $courrier->expediteur_email) }}" class="{{ $field }}" placeholder="contact@exemple.cg">
+                    <input type="email" name="expediteur_email" id="input-expediteur-email" value="{{ old('expediteur_email', $courrier->expediteur_email) }}" class="{{ $field }}" placeholder="contact@exemple.cg">
                     @error('expediteur_email')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                 </div>
                 <div>
@@ -183,7 +207,7 @@
         <button type="submit" data-loading-text="Enregistrement..." class="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 shadow-sm transition-colors">
             Enregistrer les corrections
         </button>
-        <a href="{{ route('courriers.show', $courrier) }}" class="inline-flex items-center px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-semibold no-underline text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
+        <a href="{{ route('courriers.show', ReturnUrl::propagate($courrier, ReturnUrl::validated(request()->query('return')))) }}" class="inline-flex items-center px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-semibold no-underline text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
             Annuler
         </a>
     </div>
@@ -202,8 +226,38 @@ document.addEventListener('DOMContentLoaded', function () {
     var asterisqueTel = document.getElementById('asterisque-telephone');
     var hintTelOptionnel = document.getElementById('hint-telephone-optionnel');
     var aideTelephone = document.getElementById('aide-telephone');
+    var blocFournisseur = document.getElementById('bloc-fournisseur-prestataire');
+    var selectFournisseur = document.getElementById('select-fournisseur-prestataire');
+    var blocExpediteurLibre = document.getElementById('bloc-expediteur-libre');
+    var inputExpediteur = document.getElementById('input-expediteur');
+    var inputEmail = document.getElementById('input-expediteur-email');
 
     if (!typeSelect) return;
+
+    function setBlocVisible(bloc, visible) {
+        if (!bloc) return;
+        bloc.classList.toggle('hidden', !visible);
+        bloc.querySelectorAll('input, select, textarea').forEach(function (el) {
+            el.disabled = !visible;
+            if (!visible && el.type !== 'file' && el.id !== 'input-expediteur') {
+                // Ne pas vider l’expéditeur libre au toggle (conserve old/valeur courrier).
+            }
+        });
+    }
+
+    function appliquerContactsDepuisFiche(forceContacts) {
+        if (!selectFournisseur || selectFournisseur.disabled) return;
+        var opt = selectFournisseur.options[selectFournisseur.selectedIndex];
+        if (!opt || !opt.value) return;
+        if (inputExpediteur) inputExpediteur.value = opt.getAttribute('data-nom') || '';
+        if (forceContacts) {
+            if (inputEmail) inputEmail.value = opt.getAttribute('data-email') || '';
+            if (inputTelephone) inputTelephone.value = opt.getAttribute('data-telephone') || '';
+            return;
+        }
+        if (inputEmail && !inputEmail.value) inputEmail.value = opt.getAttribute('data-email') || '';
+        if (inputTelephone && !inputTelephone.value) inputTelephone.value = opt.getAttribute('data-telephone') || '';
+    }
 
     function synchroniserSelonType() {
         var opt = typeSelect.options[typeSelect.selectedIndex];
@@ -211,11 +265,13 @@ document.addEventListener('DOMContentLoaded', function () {
         var necessiteService = opt && opt.getAttribute('data-service-demandeur') === '1';
         var telRequis = opt && opt.getAttribute('data-telephone-requis') === '1';
         var necessiteMontant = opt && opt.getAttribute('data-montant-facture') === '1';
+        var estFacture = code === 'facture';
 
         if (!code) {
             necessiteService = false;
             telRequis = false;
             necessiteMontant = false;
+            estFacture = false;
         }
 
         if (blocService) {
@@ -240,6 +296,19 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
+        setBlocVisible(blocFournisseur, estFacture);
+        setBlocVisible(blocExpediteurLibre, !estFacture);
+        if (selectFournisseur) {
+            selectFournisseur.required = estFacture;
+            selectFournisseur.disabled = !estFacture;
+        }
+        if (inputExpediteur) {
+            inputExpediteur.disabled = estFacture;
+        }
+        if (estFacture) {
+            appliquerContactsDepuisFiche(false);
+        }
+
         if (inputTelephone) {
             inputTelephone.required = !!telRequis;
         }
@@ -254,6 +323,11 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    if (selectFournisseur) {
+        selectFournisseur.addEventListener('change', function () {
+            appliquerContactsDepuisFiche(true);
+        });
+    }
     typeSelect.addEventListener('change', synchroniserSelonType);
     synchroniserSelonType();
 });

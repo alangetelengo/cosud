@@ -60,9 +60,10 @@ class FacturePrestataireSmsNotificationTest extends TestCase
         $dg->assignRole('dg');
 
         $courrier = $this->creerFacture($secretaire, 'NETPLUS SARL');
+        $courrier->forceFill(['numero_fulgurant' => '883/DG'])->save();
         $circuit = CircuitCourrier::where('code', 'facture_prestataire')->firstOrFail();
 
-        app(CircuitCourrierMoteurService::class)->demarrer($courrier, $circuit, $secretaire);
+        app(CircuitCourrierMoteurService::class)->demarrer($courrier->fresh(), $circuit, $secretaire);
 
         Notification::assertSentTo(
             $dg,
@@ -70,10 +71,17 @@ class FacturePrestataireSmsNotificationTest extends TestCase
             function (CourrierWorkflowNotification $notification, array $channels) {
                 return $notification->type === CourrierNotificationService::FACTURE_ENREGISTREE_DG
                     && in_array('database', $channels, true)
-                    && in_array('cosud_sms', $channels, true)
-                    && str_contains($notification->toCosudSms($notification->courrier->createur), 'NETPLUS SARL');
+                    && in_array('cosud_sms', $channels, true);
             }
         );
+
+        $notification = collect(Notification::sent($dg, CourrierWorkflowNotification::class))
+            ->first(fn (CourrierWorkflowNotification $n): bool => $n->type === CourrierNotificationService::FACTURE_ENREGISTREE_DG);
+        $this->assertNotNull($notification);
+        $sms = $notification->toCosudSms($dg);
+        $this->assertStringContainsString('ACSI-COSUD : Facture prestataire (883/DG)', $sms);
+        $this->assertStringContainsString('enregistree et soumise a votre validation (Bon pour accord)', $sms);
+        $this->assertStringContainsString('Fournisseur : NETPLUS SARL', $sms);
         Notification::assertSentToTimes($dg, CourrierWorkflowNotification::class, 1);
         Notification::assertNotSentTo($dg, CourrierWorkflowNotification::class, function (CourrierWorkflowNotification $n) {
             return $n->type === CourrierNotificationService::ETAPE_CIRCUIT;

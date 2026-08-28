@@ -17,6 +17,7 @@ use App\Notifications\DocumentValidationDemandeNotification;
 use App\Notifications\DocumentValidationResultNotification;
 use App\Services\MetadonneeExtracteur;
 use App\Services\ValidationDossierLecturePartageService;
+use App\Support\ReturnUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -177,7 +178,7 @@ class DocumentController extends Controller
         return $redirect->with('success', 'Document enregistré.');
     }
 
-    public function fiche(Document $document)
+    public function fiche(Request $request, Document $document)
     {
         $this->authorize('view', $document);
         $document->load([
@@ -190,19 +191,23 @@ class DocumentController extends Controller
             ->filter(fn ($c) => auth()->user()->can('view', $c))
             ->values();
 
-        return view('documents.fiche', compact('document', 'courriersLies'));
+        $retourUrl = ReturnUrl::resolve($request->query('return'), route('documents.index'));
+
+        return view('documents.fiche', compact('document', 'courriersLies', 'retourUrl'));
     }
 
-    public function edit(Document $document)
+    public function edit(Request $request, Document $document)
     {
         if (auth()->user()->cannot('update', $document)) {
-            return $this->refuserModificationLectureSeule($document);
+            return $this->refuserModificationLectureSeule($document, $request->query('return'));
         }
         $types = TypeDocument::where('actif', true)->orderBy('libelle')->get();
         [$dossiersPersoDepot, $dossiersPlanDepot] = $this->dossiersDepotGroupesPersoPuisPlan(auth()->user());
         $document->load('metadonnees.typeMetadonnee');
 
-        return view('documents.edit', compact('document', 'types', 'dossiersPersoDepot', 'dossiersPlanDepot'));
+        $retourUrl = ReturnUrl::resolve($request->query('return'), route('documents.index'));
+
+        return view('documents.edit', compact('document', 'types', 'dossiersPersoDepot', 'dossiersPlanDepot', 'retourUrl'));
     }
 
     public function extraireMetadonnees(Document $document)
@@ -215,14 +220,16 @@ class DocumentController extends Controller
         return back()->with('success', $count > 0 ? "{$count} métadonnée(s) extraite(s)." : 'Aucune métadonnée extraite (format non supporté ou PDF sans métadonnées).');
     }
 
-    public function nouvelleVersion(Document $document)
+    public function nouvelleVersion(Request $request, Document $document)
     {
         if (auth()->user()->cannot('update', $document)) {
-            return $this->refuserModificationLectureSeule($document);
+            return $this->refuserModificationLectureSeule($document, $request->query('return'));
         }
         $document->load('typeDocument', 'versions');
 
-        return view('documents.nouvelle-version', compact('document'));
+        $retourUrl = ReturnUrl::resolve($request->query('return'), route('documents.index'));
+
+        return view('documents.nouvelle-version', compact('document', 'retourUrl'));
     }
 
     public function storeNouvelleVersion(Request $request, Document $document)
@@ -1312,10 +1319,10 @@ class DocumentController extends Controller
         return [$perso, $plan];
     }
 
-    private function refuserModificationLectureSeule(Document $document)
+    private function refuserModificationLectureSeule(Document $document, ?string $return = null)
     {
         return redirect()
-            ->route('documents.fiche', $document)
+            ->route('documents.fiche', ReturnUrl::propagate($document, ReturnUrl::validated($return)))
             ->with('error', 'Accès en lecture seule : vous ne pouvez pas modifier ce document. Demandez un partage avec droit d’écriture.');
     }
 }

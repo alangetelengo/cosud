@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Paiements progressifs — {{ $moratoire->fournisseur_libelle }}</title>
 <style>
-@page { size: A4 portrait; margin: 18mm 12mm 16mm 12mm; }
+@page { size: A4 portrait; margin: 18mm 12mm 16mm 18mm; }
 body {
     font-family: DejaVu Sans, Arial, sans-serif;
     font-size: 11px;
@@ -16,6 +16,10 @@ body {
     background-repeat: no-repeat;
     background-position: top center;
 }
+main {
+    margin-left: 32px;
+    margin-right: 4px;
+}
 .zone0 {
     text-align: center;
     font-size: 13px;
@@ -26,8 +30,8 @@ body {
 }
 .sous-titre { text-align: center; font-size: 11px; margin: 0 0 4px; }
 table.paiement {
-    width: 94%;
-    margin: 12px auto 0;
+    width: 100%;
+    margin: 12px 0 0;
     border-collapse: collapse;
     font-size: 9px;
 }
@@ -61,12 +65,14 @@ table.paiement th {
 <thead>
 <tr>
 <th style="width:5%;">N°</th>
-<th style="width:16%;">Montant dette</th>
-<th style="width:16%;">Échéancier</th>
-<th style="width:14%;">Solde</th>
-<th style="width:16%;">N° chèque</th>
-<th style="width:16%;">Banque</th>
-<th style="width:17%;">OBS</th>
+<th style="width:13%;">Montant dette</th>
+<th style="width:12%;">Échéancier</th>
+<th style="width:11%;">Solde</th>
+<th style="width:11%;">Date paiement</th>
+<th style="width:12%;">Période</th>
+<th style="width:9%;">Mode</th>
+<th style="width:12%;">N° chèque</th>
+<th style="width:15%;">OBS</th>
 </tr>
 </thead>
 <tbody>
@@ -76,8 +82,10 @@ table.paiement th {
 <td class="text-right">{{ number_format((float) $echeance->montant_dette, 0, ',', ' ') }}</td>
 <td class="text-right">{{ number_format((float) $echeance->montant_echeance, 0, ',', ' ') }}</td>
 <td class="text-right">{{ number_format((float) $echeance->solde, 0, ',', ' ') }}</td>
-<td>{{ $echeance->numero_cheque ?: '' }}</td>
-<td>{{ $echeance->banque ?: '' }}</td>
+<td class="text-center">{{ $echeance->date_paiement?->format('d/m/Y') ?: '' }}</td>
+<td class="text-center">{{ $echeance->libellePeriode() ?: '' }}</td>
+<td class="text-center">{{ $echeance->mode_paiement ? $echeance->libelleModePaiement() : '' }}</td>
+<td>{{ $echeance->mode_paiement === 'espece' ? '' : ($echeance->numero_cheque ?: '') }}</td>
 <td>{{ $echeance->observation ?: '' }}</td>
 </tr>
 @endforeach
@@ -88,7 +96,7 @@ table.paiement th {
     {{ $moratoire->lieu ?: 'Brazzaville' }}, le
     {{ $moratoire->date_document?->format('d/m/Y') ?? '………………' }}
     <br><br>
-    <strong>SUIVI DES DEPENSES</strong><br><br><br><br>
+    <strong>{{ $titreSignataire }}</strong><br><br><br><br>
     <strong><u style="font-size: 12px;">{{ $moratoire->signataire_libelle ?: '—' }}</u></strong>
 </div>
 </main>

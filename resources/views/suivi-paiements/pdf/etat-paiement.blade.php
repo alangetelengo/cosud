@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>État récapitulatif de suivi des dépenses — {{ $annee }}</title>
 <style>
-@page { size: A4 portrait; margin: 18mm 12mm 16mm 12mm; }
+@page { size: A4 portrait; margin: 18mm 12mm 16mm 18mm; }
 
 body {
     font-family: DejaVu Sans, Arial, sans-serif;
@@ -16,6 +16,12 @@ body {
     background-size: cover;
     background-repeat: no-repeat;
     background-position: top center;
+}
+
+/* Décalage pour ne pas chevaucher la bande rouge/jaune de la Charte */
+main {
+    margin-left: 32px;
+    margin-right: 4px;
 }
 
 /* Espace sous le bandeau Charte (République / ministère / ACSI) */
@@ -31,7 +37,7 @@ body {
 .zone1 {
     font-size: 10px;
     font-weight: bold;
-    margin: 10px 10px 10px 45px;
+    margin: 10px 10px 10px 0;
     color: #000;
 }
 
@@ -42,8 +48,8 @@ body {
 }
 
 table.paiement {
-    width: 90%;
-    margin: 12px auto 0;
+    width: 100%;
+    margin: 12px 0 0;
     border-collapse: collapse;
     font-size: 10.5px;
 }
@@ -73,9 +79,9 @@ table.paiement tr:nth-child(odd) { background-color: #fff; }
 
 .arrete {
     margin-top: 10px;
-    width: 90%;
-    margin-left: auto;
-    margin-right: auto;
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
     font-size: 11px;
 }
 

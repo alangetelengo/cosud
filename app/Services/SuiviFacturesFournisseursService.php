@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Courrier;
+use App\Models\SuiviPaiement;
 use App\Models\TypeCourrier;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,6 +28,8 @@ class SuiviFacturesFournisseursService
 
     public const STATUT_CLOTURE = 'cloture';
 
+    public const STATUT_RELIQUAT = 'reliquat';
+
     /**
      * @return array<string, string>
      */
@@ -38,6 +41,7 @@ class SuiviFacturesFournisseursService
             self::STATUT_SIGNATURE_DG => 'Signature DG',
             self::STATUT_DECHARGE => 'En attente décharge',
             self::STATUT_CONTROLE => 'Contrôle suivi dépenses',
+            self::STATUT_RELIQUAT => 'Reliquat à payer',
             self::STATUT_CLOTURE => 'Payé / clôturé',
         ];
     }
@@ -45,12 +49,20 @@ class SuiviFacturesFournisseursService
     public function statutPour(Courrier $courrier): string
     {
         if (! $courrier->circuit_etape_actuelle_id) {
-            $suivi = $courrier->relationLoaded('suiviPaiement')
-                ? $courrier->suiviPaiement
-                : $courrier->suiviPaiement()->first();
+            $suivis = $courrier->relationLoaded('suiviPaiements')
+                ? $courrier->suiviPaiements
+                : $courrier->suiviPaiements()->get();
 
-            if ($suivi && $suivi->date_decharge && $suivi->controle_at === null) {
+            $enAttenteControle = $suivis->contains(
+                fn (SuiviPaiement $suivi): bool => $suivi->date_decharge !== null && $suivi->controle_at === null
+            );
+
+            if ($enAttenteControle) {
                 return self::STATUT_CONTROLE;
+            }
+
+            if ($this->montantsSurFacture($courrier)['a_reliquat']) {
+                return self::STATUT_RELIQUAT;
             }
 
             return self::STATUT_CLOTURE;
@@ -63,6 +75,41 @@ class SuiviFacturesFournisseursService
             'instructions_dg', 'enregistrement' => self::STATUT_ATTENTE_AC,
             default => self::STATUT_ATTENTE_AC,
         };
+    }
+
+    /**
+     * Montants facture / chèque / reliquat pour une facture du suivi Taty.
+     *
+     * @return array{
+     *     montant_facture: float,
+     *     montant_paye: float,
+     *     reliquat: float,
+     *     a_reliquat: bool
+     * }
+     */
+    public function montantsSurFacture(Courrier $courrier): array
+    {
+        $suivis = $courrier->relationLoaded('suiviPaiements')
+            ? $courrier->suiviPaiements
+            : $courrier->suiviPaiements()->get();
+
+        $montantFacture = $courrier->montant_facture !== null
+            ? (float) $courrier->montant_facture
+            : null;
+        $montantPaye = (float) $suivis->sum(fn (SuiviPaiement $suivi): float => (float) ($suivi->montant ?? 0));
+
+        if ($montantFacture === null) {
+            $montantFacture = $montantPaye;
+        }
+
+        $reliquat = max(0.0, round($montantFacture - $montantPaye, 2));
+
+        return [
+            'montant_facture' => $montantFacture,
+            'montant_paye' => $montantPaye,
+            'reliquat' => $reliquat,
+            'a_reliquat' => $montantPaye > 0.009 && $reliquat > 0.009,
+        ];
     }
 
     public function libelleStatut(string $code): string
@@ -84,6 +131,7 @@ class SuiviFacturesFournisseursService
                 'typeCourrier',
                 'circuitEtapeActuelle',
                 'suiviPaiement',
+                'suiviPaiements',
                 'serviceDemandeurStructure',
                 'dossier',
             ])
@@ -123,18 +171,31 @@ class SuiviFacturesFournisseursService
     }
 
     /**
-     * @return Collection<int, array{courrier: Courrier, statut: string, libelle_statut: string}>
+     * @return Collection<int, array{
+     *     courrier: Courrier,
+     *     statut: string,
+     *     libelle_statut: string,
+     *     montant_facture: float,
+     *     montant_paye: float,
+     *     reliquat: float,
+     *     a_reliquat: bool
+     * }>
      */
     public function lignesPourAffichage(Request $request): Collection
     {
         $lignes = $this->requeteListe($request)->get()
             ->map(function (Courrier $courrier): array {
                 $statut = $this->statutPour($courrier);
+                $montants = $this->montantsSurFacture($courrier);
 
                 return [
                     'courrier' => $courrier,
                     'statut' => $statut,
                     'libelle_statut' => $this->libelleStatut($statut),
+                    'montant_facture' => $montants['montant_facture'],
+                    'montant_paye' => $montants['montant_paye'],
+                    'reliquat' => $montants['reliquat'],
+                    'a_reliquat' => $montants['a_reliquat'],
                 ];
             });
 
@@ -189,7 +250,7 @@ class SuiviFacturesFournisseursService
     }
 
     /**
-     * @param  Collection<int, array{courrier: Courrier, statut: string, libelle_statut: string}>  $lignes
+     * @param  Collection<int, array{courrier: Courrier, statut: string, libelle_statut: string, montant_facture?: float, montant_paye?: float, reliquat?: float}>  $lignes
      */
     public function exportCsv(Collection $lignes, string $periodeLabel, ?string $suffixeFichier = null): StreamedResponse
     {
@@ -204,7 +265,9 @@ class SuiviFacturesFournisseursService
                 'Date BPA',
                 'Fournisseur',
                 'Objet',
-                'Montant',
+                'Montant facture',
+                'Montant payé',
+                'Reliquat',
                 'N° pièce',
                 'Banque',
                 'Statut paiement',
@@ -217,15 +280,18 @@ class SuiviFacturesFournisseursService
                 /** @var Courrier $courrier */
                 $courrier = $ligne['courrier'];
                 $suivi = $courrier->suiviPaiement;
+                $montants = isset($ligne['montant_facture'], $ligne['montant_paye'], $ligne['reliquat'])
+                    ? $ligne
+                    : $this->montantsSurFacture($courrier);
 
                 fputcsv($out, [
                     $courrier->numeroRegistreComplet(),
                     $courrier->date_orientation?->format('d/m/Y') ?? '',
                     $courrier->expediteur_libelle ?? '',
                     $courrier->objet,
-                    ($courrier->montant_facture ?? $suivi?->montant) !== null
-                        ? number_format((float) ($courrier->montant_facture ?? $suivi->montant), 0, ',', ' ')
-                        : '',
+                    number_format((float) $montants['montant_facture'], 0, ',', ' '),
+                    number_format((float) $montants['montant_paye'], 0, ',', ' '),
+                    number_format((float) $montants['reliquat'], 0, ',', ' '),
                     $suivi?->numero_piece ?? '',
                     $suivi?->banque ?? '',
                     $ligne['libelle_statut'],
@@ -239,6 +305,9 @@ class SuiviFacturesFournisseursService
             fputcsv($out, ['Période', $periodeLabel], ';');
             fputcsv($out, ['Exporté le', now()->format('d/m/Y H:i')], ';');
             fputcsv($out, ['Nombre de factures', (string) $lignes->count()], ';');
+            fputcsv($out, ['Total factures', number_format($this->totalMontants($lignes), 0, ',', ' ')], ';');
+            fputcsv($out, ['Total payé', number_format($this->totalPaye($lignes), 0, ',', ' ')], ';');
+            fputcsv($out, ['Total reliquats', number_format($this->totalReliquats($lignes), 0, ',', ' ')], ';');
             fclose($out);
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
@@ -255,15 +324,44 @@ class SuiviFacturesFournisseursService
     }
 
     /**
-     * @param  Collection<int, array{courrier: Courrier, statut: string, libelle_statut: string}>  $lignes
+     * @param  Collection<int, array{courrier: Courrier, montant_facture?: float}>  $lignes
      */
     public function totalMontants(Collection $lignes): float
     {
         return (float) $lignes->sum(function (array $ligne): float {
-            $montant = $ligne['courrier']->montant_facture
-                ?? $ligne['courrier']->suiviPaiement?->montant;
+            if (array_key_exists('montant_facture', $ligne)) {
+                return (float) $ligne['montant_facture'];
+            }
 
-            return $montant !== null ? (float) $montant : 0.0;
+            return $this->montantsSurFacture($ligne['courrier'])['montant_facture'];
+        });
+    }
+
+    /**
+     * @param  Collection<int, array{courrier: Courrier, montant_paye?: float}>  $lignes
+     */
+    public function totalPaye(Collection $lignes): float
+    {
+        return (float) $lignes->sum(function (array $ligne): float {
+            if (array_key_exists('montant_paye', $ligne)) {
+                return (float) $ligne['montant_paye'];
+            }
+
+            return $this->montantsSurFacture($ligne['courrier'])['montant_paye'];
+        });
+    }
+
+    /**
+     * @param  Collection<int, array{courrier: Courrier, reliquat?: float}>  $lignes
+     */
+    public function totalReliquats(Collection $lignes): float
+    {
+        return (float) $lignes->sum(function (array $ligne): float {
+            if (array_key_exists('reliquat', $ligne)) {
+                return (float) $ligne['reliquat'];
+            }
+
+            return $this->montantsSurFacture($ligne['courrier'])['reliquat'];
         });
     }
 }

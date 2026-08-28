@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@use('App\Support\ReturnUrl')
+
 @section('content-container-class', 'w-full max-w-none px-4 sm:px-6 lg:px-8')
 @section('page-title', 'Suivi de dépense')
 @section('page-title-info', 'Année '.$annee.' — '.$lignes->count().' ligne(s)')
@@ -195,7 +197,7 @@
                         <td class="px-3 py-2">
                             @if($ligne->courrier)
                                 @can('view', $ligne->courrier)
-                                    <x-table-action :href="route('courriers.show', $ligne->courrier)">Voir</x-table-action>
+                                    <x-table-action :href="route('courriers.show', ReturnUrl::forRoute($ligne->courrier))">Voir</x-table-action>
                                 @else
                                     —
                                 @endcan
@@ -227,7 +229,7 @@
                                 @endcan
                             @elseif($ligne->courrier && $ligne->estClassementReserveFacturesPrestataires())
                                 @can('view', $ligne->courrier)
-                                    <x-table-action :href="route('courriers.show', ['courrier' => $ligne->courrier, 'classer' => 1])" variant="sky">Via courrier</x-table-action>
+                                    <x-table-action :href="route('courriers.show', ReturnUrl::forRoute(['courrier' => $ligne->courrier, 'classer' => 1]))" variant="sky">Via courrier</x-table-action>
                                 @endcan
                             @endif
                             </div>

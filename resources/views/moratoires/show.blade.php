@@ -15,6 +15,12 @@
 @section('content')
 @include('partials.flash-session', ['class' => 'mb-4'])
 
+@php
+    $moisDisponibles = \App\Models\MoratoireEcheance::moisDisponibles();
+    $anneeCourante = (int) now()->year;
+    $anneesPeriode = range($anneeCourante - 2, $anneeCourante + 1);
+@endphp
+
 <div class="space-y-4">
     <div class="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/20 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-100">
         <p class="font-semibold">État récapitulatif des paiements progressifs — {{ $moratoire->fournisseur_libelle }}</p>
@@ -39,8 +45,10 @@
                         <th class="px-3 py-2 text-right font-bold whitespace-nowrap">Montant dette</th>
                         <th class="px-3 py-2 text-right font-bold whitespace-nowrap">Échéancier</th>
                         <th class="px-3 py-2 text-right font-bold whitespace-nowrap">Solde</th>
+                        <th class="px-3 py-2 text-left font-bold whitespace-nowrap">Date paiement</th>
+                        <th class="px-3 py-2 text-left font-bold whitespace-nowrap">Période</th>
+                        <th class="px-3 py-2 text-left font-bold whitespace-nowrap">Mode</th>
                         <th class="px-3 py-2 text-left font-bold whitespace-nowrap">N° chèque</th>
-                        <th class="px-3 py-2 text-left font-bold">Banque</th>
                         <th class="px-3 py-2 text-left font-bold">OBS</th>
                         @can('update', $moratoire)
                         <th class="px-3 py-2 text-left font-bold whitespace-nowrap">Actions</th>
@@ -48,12 +56,17 @@
                     </tr>
                 </thead>
                 @php
-                    $nbColonnes = auth()->user()?->can('update', $moratoire) ? 8 : 7;
+                    $nbColonnes = auth()->user()?->can('update', $moratoire) ? 10 : 9;
                     $echeanceErreurId = old('_echeance_id') ? (int) old('_echeance_id') : null;
                 @endphp
                 @foreach($moratoire->echeances as $echeance)
+                @php
+                    $formMode = old('_echeance_id') == $echeance->id
+                        ? old('mode_paiement', 'cheque')
+                        : ($echeance->mode_paiement ?? 'cheque');
+                @endphp
                 <tbody
-                    x-data="{ open: {{ $echeanceErreurId === (int) $echeance->id ? 'true' : 'false' }} }"
+                    x-data="{ open: {{ $echeanceErreurId === (int) $echeance->id ? 'true' : 'false' }}, mode: @js($formMode) }"
                     class="border-b border-slate-100 dark:border-slate-700"
                 >
                     <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/20 {{ $echeance->estPayee() ? 'bg-emerald-50/40 dark:bg-emerald-900/10' : ($loop->even ? 'bg-emerald-50/30 dark:bg-emerald-900/5' : '') }}">
@@ -61,8 +74,10 @@
                         <td class="px-3 py-2 text-right tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-200">{{ number_format((float) $echeance->montant_dette, 0, ',', ' ') }}</td>
                         <td class="px-3 py-2 text-right tabular-nums font-semibold whitespace-nowrap text-slate-900 dark:text-slate-100">{{ number_format((float) $echeance->montant_echeance, 0, ',', ' ') }}</td>
                         <td class="px-3 py-2 text-right tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-200">{{ number_format((float) $echeance->solde, 0, ',', ' ') }}</td>
-                        <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{{ $echeance->numero_cheque ?: '—' }}</td>
-                        <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{{ $echeance->banque ?: '—' }}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-slate-700 dark:text-slate-200">{{ $echeance->date_paiement?->format('d/m/Y') ?: '—' }}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-slate-700 dark:text-slate-200">{{ $echeance->libellePeriode() ?: '—' }}</td>
+                        <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{{ $echeance->libelleModePaiement() }}</td>
+                        <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{{ $echeance->mode_paiement === 'espece' ? '—' : ($echeance->numero_cheque ?: '—') }}</td>
                         <td class="px-3 py-2 max-w-[140px] truncate text-slate-600 dark:text-slate-300" title="{{ $echeance->observation }}">{{ $echeance->observation ?: '—' }}</td>
                         @can('update', $moratoire)
                         <td class="px-3 py-2 whitespace-nowrap">
@@ -92,23 +107,63 @@
                                         <span class="text-amber-700 dark:text-amber-300">· justificatif obligatoire</span>
                                     @endif
                                 </p>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 items-end">
+
+                                <fieldset class="mb-3 flex flex-wrap gap-4 text-xs">
+                                    <legend class="sr-only">Mode de paiement</legend>
+                                    <label class="inline-flex items-center gap-1.5">
+                                        <input type="radio" name="mode_paiement" value="cheque" x-model="mode"
+                                               @checked($formMode === 'cheque')>
+                                        Chèque
+                                    </label>
+                                    <label class="inline-flex items-center gap-1.5">
+                                        <input type="radio" name="mode_paiement" value="espece" x-model="mode"
+                                               @checked($formMode === 'espece')>
+                                        Espèces
+                                    </label>
+                                </fieldset>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
                                     <div>
-                                        <label class="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">N° chèque</label>
-                                        <input type="text" name="numero_cheque" value="{{ old('_echeance_id') == $echeance->id ? old('numero_cheque') : $echeance->numero_cheque }}" placeholder="N° chèque" class="w-full rounded-lg border border-slate-200 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-950 @error('numero_cheque') border-red-500 @enderror">
+                                        <label class="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Date paiement <span class="text-red-500">*</span></label>
+                                        <input type="date" name="date_paiement" value="{{ old('_echeance_id') == $echeance->id ? old('date_paiement') : $echeance->date_paiement?->format('Y-m-d') }}"
+                                               class="w-full rounded-lg border border-slate-200 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-950 @error('date_paiement') border-red-500 @enderror">
+                                        @if(old('_echeance_id') == $echeance->id) @error('date_paiement')<p class="text-[10px] text-red-600 mt-0.5">{{ $message }}</p>@enderror @endif
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Mois réglé <span class="text-red-500">*</span></label>
+                                        <select name="periode_mois" class="w-full rounded-lg border border-slate-200 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-950 @error('periode_mois') border-red-500 @enderror">
+                                            <option value="">— Choisir —</option>
+                                            @foreach($moisDisponibles as $cle => $libelle)
+                                                <option value="{{ $cle }}" @selected((old('_echeance_id') == $echeance->id ? old('periode_mois') : $echeance->periode_mois) === $cle)>{{ $libelle }}</option>
+                                            @endforeach
+                                        </select>
+                                        @if(old('_echeance_id') == $echeance->id) @error('periode_mois')<p class="text-[10px] text-red-600 mt-0.5">{{ $message }}</p>@enderror @endif
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Année <span class="text-red-500">*</span></label>
+                                        <select name="periode_annee" class="w-full rounded-lg border border-slate-200 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-950 @error('periode_annee') border-red-500 @enderror">
+                                            <option value="">— Choisir —</option>
+                                            @foreach($anneesPeriode as $annee)
+                                                <option value="{{ $annee }}" @selected((int) (old('_echeance_id') == $echeance->id ? old('periode_annee') : $echeance->periode_annee) === $annee)>{{ $annee }}</option>
+                                            @endforeach
+                                        </select>
+                                        @if(old('_echeance_id') == $echeance->id) @error('periode_annee')<p class="text-[10px] text-red-600 mt-0.5">{{ $message }}</p>@enderror @endif
+                                    </div>
+                                    <div x-show="mode === 'cheque'" x-cloak>
+                                        <label class="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">N° chèque <span class="text-red-500">*</span></label>
+                                        <input type="text" name="numero_cheque" value="{{ old('_echeance_id') == $echeance->id ? old('numero_cheque') : $echeance->numero_cheque }}"
+                                               class="w-full rounded-lg border border-slate-200 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-950 @error('numero_cheque') border-red-500 @enderror">
                                         @if(old('_echeance_id') == $echeance->id) @error('numero_cheque')<p class="text-[10px] text-red-600 mt-0.5">{{ $message }}</p>@enderror @endif
                                     </div>
-                                    <div>
+                                    <div x-show="mode === 'cheque'" x-cloak>
                                         <label class="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Banque</label>
-                                        <input type="text" name="banque" value="{{ old('_echeance_id') == $echeance->id ? old('banque') : $echeance->banque }}" placeholder="Banque" class="w-full rounded-lg border border-slate-200 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-950">
+                                        <input type="text" name="banque" value="{{ old('_echeance_id') == $echeance->id ? old('banque') : $echeance->banque }}"
+                                               class="w-full rounded-lg border border-slate-200 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-950">
                                     </div>
-                                    <div>
-                                        <label class="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Date paiement</label>
-                                        <input type="date" name="date_paiement" value="{{ old('_echeance_id') == $echeance->id ? old('date_paiement') : $echeance->date_paiement?->format('Y-m-d') }}" class="w-full rounded-lg border border-slate-200 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-950">
-                                    </div>
-                                    <div>
+                                    <div class="lg:col-span-2">
                                         <label class="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">OBS</label>
-                                        <input type="text" name="observation" value="{{ old('_echeance_id') == $echeance->id ? old('observation') : $echeance->observation }}" placeholder="OBS" class="w-full rounded-lg border border-slate-200 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-950">
+                                        <input type="text" name="observation" value="{{ old('_echeance_id') == $echeance->id ? old('observation') : $echeance->observation }}"
+                                               placeholder="Ex. : Paiement par anticipation" class="w-full rounded-lg border border-slate-200 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-950">
                                     </div>
                                     <div>
                                         <button type="submit" data-loading-text="Enregistrement..."
@@ -124,11 +179,6 @@
                                     <input type="file" name="fichiers[]" accept=".pdf,.jpg,.jpeg,.png" multiple
                                            class="w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-2.5 file:py-1 file:text-white file:font-semibold">
                                     @if(old('_echeance_id') == $echeance->id) @error('fichiers')<p class="text-[10px] text-red-600 mt-0.5">{{ $message }}</p>@enderror @endif
-                                    @if($echeance->suiviPaiement?->dossier_id)
-                                        <p class="text-[10px] text-emerald-700 dark:text-emerald-300 mt-1">
-                                            Justificatifs déjà déposés — vous pouvez en ajouter d’autres.
-                                        </p>
-                                    @endif
                                 </div>
                             </form>
                         </td>
@@ -143,23 +193,14 @@
     @if($moratoire->documents->isNotEmpty())
     <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
         <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-700/30">
-            <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide">Pièces justificatives de la dette</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ $moratoire->documents->count() }} fichier(s)</p>
+            <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide">Instruction du DG</h2>
         </div>
         <ul class="divide-y divide-slate-100 dark:divide-slate-700">
             @foreach($moratoire->documents as $document)
             <li class="px-4 py-2.5 flex items-center justify-between gap-3 text-sm">
-                <span class="min-w-0 truncate text-slate-700 dark:text-slate-200" title="{{ $document->nom_original }}">
-                    {{ $document->nom_original }}
-                    @if($document->pivot?->est_principal)
-                        <span class="ml-1 text-[10px] font-semibold uppercase text-emerald-700 dark:text-emerald-300">principal</span>
-                    @endif
-                </span>
+                <span class="min-w-0 truncate text-slate-700 dark:text-slate-200">{{ $document->nom_original }}</span>
                 @can('view', $document)
-                <a href="{{ route('documents.show', $document) }}"
-                   class="shrink-0 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:underline no-underline">
-                    Ouvrir
-                </a>
+                <a href="{{ route('documents.show', $document) }}" class="shrink-0 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:underline no-underline">Ouvrir</a>
                 @endcan
             </li>
             @endforeach
@@ -168,7 +209,7 @@
     @endif
 
     <p class="text-sm">
-        <x-table-action :href="route('moratoires.index')">← Retour à la liste</x-table-action>
+        <x-table-action :href="$retourUrl">← Retour à la liste</x-table-action>
     </p>
 </div>
 @endsection

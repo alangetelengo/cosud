@@ -811,6 +811,147 @@ class CourrierModuleTest extends TestCase
         $this->assertSame('annule', $depart->statutCourrier->code);
     }
 
+    public function test_responsable_dossiers_peut_annuler_courrier_arrivee_recu(): void
+    {
+        $taty = $this->creerResponsableDossiers();
+
+        $arrivee = Courrier::create([
+            'sens_courrier_id' => SensCourrier::where('code', 'arrivee')->value('id'),
+            'statut_courrier_id' => StatutCourrier::where('code', 'recu')->value('id'),
+            'numero_registre' => 901,
+            'numero_registre_annee' => (int) now()->format('Y'),
+            'objet' => 'Courrier à annuler',
+            'expediteur_libelle' => 'TEST FOURNISSEUR',
+            'createur_id' => $taty->id,
+            'structure_id' => $taty->structure_id,
+        ]);
+
+        $this->actingAs($taty)
+            ->post(route('courriers.annuler', $arrivee, absolute: false), [
+                'motif_annulation' => 'Doublon de saisie',
+            ])
+            ->assertRedirect(route('courriers.index', ['sens' => 'arrivee'], absolute: false));
+
+        $arrivee->refresh();
+        $this->assertSame('annule', $arrivee->statutCourrier->code);
+    }
+
+    public function test_responsable_dossiers_peut_supprimer_courrier_arrivee_recu(): void
+    {
+        $taty = $this->creerResponsableDossiers();
+
+        $arrivee = Courrier::create([
+            'sens_courrier_id' => SensCourrier::where('code', 'arrivee')->value('id'),
+            'statut_courrier_id' => StatutCourrier::where('code', 'recu')->value('id'),
+            'numero_registre' => 902,
+            'numero_registre_annee' => (int) now()->format('Y'),
+            'objet' => 'Courrier à supprimer',
+            'expediteur_libelle' => 'TEST FOURNISSEUR',
+            'createur_id' => $taty->id,
+            'structure_id' => $taty->structure_id,
+        ]);
+
+        $this->actingAs($taty)
+            ->delete(route('courriers.destroy', $arrivee, absolute: false))
+            ->assertRedirect(route('courriers.index', ['sens' => 'arrivee'], absolute: false));
+
+        $this->assertDatabaseMissing('courriers', ['id' => $arrivee->id]);
+    }
+
+    public function test_courrier_arrivee_cloture_ne_peut_pas_etre_supprime(): void
+    {
+        $taty = $this->creerResponsableDossiers();
+
+        $arrivee = Courrier::create([
+            'sens_courrier_id' => SensCourrier::where('code', 'arrivee')->value('id'),
+            'statut_courrier_id' => StatutCourrier::where('code', 'cloture')->value('id'),
+            'numero_registre' => 903,
+            'numero_registre_annee' => (int) now()->format('Y'),
+            'objet' => 'Courrier clôturé',
+            'expediteur_libelle' => 'TEST',
+            'createur_id' => $taty->id,
+            'structure_id' => $taty->structure_id,
+        ]);
+
+        $this->actingAs($taty)
+            ->delete(route('courriers.destroy', $arrivee, absolute: false))
+            ->assertForbidden();
+    }
+
+    public function test_secretaire_peut_supprimer_brouillon_depart(): void
+    {
+        $secretaire = $this->creerSecretaire();
+
+        $depart = Courrier::create([
+            'sens_courrier_id' => SensCourrier::where('code', 'depart')->value('id'),
+            'statut_courrier_id' => StatutCourrier::where('code', 'brouillon')->value('id'),
+            'numero_registre' => 904,
+            'numero_registre_annee' => (int) now()->format('Y'),
+            'objet' => 'Brouillon à supprimer',
+            'createur_id' => $secretaire->id,
+            'structure_id' => $secretaire->structure_id,
+        ]);
+
+        $this->actingAs($secretaire)
+            ->delete(route('courriers.destroy', $depart, absolute: false))
+            ->assertRedirect(route('courriers.index', ['sens' => 'depart'], absolute: false));
+
+        $this->assertDatabaseMissing('courriers', ['id' => $depart->id]);
+    }
+
+    public function test_liste_peut_annuler_directement_courrier_arrivee_recu(): void
+    {
+        $taty = $this->creerResponsableDossiers();
+
+        $arrivee = Courrier::create([
+            'sens_courrier_id' => SensCourrier::where('code', 'arrivee')->value('id'),
+            'statut_courrier_id' => StatutCourrier::where('code', 'recu')->value('id'),
+            'numero_registre' => 905,
+            'numero_registre_annee' => (int) now()->format('Y'),
+            'objet' => 'Annulation depuis liste',
+            'expediteur_libelle' => 'TEST',
+            'createur_id' => $taty->id,
+            'structure_id' => $taty->structure_id,
+        ]);
+
+        $this->actingAs($taty)
+            ->get(route('courriers.index', ['sens' => 'arrivee', 'q' => 'Annulation depuis liste'], absolute: false))
+            ->assertOk()
+            ->assertSee('Annuler ce courrier ?', false)
+            ->assertSee(route('courriers.annuler', $arrivee, absolute: false), false);
+
+        $this->actingAs($taty)
+            ->post(route('courriers.annuler', $arrivee, absolute: false), [])
+            ->assertRedirect(route('courriers.index', ['sens' => 'arrivee'], absolute: false));
+
+        $arrivee->refresh();
+        $this->assertSame('annule', $arrivee->statutCourrier->code);
+    }
+
+    public function test_fiche_ouvre_formulaire_annulation_avec_parametre_annuler(): void
+    {
+        $dg = Structure::where('code', 'DG')->firstOrFail();
+        $user = User::factory()->create(['structure_id' => $dg->id]);
+        $user->assignRole('dg');
+
+        $arrivee = Courrier::create([
+            'sens_courrier_id' => SensCourrier::where('code', 'arrivee')->value('id'),
+            'statut_courrier_id' => StatutCourrier::where('code', 'recu')->value('id'),
+            'numero_registre' => 906,
+            'numero_registre_annee' => (int) now()->format('Y'),
+            'objet' => 'Courrier DG annulation',
+            'expediteur_libelle' => 'TEST',
+            'createur_id' => $user->id,
+            'structure_id' => $dg->id,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('courriers.show', ['courrier' => $arrivee, 'annuler' => 1], absolute: false))
+            ->assertOk()
+            ->assertSee('action-annuler-courrier', false)
+            ->assertSee('Confirmer l’annulation', false);
+    }
+
     public function test_depart_expedie_n_affiche_plus_transmission_ni_archiver(): void
     {
         $secretaire = $this->creerSecretaire();
@@ -997,6 +1138,15 @@ class CourrierModuleTest extends TestCase
             ->assertSee('Courriers liés', false)
             ->assertSee('Courrier arrivée', false)
             ->assertSee('Document entrant', false);
+    }
+
+    private function creerResponsableDossiers(): User
+    {
+        $secDir = Structure::where('code', 'SEC-DIR')->firstOrFail();
+        $user = User::factory()->create(['structure_id' => $secDir->id]);
+        $user->assignRole('responsable_dossiers_prestataires');
+
+        return $user;
     }
 
     private function creerSecretaire(): User

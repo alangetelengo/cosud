@@ -8,6 +8,7 @@ use App\Models\JournalAudit;
 use App\Models\Structure;
 use App\Models\User;
 use App\Services\SmsService;
+use App\Support\ReturnUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -107,13 +108,14 @@ class UtilisateurController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $this->authorize('create', User::class);
         $roles = Role::where('guard_name', 'web')->orderBy('name')->get();
         $structures = Structure::where('actif', true)->orderBy('nom')->get();
+        $retourUrl = ReturnUrl::resolve($request->query('return'), route('utilisateurs.index'));
 
-        return view('utilisateurs.create', compact('roles', 'structures'));
+        return view('utilisateurs.create', compact('roles', 'structures', 'retourUrl'));
     }
 
     public function store(Request $request)
@@ -147,15 +149,18 @@ class UtilisateurController extends Controller
         return redirect()->route('utilisateurs.index')->with('success', 'Utilisateur créé.');
     }
 
-    public function show(User $user)
+    public function show(Request $request, User $user)
     {
         $this->authorize('view', $user);
         $user->load('roles', 'structure');
 
-        return view('utilisateurs.show', ['utilisateur' => $user]);
+        return view('utilisateurs.show', [
+            'utilisateur' => $user,
+            'retourUrl' => ReturnUrl::resolve($request->query('return'), route('utilisateurs.index')),
+        ]);
     }
 
-    public function edit(User $user)
+    public function edit(Request $request, User $user)
     {
         $this->authorize('update', $user);
         $user->load([
@@ -174,6 +179,7 @@ class UtilisateurController extends Controller
             'structures' => $structures,
             'fonctions' => $fonctions,
             'structuresDisponibles' => $structuresDisponibles,
+            'retourUrl' => ReturnUrl::resolve($request->query('return'), route('utilisateurs.index')),
         ]);
     }
 

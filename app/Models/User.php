@@ -408,4 +408,37 @@ class User extends Authenticatable
 
         return $this->name;
     }
+
+    /**
+     * Intitulé de signature pour les états PDF (fonction / rôle métier).
+     */
+    public function titreSignatureDocument(): string
+    {
+        $fonction = trim((string) (
+            DB::table('user_structure')
+                ->leftJoin('fonctions', 'fonctions.id', '=', 'user_structure.fonction_id')
+                ->where('user_structure.user_id', $this->id)
+                ->whereNull('user_structure.date_fin')
+                ->whereNotNull('fonctions.libelle')
+                ->orderBy('fonctions.libelle')
+                ->value('fonctions.libelle')
+            ?? ''
+        ));
+
+        if ($fonction !== '') {
+            return $fonction;
+        }
+
+        return match (true) {
+            $this->hasRole('responsable_suivi_depenses') => 'Responsable suivi des dépenses',
+            $this->hasRole('responsable_dossiers_prestataires') => 'Responsable dossiers fournisseurs et prestataires',
+            $this->hasRole('particulier_dg') => 'Particulière DG',
+            $this->hasRole('particulier_ac') => 'Particulière AC',
+            $this->hasRole('agent_comptable') => 'Agent comptable',
+            $this->hasRole('dg') => 'Directeur Général',
+            $this->hasRole('directeur') => 'Directeur',
+            $this->hasRole('admin') => 'Administrateur',
+            default => 'Responsable',
+        };
+    }
 }

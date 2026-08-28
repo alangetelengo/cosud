@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@use('App\Support\ReturnUrl')
+
 @section('content-container-class', 'w-full px-4 sm:px-6 lg:px-8')
 @section('page-title', 'Modifier le document')
 @section('page-title-info', $document->nom_original)
@@ -163,11 +165,11 @@
                         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                         <span>Enregistrer les modifications</span>
                     </button>
-                    <a href="{{ url()->previous() }}"
+                    <a href="{{ route('documents.fiche', ReturnUrl::propagate($document, ReturnUrl::validated(request()->query('return')))) }}"
                        class="inline-flex items-center justify-center gap-2 min-w-[120px] px-6 py-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap">
                         Annuler
                     </a>
-                    <a href="{{ route('documents.index') }}"
+                    <a href="{{ $retourUrl }}"
                        class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap">
                         Retour à la liste
                     </a>

@@ -111,6 +111,16 @@ class Document extends Model
             ->withTimestamps();
     }
 
+    /**
+     * Pièce jointe à un courrier type facture (circuit ou régularisation).
+     */
+    public function estPieceJointeFactureFournisseur(): bool
+    {
+        return $this->courriers()
+            ->whereHas('typeCourrier', fn ($q) => $q->where('code', 'facture'))
+            ->exists();
+    }
+
     public function validations(): HasMany
     {
         return $this->hasMany(DocumentValidation::class)->orderByDesc('created_at');

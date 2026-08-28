@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CircuitCourrier;
 use App\Models\Courrier;
+use App\Models\FournisseurPrestataire;
 use App\Models\PrioriteCourrier;
 use App\Models\SensCourrier;
 use App\Models\StatutCourrier;
@@ -49,13 +50,14 @@ class CourrierNotificationsEtRetardsTest extends TestCase
         $particuliere->assignRole('particulier_dg');
 
         $type = TypeCourrier::where('code', 'facture')->firstOrFail();
+        $fiche = FournisseurPrestataire::factory()->create(['nom' => 'Fournisseur']);
 
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
                 'numero_fulgurant' => 'REG-3a50bd68/2026',
                 'objet' => 'Facture test notif',
-                'expediteur_libelle' => 'Fournisseur',
+                'fournisseur_prestataire_id' => $fiche->id,
                 'expediteur_telephone' => '+242060000001',
                 'date_reception' => now()->toDateString(),
                 'type_courrier_id' => $type->id,

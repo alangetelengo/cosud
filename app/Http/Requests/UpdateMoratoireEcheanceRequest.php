@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\MoratoireEcheance;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class UpdateMoratoireEcheanceRequest extends FormRequest
@@ -22,10 +23,13 @@ class UpdateMoratoireEcheanceRequest extends FormRequest
     {
         return [
             '_echeance_id' => ['nullable', 'integer'],
+            'mode_paiement' => ['nullable', Rule::in(MoratoireEcheance::MODES_PAIEMENT)],
             'numero_cheque' => ['nullable', 'string', 'max:150'],
             'banque' => ['nullable', 'string', 'max:100'],
             'observation' => ['nullable', 'string', 'max:2000'],
             'date_paiement' => ['nullable', 'date'],
+            'periode_mois' => ['nullable', Rule::in(array_keys(MoratoireEcheance::moisDisponibles()))],
+            'periode_annee' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'fichiers' => ['nullable', 'array', 'max:20'],
             'fichiers.*' => ['file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ];
@@ -40,11 +44,32 @@ class UpdateMoratoireEcheanceRequest extends FormRequest
                 return;
             }
 
+            $mode = $this->input('mode_paiement', MoratoireEcheance::MODE_CHEQUE);
             $numeroCheque = trim((string) $this->input('numero_cheque', ''));
             $datePaiement = $this->input('date_paiement');
+            $periodeMois = $this->input('periode_mois');
+            $periodeAnnee = $this->input('periode_annee');
 
-            if ($numeroCheque === '' && blank($datePaiement)) {
-                $validator->errors()->add('numero_cheque', 'Indiquez le N° chèque ou la date de paiement.');
+            $saisiePaiement = $numeroCheque !== '' || filled($datePaiement) || filled($periodeMois);
+
+            if (! $saisiePaiement && ! $echeance->estPayee()) {
+                return;
+            }
+
+            if (blank($datePaiement)) {
+                $validator->errors()->add('date_paiement', 'La date de paiement est obligatoire.');
+            }
+
+            if (blank($periodeMois)) {
+                $validator->errors()->add('periode_mois', 'Indiquez le mois réglé par ce paiement.');
+            }
+
+            if (blank($periodeAnnee)) {
+                $validator->errors()->add('periode_annee', 'Indiquez l’année de la période réglée.');
+            }
+
+            if ($mode === MoratoireEcheance::MODE_CHEQUE && $numeroCheque === '') {
+                $validator->errors()->add('numero_cheque', 'Le N° chèque est obligatoire pour un paiement par chèque.');
             }
 
             $fichiers = array_values(array_filter((array) $this->file('fichiers', [])));

@@ -18,6 +18,7 @@ class Moratoire extends Model
     protected $fillable = [
         'fournisseur_libelle',
         'fournisseur_normalise',
+        'fournisseur_prestataire_id',
         'montant_dette_initial',
         'montant_echeance_defaut',
         'statut',
@@ -45,6 +46,11 @@ class Moratoire extends Model
     public function createur(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function fournisseurPrestataire(): BelongsTo
+    {
+        return $this->belongsTo(FournisseurPrestataire::class, 'fournisseur_prestataire_id');
     }
 
     public function documents(): BelongsToMany

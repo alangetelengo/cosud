@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CircuitCourrier;
 use App\Models\Courrier;
+use App\Models\FournisseurPrestataire;
 use App\Models\PrioriteCourrier;
 use App\Models\SensCourrier;
 use App\Models\StatutCourrier;
@@ -49,7 +50,7 @@ class CourrierPiecesMultiplesTest extends TestCase
                 'numero_fulgurant' => 'REG-57507249/2026',
                 'type_courrier_id' => TypeCourrier::where('code', 'facture')->value('id'),
                 'objet' => 'Facture AF.COM multi-scans',
-                'expediteur_libelle' => 'AF.COM',
+                'fournisseur_prestataire_id' => FournisseurPrestataire::factory()->create(['nom' => 'AF.COM'])->id,
                 'expediteur_telephone' => '+242060000001',
                 'date_reception' => now()->toDateString(),
                 'service_demandeur_structure_id' => Structure::where('code', 'DAF')->value('id'),

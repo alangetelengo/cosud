@@ -30,7 +30,12 @@ class CourrierPolicy
             return false;
         }
 
-        return $courrier->visiblePar($user);
+        if ($courrier->visiblePar($user)) {
+            return true;
+        }
+
+        // Consultation depuis le détail dette (Taty / Eleni / DG) : factures + régularisations.
+        return $user->can('moratoires.view') && $courrier->estTypeFacture();
     }
 
     public function create(User $user): bool
@@ -200,23 +205,15 @@ class CourrierPolicy
 
     public function annuler(User $user, Courrier $courrier): bool
     {
-        if (! $courrier->estDepart()) {
+        return $courrier->peutAnnulerEnregistrement($user);
+    }
+
+    public function delete(User $user, Courrier $courrier): bool
+    {
+        if (! $user->can('courriers.delete')) {
             return false;
         }
 
-        $code = $courrier->statutCourrier?->code ?? '';
-
-        if ($code === 'transmis_directeur') {
-            return $user->can('courriers.rejeter')
-                && (int) $courrier->directeur_en_attente_id === (int) $user->id;
-        }
-
-        if (in_array($code, ['brouillon', 'rejete_directeur'], true)) {
-            return $user->can('courriers.edit')
-                && $user->gereCourrierSecretariat()
-                && (int) $courrier->structure_id === (int) $user->structure_id;
-        }
-
-        return false;
+        return $courrier->peutSupprimerEnregistrementPar($user);
     }
 }

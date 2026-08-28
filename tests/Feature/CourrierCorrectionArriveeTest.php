@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Courrier;
+use App\Models\FournisseurPrestataire;
 use App\Models\PrioriteCourrier;
 use App\Models\SensCourrier;
 use App\Models\StatutCourrier;
@@ -36,6 +37,10 @@ class CourrierCorrectionArriveeTest extends TestCase
         $particuliere = $this->creerUtilisateurAvecRole('particulier_dg');
         $courrier = $this->creerCourrierArrivee($particuliere);
         $dafId = Structure::where('code', 'DAF')->value('id');
+        $fiche = FournisseurPrestataire::factory()->create([
+            'nom' => 'EEC corrigé',
+            'telephone' => '+242060000099',
+        ]);
 
         $this->assertTrue($particuliere->can('corriger', $courrier));
 
@@ -44,12 +49,14 @@ class CourrierCorrectionArriveeTest extends TestCase
             ->assertOk()
             ->assertSee('Corrigez une erreur de saisie', false)
             ->assertSee('id="bloc-service-demandeur"', false)
-            ->assertSee('data-telephone-requis="1"', false);
+            ->assertSee('id="bloc-fournisseur-prestataire"', false)
+            ->assertSee('data-telephone-requis="1"', false)
+            ->assertSee('EEC corrigé', false);
 
         $this->actingAs($particuliere)
             ->put(route('courriers.update', $courrier, absolute: false), [
                 'objet' => 'Facture corrigée',
-                'expediteur_libelle' => 'EEC corrigé',
+                'fournisseur_prestataire_id' => $fiche->id,
                 'expediteur_telephone' => '+242060000099',
                 'numero_fulgurant' => $courrier->numero_fulgurant,
                 'date_reception' => now()->toDateString(),
@@ -64,6 +71,7 @@ class CourrierCorrectionArriveeTest extends TestCase
             'objet' => 'Facture corrigée',
             'expediteur_libelle' => 'EEC corrigé',
             'expediteur_telephone' => '+242060000099',
+            'fournisseur_prestataire_id' => $fiche->id,
             'service_demandeur_structure_id' => $dafId,
         ]);
     }
@@ -73,11 +81,12 @@ class CourrierCorrectionArriveeTest extends TestCase
         $responsable = $this->creerUtilisateurAvecRole('responsable_dossiers_prestataires');
         $courrier = $this->creerCourrierArrivee($responsable);
         $dafId = Structure::where('code', 'DAF')->value('id');
+        $fiche = FournisseurPrestataire::factory()->create(['nom' => 'Fournisseur']);
 
         $this->actingAs($responsable)
             ->put(route('courriers.update', $courrier, absolute: false), [
                 'objet' => 'Objet corrigé par responsable',
-                'expediteur_libelle' => 'Fournisseur',
+                'fournisseur_prestataire_id' => $fiche->id,
                 'expediteur_telephone' => '+242060000088',
                 'numero_fulgurant' => $courrier->numero_fulgurant,
                 'type_courrier_id' => $courrier->type_courrier_id,
@@ -87,9 +96,10 @@ class CourrierCorrectionArriveeTest extends TestCase
             ->assertRedirect(route('courriers.show', $courrier, absolute: false));
 
         $this->assertSame('Objet corrigé par responsable', $courrier->fresh()->objet);
+        $this->assertSame($fiche->id, (int) $courrier->fresh()->fournisseur_prestataire_id);
     }
 
-    public function test_correction_facture_exige_telephone(): void
+    public function test_correction_facture_exige_fournisseur_prestataire(): void
     {
         $particuliere = $this->creerUtilisateurAvecRole('particulier_dg');
         $courrier = $this->creerCourrierArrivee($particuliere);
@@ -98,8 +108,33 @@ class CourrierCorrectionArriveeTest extends TestCase
         $this->actingAs($particuliere)
             ->from(route('courriers.edit', $courrier, absolute: false))
             ->put(route('courriers.update', $courrier, absolute: false), [
+                'objet' => 'Facture sans référentiel',
+                'expediteur_telephone' => '+242060000099',
+                'numero_fulgurant' => $courrier->numero_fulgurant,
+                'type_courrier_id' => $courrier->type_courrier_id,
+                'service_demandeur_structure_id' => $dafId,
+                'montant_facture' => '1250000',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('fournisseur_prestataire_id');
+    }
+
+    public function test_correction_facture_exige_telephone(): void
+    {
+        $particuliere = $this->creerUtilisateurAvecRole('particulier_dg');
+        $courrier = $this->creerCourrierArrivee($particuliere);
+        $dafId = Structure::where('code', 'DAF')->value('id');
+        $fiche = FournisseurPrestataire::factory()->create([
+            'nom' => 'EEC',
+            'telephone' => null,
+            'email' => null,
+        ]);
+
+        $this->actingAs($particuliere)
+            ->from(route('courriers.edit', $courrier, absolute: false))
+            ->put(route('courriers.update', $courrier, absolute: false), [
                 'objet' => 'Facture sans téléphone',
-                'expediteur_libelle' => 'EEC',
+                'fournisseur_prestataire_id' => $fiche->id,
                 'expediteur_telephone' => '',
                 'numero_fulgurant' => $courrier->numero_fulgurant,
                 'type_courrier_id' => $courrier->type_courrier_id,
@@ -114,12 +149,13 @@ class CourrierCorrectionArriveeTest extends TestCase
     {
         $particuliere = $this->creerUtilisateurAvecRole('particulier_dg');
         $courrier = $this->creerCourrierArrivee($particuliere);
+        $fiche = FournisseurPrestataire::factory()->create(['nom' => 'EEC']);
 
         $this->actingAs($particuliere)
             ->from(route('courriers.edit', $courrier, absolute: false))
             ->put(route('courriers.update', $courrier, absolute: false), [
                 'objet' => 'Facture sans service',
-                'expediteur_libelle' => 'EEC',
+                'fournisseur_prestataire_id' => $fiche->id,
                 'expediteur_telephone' => '+242060000099',
                 'numero_fulgurant' => $courrier->numero_fulgurant,
                 'type_courrier_id' => $courrier->type_courrier_id,

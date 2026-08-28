@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Courrier;
+use App\Models\FournisseurPrestataire;
 use App\Models\Moratoire;
 use App\Models\MoratoireEcheance;
 use App\Models\SuiviPaiement;
@@ -43,7 +44,7 @@ class FournisseurDetteService
         }
 
         $courriers = Courrier::query()
-            ->with('suiviPaiement')
+            ->with('suiviPaiements')
             ->where('type_courrier_id', $typeFactureId)
             ->whereNotNull('expediteur_libelle')
             ->where('expediteur_libelle', '!=', '')
@@ -92,7 +93,7 @@ class FournisseurDetteService
                         return (float) $c->montant_facture;
                     }
 
-                    return (float) ($c->suiviPaiement?->montant ?? 0);
+                    return (float) $c->suiviPaiements->sum('montant');
                 });
 
                 $montantPayeCheques = (float) ($paiementsParFournisseur->get($cle)?->sum('montant') ?? 0);
@@ -102,6 +103,8 @@ class FournisseurDetteService
                 return [
                     'fournisseur_libelle' => $libelleAffiche,
                     'fournisseur_normalise' => $cle,
+                    'fournisseur_prestataire_id' => $premier->fournisseur_prestataire_id
+                        ?? FournisseurPrestataire::query()->where('nom_normalise', $cle)->value('id'),
                     'nb_factures' => $lignes->count(),
                     'montant_facture' => $montantFacture,
                     'montant_paye' => $montantPaye,
@@ -134,5 +137,71 @@ class FournisseurDetteService
 
         return $this->dettesParFournisseur()
             ->first(fn (array $row) => $row['fournisseur_normalise'] === $cle);
+    }
+
+    /**
+     * Fournisseurs avec dette > 0 et sans moratoire actif (éligibles à un plan).
+     *
+     * @return Collection<int, array{
+     *     fournisseur_libelle: string,
+     *     fournisseur_normalise: string,
+     *     nb_factures: int,
+     *     montant_facture: float,
+     *     montant_paye: float,
+     *     dette: float,
+     *     moratoire_actif_id: int|null
+     * }>
+     */
+    public function fournisseursEligiblesMoratoire(): Collection
+    {
+        return $this->dettesParFournisseur()
+            ->filter(fn (array $row) => $row['dette'] > 0 && $row['moratoire_actif_id'] === null)
+            ->values();
+    }
+
+    /**
+     * Détail des factures saisies pour un fournisseur (montants + pièces).
+     *
+     * @return array{
+     *     synthese: array{
+     *         fournisseur_libelle: string,
+     *         fournisseur_normalise: string,
+     *         nb_factures: int,
+     *         montant_facture: float,
+     *         montant_paye: float,
+     *         dette: float,
+     *         moratoire_actif_id: int|null
+     *     },
+     *     factures: Collection<int, Courrier>
+     * }|null
+     */
+    public function detailFacturesPourFournisseur(string $libelle): ?array
+    {
+        $synthese = $this->dettePourFournisseur($libelle);
+        if (! $synthese) {
+            return null;
+        }
+
+        $typeFactureId = TypeCourrier::query()->where('code', 'facture')->value('id');
+        if (! $typeFactureId) {
+            return null;
+        }
+
+        $cle = $synthese['fournisseur_normalise'];
+
+        $factures = Courrier::query()
+            ->with(['documents', 'statutCourrier', 'createur', 'suiviPaiement'])
+            ->where('type_courrier_id', $typeFactureId)
+            ->whereNotNull('expediteur_libelle')
+            ->where('expediteur_libelle', '!=', '')
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn (Courrier $c) => $this->normaliserLibelle($c->expediteur_libelle) === $cle)
+            ->values();
+
+        return [
+            'synthese' => $synthese,
+            'factures' => $factures,
+        ];
     }
 }

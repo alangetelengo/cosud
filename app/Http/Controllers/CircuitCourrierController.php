@@ -6,6 +6,7 @@ use App\Http\Requests\ConfirmerControleDepenseRequest;
 use App\Http\Requests\EnregistrerDechargeAcRequest;
 use App\Http\Requests\EnvoyerChequeAcRequest;
 use App\Http\Requests\InstruireCircuitCourrierRequest;
+use App\Http\Requests\PayerReliquatFactureRequest;
 use App\Http\Requests\RejeterReponseCourrierRequest;
 use App\Http\Requests\SignerChequeDgRequest;
 use App\Http\Requests\SoumettreReponseCourrierRequest;
@@ -27,6 +28,7 @@ use App\Services\CourrierRetardService;
 use App\Services\CourrierSecretariatService;
 use App\Services\CourrierWorkflowService;
 use App\Services\ParapheurDepartService;
+use App\Services\SuiviPaiementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -55,6 +57,7 @@ class CircuitCourrierController extends Controller
                 'courriers.circuit.envoyer-cheque',
                 'courriers.circuit.signer-cheque',
                 'courriers.circuit.deposer-preuve-paiement',
+                'courriers.circuit.payer-reliquat',
                 'courriers.circuit.confirmer-controle-depense'
             )) {
                 return $next($request);
@@ -267,6 +270,50 @@ class CircuitCourrierController extends Controller
         }
 
         return back()->with('success', 'Décharge / paiement enregistré — circuit clôturé. Suivi des dépenses notifié pour contrôle des pièces.');
+    }
+
+    public function payerReliquat(PayerReliquatFactureRequest $request, Courrier $courrier): RedirectResponse
+    {
+        foreach ($this->collecterFichiersUpload($request, 'scans_cheque', 'scan_cheque') as $scan) {
+            $this->attacherScanCheque($courrier, $scan);
+        }
+
+        foreach ($this->collecterFichiersUpload($request, 'preuves_paiement', 'preuve_paiement') as $preuve) {
+            $this->attacherPieceCourrier(
+                $courrier,
+                $preuve,
+                'Pièce de décharge / paiement reliquat',
+                'Reliquat — chèque déchargé / justificatif de paiement'
+            );
+        }
+
+        try {
+            app(SuiviPaiementService::class)->creerPaiementReliquat(
+                $courrier->fresh(['suiviPaiements', 'typeCourrier']),
+                $request->user(),
+                [
+                    'montant' => $request->validated('montant'),
+                    'numero_piece' => $request->validated('numero_piece'),
+                    'banque' => $request->validated('banque'),
+                    'beneficiaire_libelle' => $request->beneficiaireChequeForce(),
+                    'programmation' => $request->validated('programmation'),
+                    'date_decharge' => $request->validated('date_decharge'),
+                    'observation' => $request->validated('observation'),
+                ],
+            );
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        $this->courrierNotifications->notifierRoles(
+            ['responsable_suivi_depenses'],
+            $courrier->fresh(),
+            $request->user(),
+            CourrierNotificationService::ETAPE_CIRCUIT,
+            'Paiement du reliquat enregistré — contrôler les pièces physiques et joindre les pièces manquantes si besoin (hors circuit).'
+        );
+
+        return back()->with('success', 'Paiement du reliquat enregistré et décharge clôturée. Suivi des dépenses notifié pour contrôle.');
     }
 
     public function confirmerControleDepense(ConfirmerControleDepenseRequest $request, Courrier $courrier): RedirectResponse

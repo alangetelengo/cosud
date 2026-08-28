@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@use('App\Support\ReturnUrl')
+
 @section('content-container-class', 'w-full px-4 sm:px-6 lg:px-8')
 @section('page-title', 'Nouvelle version')
 @section('page-title-info', $document->nom_original)
@@ -95,11 +97,11 @@
                             <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                             Déposer la nouvelle version
                         </button>
-                        <a href="{{ route('documents.edit', $document) }}"
+                        <a href="{{ route('documents.fiche', ReturnUrl::propagate($document, ReturnUrl::validated(request()->query('return')))) }}"
                            class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                             Annuler
                         </a>
-                        <a href="{{ route('documents.index') }}"
+                        <a href="{{ $retourUrl }}"
                            class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                             Retour à la liste
                         </a>

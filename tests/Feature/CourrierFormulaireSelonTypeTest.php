@@ -43,6 +43,7 @@ class CourrierFormulaireSelonTypeTest extends TestCase
             ->getContent();
 
         $this->assertStringContainsString('id="bloc-contacts-expediteur"', $html);
+        $this->assertStringContainsString('id="bloc-fournisseur-prestataire"', $html);
         $this->assertStringContainsString('id="aide-arrivee-mad"', $html);
         $this->assertStringContainsString('id="aide-arrivee-facture"', $html);
 

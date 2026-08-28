@@ -14,7 +14,8 @@ class MoratoirePolicy
 
     public function view(User $user, Moratoire $moratoire): bool
     {
-        return $user->can('moratoires.view');
+        // Plans réservés à Eleni / DG (create) — Taty a seulement la vue des dettes.
+        return $user->can('moratoires.create') || $user->aAccesTotal();
     }
 
     public function create(User $user): bool

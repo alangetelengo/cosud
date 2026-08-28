@@ -1,14 +1,16 @@
 @extends('layouts.app')
 
+@use('App\Support\ReturnUrl')
+
 @section('page-title', 'Détail utilisateur')
 @section('page-title-info', $utilisateur->email)
 
 @section('btn-create')
     @can('utilisateurs.edit')
-    <a href="{{ route('utilisateurs.edit', $utilisateur) }}#structures" class="inline-flex items-center gap-2 px-6 py-3 rounded-lg border-2 border-[#00b464]/40 text-[#00a055] dark:text-emerald-400 font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all no-underline">
+    <a href="{{ route('utilisateurs.edit', ReturnUrl::propagate($utilisateur, ReturnUrl::validated(request()->query('return')))) }}#structures" class="inline-flex items-center gap-2 px-6 py-3 rounded-lg border-2 border-[#00b464]/40 text-[#00a055] dark:text-emerald-400 font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all no-underline">
         🏢 Structures & fonctions
     </a>
-    <a href="{{ route('utilisateurs.edit', $utilisateur) }}"
+    <a href="{{ route('utilisateurs.edit', ReturnUrl::propagate($utilisateur, ReturnUrl::validated(request()->query('return')))) }}"
        x-data="{ loading: false }"
        @click.prevent="if(!loading){ loading=true; window.location.href=$el.href }"
        class="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-[#00b464] text-white font-semibold hover:bg-[#00a055] transition-all no-underline"
@@ -97,7 +99,7 @@
             </form>
             @endif
             @endcan
-            <a href="{{ route('utilisateurs.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all no-underline">
+            <a href="{{ $retourUrl }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all no-underline">
                 ← Retour à la liste
             </a>
         </div>

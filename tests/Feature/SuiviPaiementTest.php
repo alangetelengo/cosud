@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CircuitCourrier;
 use App\Models\Courrier;
+use App\Models\FournisseurPrestataire;
 use App\Models\PrioriteCourrier;
 use App\Models\SensCourrier;
 use App\Models\StatutCourrier;
@@ -84,16 +85,18 @@ class SuiviPaiementTest extends TestCase
 
         $type = TypeCourrier::where('code', 'facture')->firstOrFail();
         $daf = Structure::where('code', 'DAF')->firstOrFail();
+        $fiche = FournisseurPrestataire::factory()->create(['nom' => 'ETS KOMBO']);
 
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
                 'numero_fulgurant' => 'REG-a7b38d66/2026',
                 'objet' => 'Facture avec service demandeur',
-                'expediteur_libelle' => 'ETS KOMBO',
+                'fournisseur_prestataire_id' => $fiche->id,
                 'expediteur_telephone' => '+242060000001',
                 'date_reception' => now()->toDateString(),
                 'type_courrier_id' => $type->id,
+                'montant_facture' => '750000',
                 'fichier' => UploadedFile::fake()->create('f.pdf', 20, 'application/pdf'),
             ])
             ->assertSessionHasErrors('service_demandeur_structure_id');
@@ -103,7 +106,7 @@ class SuiviPaiementTest extends TestCase
                 'sens' => 'arrivee',
                 'numero_fulgurant' => 'REG-8773de12/2026',
                 'objet' => 'Facture avec service demandeur',
-                'expediteur_libelle' => 'ETS KOMBO',
+                'fournisseur_prestataire_id' => $fiche->id,
                 'expediteur_telephone' => '+242060000001',
                 'date_reception' => now()->toDateString(),
                 'type_courrier_id' => $type->id,

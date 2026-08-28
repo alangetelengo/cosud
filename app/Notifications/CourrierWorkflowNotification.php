@@ -201,8 +201,8 @@ class CourrierWorkflowNotification extends Notification
         $fournisseurCourt = $fournisseur !== '' ? mb_substr($fournisseur, 0, 40) : 'fournisseur';
 
         $texte = match ($this->type) {
-            CourrierNotificationService::FACTURE_ENREGISTREE_DG => 'COSUD n°'.$numero
-                .' : facture prestataire a traiter (Bon pour accord). Fournisseur : '.$fournisseurCourt.'.',
+            CourrierNotificationService::FACTURE_ENREGISTREE_DG => 'ACSI – COSUD : Facture prestataire ('.$numero.')'
+                .' enregistrée et soumise à votre validation (Bon pour accord). Fournisseur : '.$fournisseurCourt.'.',
             CourrierNotificationService::BON_POUR_ACCORD_AC => $this->texteSmsBonPourAccordAc($numero, $fournisseurCourt),
             default => 'COSUD n°'.$numero.' : action requise sur un courrier.',
         };

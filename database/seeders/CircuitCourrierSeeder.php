@@ -328,7 +328,7 @@ class CircuitCourrierSeeder extends Seeder
         $permsBase = Permission::whereIn('name', [
             'documents.view', 'documents.create', 'documents.edit',
             'dossiers.view', 'dossiers.create', 'dossiers.edit',
-            'courriers.view', 'courriers.create', 'courriers.edit', 'courriers.transmettre',
+            'courriers.view', 'courriers.create', 'courriers.edit', 'courriers.delete', 'courriers.transmettre',
             'courriers.archiver', 'courriers.recevoir',
         ])->pluck('name');
 

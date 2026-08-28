@@ -47,6 +47,7 @@ class CourrierReferentielSeeder extends Seeder
             ['code' => 'oriente', 'libelle' => 'Orienté (DG)', 'ordre' => 3, 'est_initial' => false, 'est_final' => false],
             ['code' => 'ventile', 'libelle' => 'Ventilé', 'ordre' => 4, 'est_initial' => false, 'est_final' => false],
             ['code' => 'cloture', 'libelle' => 'Clôturé', 'ordre' => 5, 'est_initial' => false, 'est_final' => true],
+            ['code' => 'annule', 'libelle' => 'Annulé', 'ordre' => 6, 'est_initial' => false, 'est_final' => true],
         ];
         foreach ($statutsArrivee as $s) {
             StatutCourrier::updateOrCreate(

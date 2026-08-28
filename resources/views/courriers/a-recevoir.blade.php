@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@use('App\Support\ReturnUrl')
 @section('content-container-class', 'w-full max-w-none px-4 sm:px-6 lg:px-8')
 @section('page-title', 'Courriers internes à réceptionner')
 @section('page-title-info', 'Courriers départ expédiés par un autre secrétariat ACSI, en attente de votre réception.')
@@ -62,7 +63,7 @@
                         </td>
                         <td class="px-5 py-3.5">
                             <div class="flex items-center justify-end gap-1.5">
-                                <a href="{{ route('courriers.show', $c) }}"
+                                <a href="{{ route('courriers.show', ReturnUrl::forRoute($c)) }}"
                                    class="inline-flex items-center justify-center min-w-[2.35rem] min-h-[2.35rem] p-2 rounded-xl text-sky-600 dark:text-sky-400 bg-sky-50/80 dark:bg-sky-900/20 hover:bg-sky-100 dark:hover:bg-sky-900/40 border border-sky-100/80 dark:border-sky-800/40 shadow-sm transition"
                                    title="Consulter">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

@@ -642,13 +642,14 @@ class CircuitCourrierMoteurService
             return false;
         }
 
-        $courrier->loadMissing('suiviPaiement');
-        $suivi = $courrier->suiviPaiement;
+        $courrier->loadMissing('suiviPaiement', 'suiviPaiements');
+        $suivis = $courrier->suiviPaiements;
 
-        return $suivi
+        return $suivis->isNotEmpty()
             && $courrier->circuit_etape_actuelle_id === null
-            && $suivi->date_decharge !== null
-            && $suivi->controle_at === null;
+            && $suivis->contains(
+                fn ($suivi): bool => $suivi->date_decharge !== null && $suivi->controle_at === null
+            );
     }
 
     /**

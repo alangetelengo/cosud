@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@use('App\Support\ReturnUrl')
 @section('content-container-class', 'w-full px-4 sm:px-6 lg:px-8')
 @section('page-title', 'Courrier n° '.$courrier->numeroRegistreComplet())
 
@@ -68,21 +69,35 @@
         $courrier
     );
     $peutDeposerPreuvePaiement = $peutEnregistrerDechargeAc;
+    // AC : paiement / clôture du reliquat hors circuit DG.
+    $montantsReliquat = app(\App\Services\SuiviFacturesFournisseursService::class)->montantsSurFacture($courrier);
+    $peutPayerReliquat = app(\App\Services\SuiviPaiementService::class)
+        ->peutEnregistrerPaiementReliquat(auth()->user(), $courrier);
 
     // Formulaire de soumission ouvert d’emblée pour l’actrice attendue.
     $ouvrirFormulaireSoumettreReponse = $peutSoumettreReponse
         && ($estActeurCircuitActuel || $errors->has('document_reponse'));
-    $formInitial = $ouvrirFormulaireSoumettreReponse
-        ? 'soumettre-reponse'
-        : ($errors->has('motif_rejet') ? 'rejeter-reponse' : (
-            $errors->has('dossier_id') || $errors->has('nom_dossier') || $errors->has('mode') || request()->boolean('classer')
-                ? 'classer-dossier'
-                : null
-        ));
+    $formInitial = null;
+    if (request()->boolean('annuler') && auth()->user()?->can('annuler', $courrier)) {
+        $formInitial = $courrier->cleFormulaireAnnulation();
+    } elseif (request()->boolean('supprimer') && auth()->user()?->can('delete', $courrier)) {
+        $formInitial = 'supprimer-courrier';
+    } elseif ($errors->has('motif_annulation')) {
+        $formInitial = $courrier->cleFormulaireAnnulation();
+    } elseif ($ouvrirFormulaireSoumettreReponse) {
+        $formInitial = 'soumettre-reponse';
+    } elseif ($errors->has('motif_rejet')) {
+        $formInitial = 'rejeter-reponse';
+    } elseif ($errors->has('dossier_id') || $errors->has('nom_dossier') || $errors->has('mode') || request()->boolean('classer')) {
+        $formInitial = 'classer-dossier';
+    }
 @endphp
 
 @section('content')
-<div class="w-full" x-data="{ tab: '{{ $defaultTab }}', form: @js($formInitial) }">
+<div class="w-full" x-data="{ tab: '{{ $defaultTab }}', form: @js($formInitial) }"
+     @if($formInitial && (str_starts_with((string) $formInitial, 'annuler') || $formInitial === 'supprimer-courrier'))
+     x-init="$nextTick(() => document.getElementById(@js(str_starts_with((string) $formInitial, 'annuler') ? 'action-annuler-courrier' : 'action-supprimer-courrier'))?.scrollIntoView({ behavior: 'smooth', block: 'start' }))"
+     @endif>
     @include('partials.flash-session', ['class' => 'mb-4'])
 
     <div class="flex flex-col lg:flex-row gap-5 items-start">
@@ -97,7 +112,7 @@
                         <span class="px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs">{{ ucfirst($courrier->origine) }}</span>
                         @if($courrier->estRegularisation())
                         <span class="px-2.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 text-xs font-bold">
-                            Régularisation {{ $courrier->estRegularisationPayee() ? 'payée' : 'impayée' }}
+                            Régularisation {{ \App\Services\FactureRegularisationService::libelleStatutPaiement($courrier->regularisation_paiement) }}
                         </span>
                         @endif
                         @if($courrier->reference)
@@ -264,7 +279,7 @@
                     <li class="px-5 py-2.5 flex items-center gap-2 text-sm">
                         <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                         @can('view', $doc)
-                        <a href="{{ route('documents.fiche', $doc) }}" class="text-emerald-600 font-medium no-underline truncate">{{ $doc->nom_original }}</a>
+                        <a href="{{ route('documents.fiche', ReturnUrl::forRoute($doc)) }}" class="text-emerald-600 font-medium no-underline truncate">{{ $doc->nom_original }}</a>
                         @else
                         <span class="text-slate-500 truncate">{{ $doc->nom_original }} (accès restreint)</span>
                         @endcan
@@ -366,7 +381,7 @@
             </div>
 
             <div class="flex flex-wrap gap-4 text-sm pb-2">
-                <a href="{{ route('courriers.index', ['sens' => $courrier->sensCourrier->code]) }}" class="text-emerald-600 font-semibold no-underline">← Retour à la liste</a>
+                <a href="{{ $retourUrl }}" class="text-emerald-600 font-semibold no-underline">← Retour à la liste</a>
                 @if(auth()->user()->gereCourrierSecretariat())
                 <a href="{{ route('courriers.a-recevoir') }}" class="text-sky-600 font-semibold no-underline">Courriers à réceptionner</a>
                 @endif
@@ -377,11 +392,12 @@
         <div class="w-full lg:w-96 shrink-0 space-y-4 lg:sticky lg:top-4 order-1 lg:order-2">
             @include('courriers.partials.circuit-suivi')
 
-            <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
+            <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm" id="actions-courrier">
                 <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-700/30">
                     <h3 class="font-semibold text-sm text-slate-800 dark:text-slate-100">Actions</h3>
                 </div>
                 <div class="p-3 space-y-2 max-h-[min(70vh,40rem)] overflow-y-auto">
+                    @include('courriers.partials.actions-annuler-supprimer')
                     @can('classerDossier', $courrier)
                     <div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/20 p-3 space-y-2"
                          x-data="{ mode: @js(old('mode', $courrier->dossier_id ? 'existant' : ($dossierSuggere ? 'existant' : 'nouveau'))) }">
@@ -913,6 +929,78 @@
                                 </button>
                             </form>
                         </div>
+                        @elseif($peutPayerReliquat)
+                        @php
+                            $reliquatAffiche = number_format($montantsReliquat['reliquat'], 0, ',', ' ');
+                            $montantReliquatAffiche = old('montant') !== null && old('montant') !== ''
+                                ? number_format((float) preg_replace('/\s+/', '', (string) old('montant')), 0, ',', ' ')
+                                : $reliquatAffiche;
+                            $beneficiaireReliquatDefaut = old('beneficiaire_libelle', $courrier->expediteur_libelle);
+                            $beneficiaireReliquatVerrouille = trim((string) ($courrier->expediteur_libelle ?? '')) !== '';
+                        @endphp
+                        <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-900/20 p-3 space-y-2">
+                            <p class="text-xs font-semibold text-amber-900 dark:text-amber-200">Payer le reliquat</p>
+                            <p class="text-[11px] text-slate-500 leading-snug">
+                                Reliquat à solder : <strong>{{ $reliquatAffiche }} FCFA</strong>
+                                (facture {{ number_format($montantsReliquat['montant_facture'], 0, ',', ' ') }} − déjà payé {{ number_format($montantsReliquat['montant_paye'], 0, ',', ' ') }}).
+                                Vous enregistrez le paiement et clôturez la décharge sans repasser par le circuit DG.
+                            </p>
+                            <form method="post" action="{{ route('courriers.circuit.payer-reliquat', $courrier) }}" enctype="multipart/form-data" data-loading-text="Enregistrement..." class="space-y-2">
+                                @csrf
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Montant (FCFA)</label>
+                                    <input type="text" name="montant" value="{{ $montantReliquatAffiche }}" inputmode="numeric" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" required>
+                                    @error('montant')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-[11px] font-semibold mb-1">N° pièce (chèque)</label>
+                                        <input type="text" name="numero_piece" value="{{ old('numero_piece') }}" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" required>
+                                        @error('numero_piece')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-semibold mb-1">Banque</label>
+                                        <input type="text" name="banque" value="{{ old('banque') }}" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" required>
+                                        @error('banque')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Bénéficiaire</label>
+                                    <input type="text" name="beneficiaire_libelle" value="{{ $beneficiaireReliquatDefaut }}" @if($beneficiaireReliquatVerrouille) readonly @endif class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900 {{ $beneficiaireReliquatVerrouille ? 'bg-slate-50 dark:bg-slate-800/60' : '' }}" required>
+                                    @error('beneficiaire_libelle')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Programmation <span class="font-normal text-slate-400">(facultatif)</span></label>
+                                    <input type="text" name="programmation" value="{{ old('programmation') }}" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900">
+                                    @error('programmation')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Date de décharge</label>
+                                    <input type="date" name="date_decharge" value="{{ old('date_decharge', now()->toDateString()) }}" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" required>
+                                    @error('date_decharge')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Scan chèque / pièces de décharge</label>
+                                    <input type="file" name="scans_cheque[]" accept=".pdf,.jpg,.jpeg,.png" multiple class="block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-amber-600 file:text-white file:font-semibold file:text-xs">
+                                    <input type="file" name="preuves_paiement[]" accept=".pdf,.jpg,.jpeg,.png" multiple class="mt-1 block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-amber-600 file:text-white file:font-semibold file:text-xs">
+                                    @error('preuves_paiement')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                    @error('scans_cheque')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                    @error('scans_cheque.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                    @error('preuves_paiement.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold mb-1">Observation <span class="font-normal text-slate-400">(facultatif)</span></label>
+                                    <textarea name="observation" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Note sur le paiement du reliquat…">{{ old('observation') }}</textarea>
+                                    @error('observation')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <button type="button"
+                                        data-loading-text="Enregistrement..."
+                                        onclick="flashAlert('Enregistrer ce paiement de reliquat et clôturer la décharge ?', this.closest('form'), {icon:'✓', danger:false, confirmText:'Payer et clôturer', title:'Paiement du reliquat'})"
+                                        class="w-full px-3 py-2 rounded-lg bg-amber-600 text-white text-xs font-semibold">
+                                    Payer le reliquat et clôturer
+                                </button>
+                            </form>
+                        </div>
                         @elseif($etapeCircuitActuelle && $courrier->statutCourrier->code !== 'cloture')
                         <p class="text-[11px] text-slate-400 italic px-1">En attente de l’acteur de l’étape en cours.</p>
                         @endif
@@ -940,10 +1028,10 @@
                             </button>
                             <div x-show="autresActions" x-cloak class="space-y-1.5 pb-1">
                                 @if($estActeurCircuitActuel)
-                                <a href="{{ route('courriers.edit', $courrier) }}" class="block w-full text-center px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-semibold no-underline text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50">Corriger l’enregistrement</a>
+                                <a href="{{ route('courriers.edit', ReturnUrl::propagate($courrier, ReturnUrl::validated(request()->query('return')))) }}" class="block w-full text-center px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-semibold no-underline text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50">Corriger l’enregistrement</a>
                                 @else
                                 <button type="button"
-                                        @click="flashAlert('Ce n’est pas votre tour dans le circuit : c’est actuellement à « {{ $libelleActeurCircuitActuel }} » d’agir. Corriger l’enregistrement quand même ?', () => { window.location.href = '{{ route('courriers.edit', $courrier) }}' }, {icon:'⚠️', danger:true, confirmText:'Corriger quand même', title:'Pas votre tour'})"
+                                        @click="flashAlert('Ce n’est pas votre tour dans le circuit : c’est actuellement à « {{ $libelleActeurCircuitActuel }} » d’agir. Corriger l’enregistrement quand même ?', () => { window.location.href = '{{ route('courriers.edit', ReturnUrl::propagate($courrier, ReturnUrl::validated(request()->query('return')))) }}' }, {icon:'⚠️', danger:true, confirmText:'Corriger quand même', title:'Pas votre tour'})"
                                         class="block w-full text-center px-3 py-2 rounded-lg border border-dashed border-amber-300 dark:border-amber-700 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20">
                                     Corriger l’enregistrement <span class="opacity-70">(pas votre tour)</span>
                                 </button>
@@ -974,12 +1062,7 @@
                                 </button>
                             </form>
                             @can('update', $courrier)
-                            <a href="{{ route('courriers.edit', $courrier) }}" class="block w-full text-center px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-semibold no-underline text-slate-700 dark:text-slate-200">Modifier</a>
-                            @endcan
-                            @can('annuler', $courrier)
-                            <button type="button"
-                                    @click="flashAlert('Annuler ce courrier départ ?', () => { form = 'annuler-brouillon' }, {icon:'🗑️', danger:true, confirmText:'Continuer', title:'Annulation'})"
-                                    class="w-full px-3 py-2 rounded-lg border border-red-300 text-red-700 text-xs font-semibold">Annuler le courrier</button>
+                            <a href="{{ route('courriers.edit', ReturnUrl::propagate($courrier, ReturnUrl::validated(request()->query('return')))) }}" class="block w-full text-center px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-semibold no-underline text-slate-700 dark:text-slate-200">Modifier</a>
                             @endcan
                         </div>
                         @endcan
@@ -997,11 +1080,6 @@
                         <button type="button"
                                 @click="flashAlert('Renvoyer ce courrier au secrétariat pour correction ?', () => { form = 'rejeter' }, {icon:'↩️', danger:true, confirmText:'Continuer', title:'Renvoi pour correction'})"
                                 class="w-full px-3 py-2 rounded-lg bg-amber-600 text-white text-xs font-semibold">Renvoyer pour correction</button>
-                        @endcan
-                        @can('annuler', $courrier)
-                        <button type="button"
-                                @click="flashAlert('Annuler définitivement ce courrier ?', () => { form = 'annuler-directeur' }, {icon:'🗑️', danger:true, confirmText:'Continuer', title:'Annulation'})"
-                                class="w-full px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold">Annuler le courrier</button>
                         @endcan
                         @endif
 
@@ -1118,27 +1196,6 @@
                                 onclick="flashAlert('Confirmer le renvoi pour correction ?', this.closest('form'), {icon:'↩️', danger:true, confirmText:'Renvoyer', title:'Renvoi'})"
                                 class="w-full px-3 py-2 rounded-lg bg-amber-600 text-white text-xs font-semibold">Confirmer le renvoi</button>
                     </form>
-                    @endcan
-
-                    @can('annuler', $courrier)
-                    @if(in_array($courrier->statutCourrier->code, ['brouillon', 'rejete_directeur'], true))
-                    <form x-show="form === 'annuler-brouillon'" x-cloak method="post" action="{{ route('courriers.annuler', $courrier) }}" class="space-y-2 pt-2 border-t border-slate-100">
-                        @csrf
-                        <textarea name="motif_annulation" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Motif (optionnel)…"></textarea>
-                        <button type="button"
-                                onclick="flashAlert('Confirmer l’annulation de ce courrier ?', this.closest('form'), {icon:'🗑️', danger:true, confirmText:'Annuler le courrier', title:'Annulation'})"
-                                class="w-full px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold">Confirmer l’annulation</button>
-                    </form>
-                    @endif
-                    @if($courrier->statutCourrier->code === 'transmis_directeur')
-                    <form x-show="form === 'annuler-directeur'" x-cloak method="post" action="{{ route('courriers.annuler', $courrier) }}" class="space-y-2 pt-2 border-t border-slate-100">
-                        @csrf
-                        <textarea name="motif_annulation" required rows="3" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Motif d’annulation…"></textarea>
-                        <button type="button"
-                                onclick="flashAlert('Confirmer l’annulation définitive de ce courrier ?', this.closest('form'), {icon:'🗑️', danger:true, confirmText:'Annuler le courrier', title:'Annulation'})"
-                                class="w-full px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold">Confirmer l’annulation</button>
-                    </form>
-                    @endif
                     @endcan
 
                     @can('orienter', $courrier)

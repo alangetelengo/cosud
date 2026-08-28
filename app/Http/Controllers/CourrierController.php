@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\AnnulerCourrierDepartRequest;
+use App\Http\Requests\AnnulerCourrierRequest;
 use App\Http\Requests\ArchiverCourrierRequest;
 use App\Http\Requests\ClasserCourrierDossierRequest;
 use App\Http\Requests\CreerReponseCourrierRequest;
@@ -11,6 +11,7 @@ use App\Http\Requests\OrienterCourrierRequest;
 use App\Http\Requests\RefuserReceptionInterneRequest;
 use App\Http\Requests\RejeterDepartCourrierRequest;
 use App\Http\Requests\StoreCourrierRequest;
+use App\Http\Requests\SupprimerCourrierRequest;
 use App\Http\Requests\TransmettreCourrierRequest;
 use App\Http\Requests\UpdateCourrierArriveeRequest;
 use App\Http\Requests\UpdateCourrierDepartRequest;
@@ -19,6 +20,7 @@ use App\Models\Courrier;
 use App\Models\CourrierTransmission;
 use App\Models\CourrierVentilationDestinataire;
 use App\Models\Document;
+use App\Models\FournisseurPrestataire;
 use App\Models\JournalAudit;
 use App\Models\Parapheur;
 use App\Models\PrioriteCourrier;
@@ -31,6 +33,7 @@ use App\Models\TypeDocument;
 use App\Models\User;
 use App\Services\CircuitCourrierMoteurService;
 use App\Services\CourrierClassementDossierService;
+use App\Services\CourrierEnregistrementService;
 use App\Services\CourrierFilService;
 use App\Services\CourrierNotificationService;
 use App\Services\CourrierNumeroRegistreService;
@@ -38,6 +41,7 @@ use App\Services\CourrierOrientationService;
 use App\Services\CourrierSecretariatService;
 use App\Services\CourrierWorkflowService;
 use App\Services\ParapheurDepartService;
+use App\Support\ReturnUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 
@@ -53,6 +57,7 @@ class CourrierController extends Controller
         private readonly CircuitCourrierMoteurService $circuitMoteur,
         private readonly CourrierOrientationService $orientationService,
         private readonly CourrierClassementDossierService $classementDossierService,
+        private readonly CourrierEnregistrementService $enregistrementService,
     ) {}
 
     public function index(Request $request)
@@ -152,9 +157,18 @@ class CourrierController extends Controller
             ? $this->parapheurDepartService->typesDocumentPourDepot()
             : collect();
 
+        $retourUrl = ReturnUrl::resolve(
+            $request->query('return'),
+            route('courriers.index', ['sens' => $sensCode])
+        );
+
+        $fournisseursPrestataires = $sensCode === 'arrivee'
+            ? FournisseurPrestataire::query()->actifs()->orderBy('nom')->get(['id', 'nom', 'email', 'telephone'])
+            : collect();
+
         return view('courriers.create', compact(
             'sens', 'sensCode', 'types', 'priorites', 'secretariats', 'directions',
-            'documentsParapheur', 'typesDocumentParapheur',
+            'documentsParapheur', 'typesDocumentParapheur', 'retourUrl', 'fournisseursPrestataires',
         ));
     }
 
@@ -192,6 +206,9 @@ class CourrierController extends Controller
             'structure_expediteur_id' => $request->structure_expediteur_id,
             'structure_destinataire_id' => $request->structure_destinataire_id,
             'service_demandeur_structure_id' => $request->service_demandeur_structure_id,
+            'fournisseur_prestataire_id' => $request->filled('fournisseur_prestataire_id')
+                ? (int) $request->fournisseur_prestataire_id
+                : null,
             'objet' => $request->objet,
             'montant_facture' => $request->filled('montant_facture')
                 ? $request->montant_facture
@@ -222,7 +239,7 @@ class CourrierController extends Controller
             ->with('success', 'Courrier enregistré — n° '.$courrier->numeroRegistreComplet());
     }
 
-    public function show(Courrier $courrier)
+    public function show(Request $request, Courrier $courrier)
     {
         $this->authorize('view', $courrier);
 
@@ -247,7 +264,7 @@ class CourrierController extends Controller
             'dossier', 'structure', 'structureDestinataire', 'structureExpediteur', 'serviceDemandeurStructure',
             'courrierParent', 'courrierDepartSource', 'courrierArriveeLie', 'reponsesDepart.documents', 'reponsesDepart.statutCourrier',
             'circuit', 'circuitEtapeActuelle', 'circuitHistoriques.etape', 'circuitHistoriques.user',
-            'documentReponse', 'reponseStructureDestinataire', 'destinataireAgent', 'agentConfie', 'agentsConfies.structure', 'suiviPaiement',
+            'documentReponse', 'reponseStructureDestinataire', 'destinataireAgent', 'agentConfie', 'agentsConfies.structure', 'suiviPaiement', 'suiviPaiements',
         ]);
         $structures = Structure::where('actif', true)->orderBy('nom')->get();
         $directions = Structure::directionsOrientation()->get();
@@ -297,11 +314,16 @@ class CourrierController extends Controller
             $dossierSuggere = $this->classementDossierService->suggererDossier(auth()->user(), $courrier);
         }
 
+        $retourUrl = ReturnUrl::resolve(
+            $request->query('return'),
+            route('courriers.index', ['sens' => $courrier->sensCourrier->code])
+        );
+
         return view('courriers.show', compact(
             'courrier', 'structures', 'directions', 'secretariats', 'utilisateursVentilation', 'agentsOrientation',
             'directeurValidation', 'directionEmettrice',
             'filRacine', 'filCourriers', 'filHistorique',
-            'dossiersClassement', 'dossierSuggere',
+            'dossiersClassement', 'dossierSuggere', 'retourUrl',
         ));
     }
 
@@ -314,8 +336,17 @@ class CourrierController extends Controller
         $directions = $courrier->estArrivee()
             ? Structure::servicesDemandeurs()->get()
             : collect();
+        $fournisseursPrestataires = $courrier->estArrivee()
+            ? FournisseurPrestataire::query()->actifs()->orderBy('nom')->get(['id', 'nom', 'email', 'telephone'])
+            : collect();
 
-        return view('courriers.edit', compact('courrier', 'types', 'priorites', 'directions'));
+        return view('courriers.edit', compact(
+            'courrier',
+            'types',
+            'priorites',
+            'directions',
+            'fournisseursPrestataires',
+        ));
     }
 
     public function update(Courrier $courrier)
@@ -331,6 +362,11 @@ class CourrierController extends Controller
 
     public function updateArrivee(UpdateCourrierArriveeRequest $request, Courrier $courrier)
     {
+        $estFacture = TypeCourrier::query()
+            ->whereKey($request->type_courrier_id ?? $courrier->type_courrier_id)
+            ->where('code', 'facture')
+            ->exists();
+
         $courrier->update([
             'objet' => $request->objet,
             'montant_facture' => $request->filled('montant_facture')
@@ -343,6 +379,9 @@ class CourrierController extends Controller
             'expediteur_libelle' => $request->expediteur_libelle,
             'expediteur_email' => $request->expediteur_email,
             'expediteur_telephone' => $request->expediteur_telephone,
+            'fournisseur_prestataire_id' => $estFacture && $request->filled('fournisseur_prestataire_id')
+                ? (int) $request->fournisseur_prestataire_id
+                : null,
             'numero_fulgurant' => trim((string) $request->numero_fulgurant),
             'reference' => $request->reference,
             'nombre_pieces' => $request->nombre_pieces,
@@ -551,31 +590,47 @@ class CourrierController extends Controller
         return back()->with('success', 'Courrier renvoyé au secrétariat pour correction.');
     }
 
-    public function annulerDepart(AnnulerCourrierDepartRequest $request, Courrier $courrier)
+    public function annuler(AnnulerCourrierRequest $request, Courrier $courrier)
     {
         $acteur = auth()->user();
         $etaitChezDirecteur = $courrier->statutCourrier?->code === 'transmis_directeur';
 
-        $this->workflowService->transitionner($courrier, 'annule', [
-            'motif_rejet' => $request->motif_annulation,
-            'rejete_par_id' => $acteur->id,
-            'date_rejet' => now(),
-        ]);
+        try {
+            $this->enregistrementService->annuler($courrier, $acteur, $request->input('motif_annulation'));
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         if ($etaitChezDirecteur) {
             $this->courrierNotifications->notifierCreateur(
                 $courrier->fresh(),
                 $acteur,
                 CourrierNotificationService::ANNULATION,
-                $request->motif_annulation
+                $request->input('motif_annulation')
             );
         }
 
-        $this->auditerCourrier('courrier.annule', $courrier);
+        $sens = $courrier->estDepart() ? 'depart' : 'arrivee';
 
         return redirect()
-            ->route('courriers.index', ['sens' => 'depart'])
+            ->route('courriers.index', ['sens' => $sens])
             ->with('success', 'Courrier annulé.');
+    }
+
+    public function destroy(SupprimerCourrierRequest $request, Courrier $courrier)
+    {
+        $numero = $courrier->numeroRegistreComplet();
+        $sens = $courrier->sensCourrier?->code ?? 'arrivee';
+
+        try {
+            $this->enregistrementService->supprimer($courrier, $request->user());
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('courriers.index', ['sens' => $sens])
+            ->with('success', 'Courrier '.$numero.' supprimé. Vous pouvez le resaisir si besoin.');
     }
 
     public function expedierVersSecretariat(ExpedierCourrierDepartRequest $request, Courrier $courrier)

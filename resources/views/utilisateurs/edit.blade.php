@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@use('App\Support\ReturnUrl')
+
 @section('page-title', 'Modifier l\'utilisateur')
 @section('page-title-info', $utilisateur->email)
 
@@ -134,8 +136,8 @@
                 </div>
                 <div class="mt-8 flex flex-wrap gap-4">
                     <button type="submit" id="btn-utilisateur-edit-submit" class="px-6 py-2.5 rounded-lg bg-[#00b464] text-white font-semibold hover:bg-[#00a055] btn-submit-loading">Enregistrer le compte</button>
-                    <a href="{{ route('utilisateurs.index') }}" class="px-6 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700">Retour à la liste</a>
-                    <a href="{{ route('utilisateurs.show', $utilisateur) }}" class="px-6 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700">Fiche utilisateur</a>
+                    <a href="{{ $retourUrl }}" class="px-6 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700">Retour à la liste</a>
+                    <a href="{{ route('utilisateurs.show', ReturnUrl::propagate($utilisateur, ReturnUrl::validated(request()->query('return')))) }}" class="px-6 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700">Fiche utilisateur</a>
                 </div>
             </form>
         </div>

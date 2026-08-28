@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@use('App\Support\ReturnUrl')
+
 @section('content-container-class', 'w-full px-4 sm:px-6 lg:px-8')
 @section('page-title', 'Fiche document')
 @section('page-title-info', $document->titre ?: $document->nom_original)
@@ -67,7 +69,7 @@
                             <dd class="space-y-2">
                                 @foreach($courriersLies as $courrierLie)
                                 <div class="text-sm rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2 bg-slate-50/50 dark:bg-slate-900/30">
-                                    <a href="{{ route('courriers.show', $courrierLie) }}" class="text-emerald-600 font-medium no-underline">
+                                    <a href="{{ route('courriers.show', ReturnUrl::forRoute($courrierLie)) }}" class="text-emerald-600 font-medium no-underline">
                                         {{ $courrierLie->sensCourrier->libelle }} n° {{ $courrierLie->numeroRegistreComplet() }}
                                     </a>
                                     <p class="text-xs text-slate-500 mt-0.5">
@@ -166,7 +168,7 @@
 
                     <div class="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-600">
                         @can('update', $document)
-                        <a href="{{ route('documents.edit', $document) }}" class="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition-colors no-underline">
+                        <a href="{{ route('documents.edit', ReturnUrl::propagate($document, ReturnUrl::validated(request()->query('return')))) }}" class="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition-colors no-underline">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             Modifier
                         </a>
@@ -184,7 +186,7 @@
                         </a>
                         @endif
                         @endcan
-                        <a href="{{ route('documents.index') }}" class="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors no-underline">
+                        <a href="{{ $retourUrl }}" class="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors no-underline">
                             Retour à la liste
                         </a>
                     </div>

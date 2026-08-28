@@ -177,6 +177,31 @@ class Dossier extends Model
     }
 
     /**
+     * Sous-dossiers de l’arbre « Mes dossiers » (hors racine) : dossiers fournisseurs / prestataires.
+     *
+     * @return list<int>
+     */
+    public static function idsDossiersFournisseursPrestatairesPour(int $userId): array
+    {
+        unset(self::$cacheIdsArbrePersonnel[$userId]);
+
+        $idsArbre = self::idsPourArbrePersonnel($userId);
+        if ($idsArbre === []) {
+            return [];
+        }
+
+        return self::query()
+            ->whereIn('id', $idsArbre)
+            ->whereNull('racine_utilisateur_id')
+            ->where('actif', true)
+            ->orderBy('nom')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
      * IDs des dossiers situés dans l’arbre personnel d’un autre utilisateur (à exclure du voir « par structure »).
      *
      * @return list<int>
