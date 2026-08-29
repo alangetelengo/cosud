@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CosudSetting;
 use App\Models\Courrier;
 use App\Models\Structure;
 use App\Models\User;
@@ -287,6 +288,10 @@ class CourrierNotificationService
         $courrier->loadMissing('circuit');
 
         if ($courrier->circuit?->code !== 'facture_prestataire') {
+            return;
+        }
+
+        if (! CosudSetting::notifFactureEnregistreeDg()) {
             return;
         }
 

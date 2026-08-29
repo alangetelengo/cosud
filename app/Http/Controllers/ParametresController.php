@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateCosudAccesRequest;
+use App\Http\Requests\UpdateCosudNotificationsRequest;
 use App\Models\CosudSetting;
 use App\Models\JournalAudit;
 use App\Models\Structure;
@@ -59,5 +60,33 @@ class ParametresController extends Controller
         return redirect()
             ->route('parametres.cosud-acces')
             ->with('success', 'Les paramètres d’accès ont été enregistrés.');
+    }
+
+    public function notifications()
+    {
+        Log::channel('cosud')->debug('Consultation paramètres notifications COSUD', ['user_id' => auth()->id()]);
+        $notifFactureEnregistreeDg = CosudSetting::notifFactureEnregistreeDg();
+
+        return view('parametres.notifications', compact('notifFactureEnregistreeDg'));
+    }
+
+    public function updateNotifications(UpdateCosudNotificationsRequest $request)
+    {
+        $avant = CosudSetting::notifFactureEnregistreeDg();
+        $apres = $request->boolean('notif_facture_enregistree_dg');
+        CosudSetting::setBool(CosudSetting::NOTIF_FACTURE_ENREGISTREE_DG, $apres);
+
+        JournalAudit::log('parametres.notifications.update', 'parametres', [
+            'donnees_avant' => json_encode(['notif_facture_enregistree_dg' => $avant]),
+            'donnees_apres' => json_encode(['notif_facture_enregistree_dg' => $apres]),
+        ]);
+        Log::channel('cosud')->info('Paramètres notifications COSUD mis à jour', [
+            'user_id' => auth()->id(),
+            'notif_facture_enregistree_dg' => $apres,
+        ]);
+
+        return redirect()
+            ->route('parametres.notifications')
+            ->with('success', 'Les paramètres de notification ont été enregistrés.');
     }
 }

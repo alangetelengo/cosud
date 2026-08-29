@@ -9,6 +9,9 @@ class CosudSetting extends Model
 {
     public const LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT = 'lecture_dossier_lors_partage_document';
 
+    /** SMS + cloche au DG à l’enregistrement d’une facture / prestataire. */
+    public const NOTIF_FACTURE_ENREGISTREE_DG = 'notif_facture_enregistree_dg';
+
     protected $table = 'cosud_settings';
 
     protected $fillable = [
@@ -53,6 +56,14 @@ class CosudSetting extends Model
         return static::bool(
             self::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT,
             (bool) config('cosud.defaults.lecture_dossier_lors_partage_document', false)
+        );
+    }
+
+    public static function notifFactureEnregistreeDg(): bool
+    {
+        return static::bool(
+            self::NOTIF_FACTURE_ENREGISTREE_DG,
+            (bool) config('cosud.defaults.notif_facture_enregistree_dg', true)
         );
     }
 }

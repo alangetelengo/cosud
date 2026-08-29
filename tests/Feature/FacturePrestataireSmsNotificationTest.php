@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CircuitCourrier;
+use App\Models\CosudSetting;
 use App\Models\Courrier;
 use App\Models\PrioriteCourrier;
 use App\Models\SensCourrier;
@@ -19,6 +20,7 @@ use Database\Seeders\CourrierReferentielSeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Database\Seeders\StructureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Notification;
 use Mockery;
 use Tests\TestCase;
@@ -42,6 +44,7 @@ class FacturePrestataireSmsNotificationTest extends TestCase
         $this->app->instance(SmsService::class, $sms);
 
         config(['cosud.whatsapp.driver' => 'log']);
+        Cache::forget('cosud_setting_bool:'.CosudSetting::NOTIF_FACTURE_ENREGISTREE_DG);
     }
 
     public function test_enregistrement_facture_envoie_sms_au_dg(): void
@@ -156,6 +159,35 @@ class FacturePrestataireSmsNotificationTest extends TestCase
                 return $notification->type === CourrierNotificationService::FACTURE_ENREGISTREE_DG
                     && in_array('database', $channels, true)
                     && ! in_array('cosud_sms', $channels, true);
+            }
+        );
+    }
+
+    public function test_aucune_notif_dg_si_parametre_desactive(): void
+    {
+        Notification::fake();
+        CosudSetting::setBool(CosudSetting::NOTIF_FACTURE_ENREGISTREE_DG, false);
+
+        $secretaire = User::factory()->create([
+            'structure_id' => Structure::where('code', 'SEC-DIR')->value('id'),
+        ]);
+        $secretaire->assignRole('secretaire_direction');
+
+        $dg = User::factory()->create([
+            'structure_id' => Structure::where('code', 'DG')->value('id'),
+            'telephone' => '242066844444',
+        ]);
+        $dg->assignRole('dg');
+
+        $courrier = $this->creerFacture($secretaire, 'SANS NOTIF DG');
+        $circuit = CircuitCourrier::where('code', 'facture_prestataire')->firstOrFail();
+        app(CircuitCourrierMoteurService::class)->demarrer($courrier, $circuit, $secretaire);
+
+        Notification::assertNotSentTo(
+            $dg,
+            CourrierWorkflowNotification::class,
+            function (CourrierWorkflowNotification $notification): bool {
+                return $notification->type === CourrierNotificationService::FACTURE_ENREGISTREE_DG;
             }
         );
     }

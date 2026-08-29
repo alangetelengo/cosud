@@ -17,9 +17,12 @@ return [
      * lecture_dossier_lors_partage_document : si true, un partage / envoi document
      * peut accorder automatiquement la lecture du dossier parent (hors « une seule pièce »).
      * Défaut applicatif : false.
+     * notif_facture_enregistree_dg : SMS + cloche au DG à l’enregistrement facture/prestataire.
+     * Défaut applicatif : true.
      */
     'defaults' => [
         'lecture_dossier_lors_partage_document' => false,
+        'notif_facture_enregistree_dg' => true,
     ],
 
     /**

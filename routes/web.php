@@ -89,6 +89,8 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::get('/parametres', [ParametresController::class, 'index'])->name('parametres.index');
     Route::get('/parametres/cosud-acces', [ParametresController::class, 'cosudAcces'])->name('parametres.cosud-acces');
     Route::put('/parametres/cosud-acces', [ParametresController::class, 'updateCosudAcces'])->name('parametres.cosud-acces.update');
+    Route::get('/parametres/notifications', [ParametresController::class, 'notifications'])->name('parametres.notifications');
+    Route::put('/parametres/notifications', [ParametresController::class, 'updateNotifications'])->name('parametres.notifications.update');
     Route::get('/parametres/audit', [AuditController::class, 'index'])->name('parametres.audit.index');
     Route::get('/parametres/roles', [RoleController::class, 'index'])->name('parametres.roles.index');
     Route::get('/parametres/roles/create', [RoleController::class, 'create'])->name('parametres.roles.create');
