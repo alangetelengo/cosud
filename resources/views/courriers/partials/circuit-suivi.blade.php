@@ -63,6 +63,9 @@
             @if($courrier->instructions_dg)
             <p class="text-[11px] text-amber-950 mt-1.5 leading-snug"><strong>Instructions :</strong> {{ $courrier->instructions_dg }}</p>
             @endif
+            @if($courrier->mode_paiement_circuit)
+            <p class="text-[11px] text-amber-950 mt-1 leading-snug"><strong>Mode de paiement :</strong> {{ $courrier->libelleModePaiementCircuit() }}</p>
+            @endif
             @if($courrier->libelleDelaiExecution())
             <p class="text-[11px] text-amber-950 mt-1 leading-snug"><strong>Délai d’exécution :</strong> {{ $courrier->libelleDelaiExecution() }}</p>
             @endif
@@ -97,6 +100,24 @@
             <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Vos instructions <span class="text-red-500">*</span></label>
             <textarea name="instructions" required rows="3" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="{{ $placeholderInstructions }}">{{ old('instructions') }}</textarea>
             @error('instructions')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
+            @if($courrier->necessiteChoixModePaiementCircuit())
+            <fieldset class="rounded-lg border border-slate-200 dark:border-slate-600 p-2.5 space-y-1.5">
+                <legend class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 px-1">Mode de paiement <span class="text-red-500">*</span></legend>
+                <label class="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
+                    <input type="radio" name="mode_paiement_circuit" value="cheque" required
+                           @checked(old('mode_paiement_circuit', 'cheque') === 'cheque')
+                           class="border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                    <span>Chèque</span>
+                </label>
+                <label class="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
+                    <input type="radio" name="mode_paiement_circuit" value="ov" required
+                           @checked(old('mode_paiement_circuit') === 'ov')
+                           class="border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                    <span>Ordre de virement (OV)</span>
+                </label>
+                @error('mode_paiement_circuit')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
+            </fieldset>
+            @endif
             <div>
                 <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">Délai d’exécution <span class="font-normal text-slate-400">(facultatif)</span></label>
                 <div class="flex items-center gap-2">
@@ -270,15 +291,27 @@
         </p>
         @elseif($peutAvancerCircuit && $etapeTraiteeViaEnvoiChequeAc)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
-            Cette étape se termine automatiquement en envoyant le chèque au DG (voir « Actions » ci-dessous).
+            @if($courrier->estModePaiementOv())
+                Cette étape se termine automatiquement en envoyant l’ordre de virement au DG (voir « Actions » ci-dessous).
+            @else
+                Cette étape se termine automatiquement en envoyant le chèque au DG (voir « Actions » ci-dessous).
+            @endif
         </p>
         @elseif($peutAvancerCircuit && $etapeTraiteeViaSignatureChequeDg)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
-            Confirmez la signature du chèque (sans scan) via « Actions » ci-dessous — le dossier revient à l’AC.
+            @if($courrier->estModePaiementOv())
+                Confirmez la signature de l’OV (sans scan) via « Actions » ci-dessous — le dossier revient à l’AC.
+            @else
+                Confirmez la signature du chèque (sans scan) via « Actions » ci-dessous — le dossier revient à l’AC.
+            @endif
         </p>
         @elseif($peutAvancerCircuit && $etapeTraiteeViaPreuvePaiement)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">
-            Enregistrez le bordereau et les pièces de décharge via « Actions » — cette action clôture le circuit.
+            @if($courrier->estModePaiementOv())
+                Enregistrez l’accusé de réception de la banque via « Actions » — cette action clôture le circuit.
+            @else
+                Enregistrez le bordereau et les pièces de décharge via « Actions » — cette action clôture le circuit.
+            @endif
         </p>
         @elseif($peutAvancerCircuit && $etapeTraiteeViaControleDepense)
         <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-700 italic">

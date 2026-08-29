@@ -60,6 +60,7 @@ class Courrier extends Model
         'numero_archives',
         'observations',
         'instructions_dg',
+        'mode_paiement_circuit',
         'delai_execution_jours',
         'agent_confie_id',
         'message_ac',
@@ -81,6 +82,16 @@ class Courrier extends Model
         'reponse_structure_destinataire_id',
         'destinataire_agent_id',
         'reponse_objet',
+    ];
+
+    public const MODE_PAIEMENT_CHEQUE = 'cheque';
+
+    public const MODE_PAIEMENT_OV = 'ov';
+
+    /** @var list<string> */
+    public const MODES_PAIEMENT_CIRCUIT = [
+        self::MODE_PAIEMENT_CHEQUE,
+        self::MODE_PAIEMENT_OV,
     ];
 
     protected function casts(): array
@@ -118,6 +129,34 @@ class Courrier extends Model
         }
 
         return $this->typeCourrier()->where('code', 'facture')->exists();
+    }
+
+    public function necessiteChoixModePaiementCircuit(): bool
+    {
+        $this->loadMissing(['circuit', 'typeCourrier']);
+
+        return $this->circuit?->code === 'facture_prestataire'
+            || $this->typeCourrier?->code === 'facture';
+    }
+
+    public function estModePaiementOv(): bool
+    {
+        return $this->mode_paiement_circuit === self::MODE_PAIEMENT_OV;
+    }
+
+    public function estModePaiementCheque(): bool
+    {
+        return $this->mode_paiement_circuit === self::MODE_PAIEMENT_CHEQUE
+            || ($this->mode_paiement_circuit === null && $this->necessiteChoixModePaiementCircuit());
+    }
+
+    public function libelleModePaiementCircuit(): string
+    {
+        return match ($this->mode_paiement_circuit) {
+            self::MODE_PAIEMENT_OV => 'Ordre de virement',
+            self::MODE_PAIEMENT_CHEQUE => 'Chèque',
+            default => '—',
+        };
     }
 
     public function circuit(): BelongsTo

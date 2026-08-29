@@ -184,8 +184,12 @@ class CourrierWorkflowNotification extends Notification
                 'body' => 'Une facture / MAD prestataire vient d’être enregistrée : donnez votre Bon pour accord.',
             ],
             CourrierNotificationService::BON_POUR_ACCORD_AC => [
-                'title' => 'Bon pour accord — établir le chèque',
-                'body' => 'Le DG a donné son Bon pour accord : établissez le chèque selon ses instructions.',
+                'title' => $this->courrier->estModePaiementOv()
+                    ? 'Bon pour accord — établir l’OV'
+                    : 'Bon pour accord — établir le chèque',
+                'body' => $this->courrier->estModePaiementOv()
+                    ? 'Le DG a donné son Bon pour accord : établissez l’ordre de virement selon ses instructions.'
+                    : 'Le DG a donné son Bon pour accord : établissez le chèque selon ses instructions.',
             ],
             default => [
                 'title' => 'Courrier — mise à jour',
@@ -219,9 +223,12 @@ class CourrierWorkflowNotification extends Notification
     {
         $instructions = trim((string) ($this->courrier->instructions_dg ?? ''));
         $extrait = $instructions !== '' ? mb_substr($instructions, 0, 80) : 'voir COSUD';
+        $action = $this->courrier->estModePaiementOv()
+            ? 'etablir un OV'
+            : 'editer un cheque';
 
         return 'COSUD n°'.$numero
-            .' : Bon pour accord DG — editer un cheque. Fournisseur : '.$fournisseurCourt
+            .' : Bon pour accord DG — '.$action.'. Fournisseur : '.$fournisseurCourt
             .'. Instructions : '.$extrait;
     }
 

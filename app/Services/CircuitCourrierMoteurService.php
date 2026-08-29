@@ -333,6 +333,7 @@ class CircuitCourrierMoteurService
         ?int $agentConfieId = null,
         ?array $agentConfieIds = null,
         ?int $delaiExecutionJours = null,
+        ?string $modePaiementCircuit = null,
     ): Courrier {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->action !== CircuitCourrierEtape::ACTION_INSTRUIRE) {
@@ -354,8 +355,21 @@ class CircuitCourrierMoteurService
             throw new InvalidArgumentException('Un ou plusieurs destinataires sont introuvables ou inactifs.');
         }
 
+        if ($courrier->necessiteChoixModePaiementCircuit()) {
+            // Appels service / tests : défaut chèque si non fourni. Le Form Request impose le choix à l’UI.
+            if ($modePaiementCircuit === null || $modePaiementCircuit === '') {
+                $modePaiementCircuit = Courrier::MODE_PAIEMENT_CHEQUE;
+            }
+            if (! in_array($modePaiementCircuit, Courrier::MODES_PAIEMENT_CIRCUIT, true)) {
+                throw new InvalidArgumentException('Choisissez le mode de paiement (chèque ou ordre de virement).');
+            }
+        } else {
+            $modePaiementCircuit = null;
+        }
+
         $courrier->update([
             'instructions_dg' => $instructions,
+            'mode_paiement_circuit' => $modePaiementCircuit,
             'delai_execution_jours' => $delaiExecutionJours,
             'date_orientation' => now(),
         ]);
@@ -532,7 +546,11 @@ class CircuitCourrierMoteurService
             throw new InvalidArgumentException('Vous n’êtes pas autorisé à confirmer la signature du chèque.');
         }
 
-        $commentaire = $message ?: 'Chèque signé par le DG — dossier renvoyé à l’AC pour décharge bénéficiaire.';
+        $commentaire = $message ?: (
+            $courrier->estModePaiementOv()
+                ? 'Ordre de virement signé par le DG — dossier renvoyé à l’AC pour accusé de réception banque.'
+                : 'Chèque signé par le DG — dossier renvoyé à l’AC pour décharge bénéficiaire.'
+        );
 
         $courrier = $this->avancer(
             $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),

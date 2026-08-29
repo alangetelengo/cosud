@@ -194,6 +194,7 @@ class CircuitCourrierController extends Controller
                 $request->validated('delai_execution_jours') !== null
                     ? (int) $request->validated('delai_execution_jours')
                     : null,
+                $request->validated('mode_paiement_circuit'),
             );
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());
@@ -225,7 +226,11 @@ class CircuitCourrierController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Chèque transmis au DG pour signature.');
+        $libelleSucces = $courrier->fresh()->estModePaiementOv()
+            ? 'Ordre de virement transmis au DG pour signature.'
+            : 'Chèque transmis au DG pour signature.';
+
+        return back()->with('success', $libelleSucces);
     }
 
     public function signerCheque(SignerChequeDgRequest $request, Courrier $courrier): RedirectResponse
@@ -241,17 +246,29 @@ class CircuitCourrierController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Signature du chèque confirmée. L’AC peut enregistrer la décharge du bénéficiaire.');
+        $libelleSucces = $courrier->fresh()->estModePaiementOv()
+            ? 'Signature de l’ordre de virement confirmée. L’AC peut joindre l’accusé de réception de la banque.'
+            : 'Signature du chèque confirmée. L’AC peut enregistrer la décharge du bénéficiaire.';
+
+        return back()->with('success', $libelleSucces);
     }
 
     public function deposerPreuvePaiement(EnregistrerDechargeAcRequest $request, Courrier $courrier): RedirectResponse
     {
+        $estOv = $courrier->estModePaiementOv();
+        $titrePiece = $estOv
+            ? 'Accusé de réception banque / justificatif OV'
+            : 'Pièce de décharge / paiement';
+        $descPiece = $estOv
+            ? 'Accusé de réception de la banque / justificatif ordre de virement'
+            : 'Chèque déchargé / pièce d’identité / justificatif de paiement';
+
         foreach ($this->collecterFichiersUpload($request, 'preuves_paiement', 'preuve_paiement') as $preuve) {
             $this->attacherPieceCourrier(
                 $courrier,
                 $preuve,
-                'Pièce de décharge / paiement',
-                'Chèque déchargé / pièce d’identité / justificatif de paiement'
+                $titrePiece,
+                $descPiece
             );
         }
 
@@ -269,7 +286,11 @@ class CircuitCourrierController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Décharge / paiement enregistré — circuit clôturé. Suivi des dépenses notifié pour contrôle des pièces.');
+        $libelleSucces = $estOv
+            ? 'Accusé de réception banque enregistré — circuit clôturé. Suivi des dépenses notifié pour contrôle des pièces.'
+            : 'Décharge / paiement enregistré — circuit clôturé. Suivi des dépenses notifié pour contrôle des pièces.';
+
+        return back()->with('success', $libelleSucces);
     }
 
     public function payerReliquat(PayerReliquatFactureRequest $request, Courrier $courrier): RedirectResponse

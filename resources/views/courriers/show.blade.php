@@ -640,6 +640,7 @@
                             $beneficiaireChequeDefaut = old('beneficiaire_libelle', $courrier->expediteur_libelle);
                             $beneficiaireChequeVerrouille = trim((string) ($courrier->expediteur_libelle ?? '')) !== '';
                             $inputChequeClass = 'w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900/80 px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition';
+                            $estPaiementOv = $courrier->estModePaiementOv();
                         @endphp
                         <div
                             class="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-900/40 overflow-hidden"
@@ -656,7 +657,9 @@
                                     <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                                     </span>
-                                    <p class="text-xs font-bold text-emerald-900 dark:text-emerald-100 leading-tight">Envoyer le chèque au DG</p>
+                                    <p class="text-xs font-bold text-emerald-900 dark:text-emerald-100 leading-tight">
+                                        {{ $estPaiementOv ? 'Envoyer l’ordre de virement au DG' : 'Envoyer le chèque au DG' }}
+                                    </p>
                                 </div>
                             </div>
                             <div class="p-3.5 space-y-3">
@@ -664,16 +667,23 @@
                                 <div class="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200/70 dark:border-amber-800/50 px-3 py-2">
                                     <p class="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Instructions DG</p>
                                     <p class="mt-0.5 text-[11px] text-slate-700 dark:text-slate-300 leading-snug">{{ $courrier->instructions_dg }}</p>
+                                    @if($courrier->mode_paiement_circuit)
+                                        <p class="mt-1 text-[11px] text-amber-800/90 dark:text-amber-200/90">Mode : <strong>{{ $courrier->libelleModePaiementCircuit() }}</strong></p>
+                                    @endif
                                     @if($courrier->libelleDelaiExecution())
                                         <p class="mt-1 text-[11px] text-amber-800/90 dark:text-amber-200/90">Délai d’exécution : <strong>{{ $courrier->libelleDelaiExecution() }}</strong></p>
                                     @endif
                                 </div>
                                 @endif
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">Saisissez les références (bordereau), puis transmettez pour signature.</p>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                                    {{ $estPaiementOv
+                                        ? 'Saisissez les références de l’OV (N°, banque), puis transmettez pour signature.'
+                                        : 'Saisissez les références (bordereau), puis transmettez pour signature.' }}
+                                </p>
                                 <button type="button" @click="ouvrir()"
                                         class="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-colors">
                                     <svg class="h-4 w-4 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                                    Saisir les références du chèque
+                                    {{ $estPaiementOv ? 'Saisir les références de l’OV' : 'Saisir les références du chèque' }}
                                 </button>
                             </div>
 
@@ -718,7 +728,9 @@
                                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                                                 </span>
                                                 <div class="min-w-0 flex-1 pt-0.5">
-                                                    <h3 id="modal-cheque-titre" class="text-sm font-bold tracking-tight">Références du chèque</h3>
+                                                    <h3 id="modal-cheque-titre" class="text-sm font-bold tracking-tight">
+                                                        {{ $estPaiementOv ? 'Références de l’ordre de virement' : 'Références du chèque' }}
+                                                    </h3>
                                                     <p class="mt-0.5 text-[11px] text-emerald-50/90 leading-snug">Transmission au DG — alimente le bordereau.</p>
                                                 </div>
                                                 <button type="button" @click="fermer()"
@@ -736,7 +748,9 @@
                                             @csrf
                                             <div class="flex-1 overflow-y-auto overscroll-contain px-4 py-3.5 space-y-3.5">
                                                 <section class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 p-3 space-y-2.5">
-                                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Identité du chèque</p>
+                                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                                        {{ $estPaiementOv ? 'Identité de l’OV' : 'Identité du chèque' }}
+                                                    </p>
                                                     <div class="grid grid-cols-1 gap-2.5">
                                                         <div>
                                                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Banque <span class="text-red-500">*</span></label>
@@ -745,9 +759,12 @@
                                                             @error('banque')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                                         </div>
                                                         <div>
-                                                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">N° pièce <span class="text-red-500">*</span></label>
+                                                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">
+                                                                {{ $estPaiementOv ? 'N° / réf. OV' : 'N° pièce' }} <span class="text-red-500">*</span>
+                                                            </label>
                                                             <input type="text" name="numero_piece" value="{{ old('numero_piece') }}" required
-                                                                   class="{{ $inputChequeClass }}" placeholder="Ex. : Chèque N° 0000322">
+                                                                   class="{{ $inputChequeClass }}"
+                                                                   placeholder="{{ $estPaiementOv ? 'Ex. : OV-2026-0045' : 'Ex. : Chèque N° 0000322' }}">
                                                             @error('numero_piece')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                                         </div>
                                                         <div>
@@ -810,7 +827,7 @@
                                                 </button>
                                                 <button type="button"
                                                         data-loading-text="Envoi..."
-                                                        onclick="flashAlert('Transmettre ce chèque au DG pour signature ? Le circuit avancera automatiquement.', document.getElementById('form-envoyer-cheque-ac'), {icon:'✓', danger:false, confirmText:'Envoyer au DG', title:'Envoi du chèque'})"
+                                                        onclick="flashAlert('{{ $estPaiementOv ? 'Transmettre cet ordre de virement au DG pour signature ? Le circuit avancera automatiquement.' : 'Transmettre ce chèque au DG pour signature ? Le circuit avancera automatiquement.' }}', document.getElementById('form-envoyer-cheque-ac'), {icon:'✓', danger:false, confirmText:'Envoyer au DG', title:'{{ $estPaiementOv ? 'Envoi de l’OV' : 'Envoi du chèque' }}'})"
                                                         class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition">
                                                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                                                     Envoyer au DG
@@ -822,9 +839,16 @@
                             </template>
                         </div>
                         @elseif($peutSignerChequeDg)
+                        @php $estPaiementOv = $courrier->estModePaiementOv(); @endphp
                         <div class="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-900/20 p-3 space-y-2">
-                            <p class="text-xs font-semibold text-indigo-900 dark:text-indigo-200">Confirmer la signature du chèque</p>
-                            <p class="text-[11px] text-slate-500 leading-snug">Aucun scan dans COSUD : le chèque est signé sur papier. Confirmez pour renvoyer le dossier à l’AC.</p>
+                            <p class="text-xs font-semibold text-indigo-900 dark:text-indigo-200">
+                                {{ $estPaiementOv ? 'Confirmer la signature de l’ordre de virement' : 'Confirmer la signature du chèque' }}
+                            </p>
+                            <p class="text-[11px] text-slate-500 leading-snug">
+                                {{ $estPaiementOv
+                                    ? 'Aucun scan dans COSUD : l’OV est signé sur papier. Confirmez pour renvoyer le dossier à l’AC.'
+                                    : 'Aucun scan dans COSUD : le chèque est signé sur papier. Confirmez pour renvoyer le dossier à l’AC.' }}
+                            </p>
                             @if($courrier->message_ac)
                             <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug"><strong>Message AC :</strong> {{ $courrier->message_ac }}</p>
                             @endif
@@ -838,7 +862,10 @@
                                 <label class="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
                                     <input type="hidden" name="notifier_fournisseur" value="0">
                                     <input type="checkbox" name="notifier_fournisseur" value="1" class="mt-0.5" @checked(old('notifier_fournisseur', '1') === '1')>
-                                    <span>Notifier le fournisseur / prestataire pour le recouvrement
+                                    <span>
+                                        {{ $estPaiementOv
+                                            ? 'Notifier le fournisseur / prestataire (SMS : OV envoyé à la banque)'
+                                            : 'Notifier le fournisseur / prestataire pour le recouvrement' }}
                                         @if($courrier->expediteur_email)
                                         <span class="block text-slate-400">({{ $courrier->expediteur_email }})</span>
                                         @elseif($courrier->expediteur_libelle)
@@ -847,19 +874,26 @@
                                     </span>
                                 </label>
                                 <button type="button"
-                                        onclick="flashAlert('Confirmer que le chèque est signé et renvoyer le dossier à l’AC ?', this.closest('form'), {icon:'✍️', danger:false, confirmText:'Confirmer la signature', title:'Signature du chèque'})"
+                                        onclick="flashAlert('{{ $estPaiementOv ? 'Confirmer que l’OV est signé et renvoyer le dossier à l’AC ?' : 'Confirmer que le chèque est signé et renvoyer le dossier à l’AC ?' }}', this.closest('form'), {icon:'✍️', danger:false, confirmText:'Confirmer la signature', title:'{{ $estPaiementOv ? 'Signature de l’OV' : 'Signature du chèque' }}'})"
                                         class="w-full px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold">
-                                    Chèque signé — renvoyer à l’AC
+                                    {{ $estPaiementOv ? 'OV signé — renvoyer à l’AC' : 'Chèque signé — renvoyer à l’AC' }}
                                 </button>
                             </form>
                         </div>
                         @elseif($peutEnregistrerDechargeAc)
                         @php
                             $suiviBordereau = $courrier->suiviPaiement;
+                            $estPaiementOv = $courrier->estModePaiementOv();
                         @endphp
                         <div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/20 p-3 space-y-2">
-                            <p class="text-xs font-semibold text-emerald-900 dark:text-emerald-200">Bordereau — décharge bénéficiaire</p>
-                            <p class="text-[11px] text-slate-500 leading-snug">Les références du chèque sont figées. Joignez les pièces justificatives et la date de décharge.</p>
+                            <p class="text-xs font-semibold text-emerald-900 dark:text-emerald-200">
+                                {{ $estPaiementOv ? 'Bordereau — accusé de réception banque' : 'Bordereau — décharge bénéficiaire' }}
+                            </p>
+                            <p class="text-[11px] text-slate-500 leading-snug">
+                                {{ $estPaiementOv
+                                    ? 'Les références de l’OV sont figées. Joignez l’accusé de réception de la banque pour justifier la dépense.'
+                                    : 'Les références du chèque sont figées. Joignez les pièces justificatives et la date de décharge.' }}
+                            </p>
                             @if($suiviBordereau)
                             <div class="rounded-md bg-white/80 dark:bg-slate-900/40 border border-emerald-100 dark:border-emerald-900 px-2.5 py-2 text-[11px] text-slate-700 dark:text-slate-200 space-y-0.5">
                                 <p><strong>Ref pièce :</strong> {{ $suiviBordereau->numero_piece ?? '—' }}</p>
@@ -872,26 +906,31 @@
                             <form method="post" action="{{ route('courriers.circuit.deposer-preuve-paiement', $courrier) }}" enctype="multipart/form-data" data-loading-text="Enregistrement..." class="space-y-2">
                                 @csrf
                                 <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Date de décharge <span class="text-red-500">*</span></label>
+                                    <label class="block text-[11px] font-semibold mb-1">
+                                        {{ $estPaiementOv ? 'Date de l’accusé banque' : 'Date de décharge' }} <span class="text-red-500">*</span>
+                                    </label>
                                     <input type="date" name="date_decharge" value="{{ old('date_decharge', now()->toDateString()) }}" required class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900">
                                     @error('date_decharge')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
                                 <div>
-                                    <label class="block text-[11px] font-semibold mb-1">Pièces (chèque déchargé, identité…) <span class="text-red-500">*</span></label>
+                                    <label class="block text-[11px] font-semibold mb-1">
+                                        {{ $estPaiementOv ? 'Pièces (accusé de réception banque…)' : 'Pièces (chèque déchargé, identité…)' }}
+                                        <span class="text-red-500">*</span>
+                                    </label>
                                     <input type="file" name="preuves_paiement[]" required accept=".pdf,.jpg,.jpeg,.png" multiple class="block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:text-white file:font-semibold file:text-xs">
                                     @error('preuves_paiement')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                     @error('preuves_paiement.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
                                 <div>
                                     <label class="block text-[11px] font-semibold mb-1">Observation <span class="font-normal text-slate-400">(facultatif)</span></label>
-                                    <textarea name="observation" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Remarque sur la décharge…">{{ old('observation') }}</textarea>
+                                    <textarea name="observation" rows="2" class="w-full rounded-lg border px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="{{ $estPaiementOv ? 'Remarque sur l’accusé banque…' : 'Remarque sur la décharge…' }}">{{ old('observation') }}</textarea>
                                     @error('observation')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
                                 <button type="button"
                                         data-loading-text="Enregistrement..."
-                                        onclick="flashAlert('Enregistrer la décharge et notifier le suivi des dépenses ?', this.closest('form'), {icon:'✓', danger:false, confirmText:'Enregistrer', title:'Décharge bénéficiaire'})"
+                                        onclick="flashAlert('{{ $estPaiementOv ? 'Enregistrer l’accusé de réception banque et notifier le suivi des dépenses ?' : 'Enregistrer la décharge et notifier le suivi des dépenses ?' }}', this.closest('form'), {icon:'✓', danger:false, confirmText:'Enregistrer', title:'{{ $estPaiementOv ? 'Accusé banque' : 'Décharge bénéficiaire' }}'})"
                                         class="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold">
-                                    Enregistrer la décharge / le paiement
+                                    {{ $estPaiementOv ? 'Enregistrer l’accusé banque / le paiement' : 'Enregistrer la décharge / le paiement' }}
                                 </button>
                             </form>
                         </div>
