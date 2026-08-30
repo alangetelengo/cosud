@@ -8,6 +8,7 @@ use App\Models\JournalAudit;
 use App\Models\Structure;
 use App\Models\User;
 use App\Services\SmsService;
+use App\Services\UtilisateurSuppressionService;
 use App\Support\ReturnUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Rules\ValidationRule;
+use InvalidArgumentException;
 use PragmaRX\Google2FA\Google2FA;
 use Spatie\Permission\Models\Role;
 
@@ -240,9 +242,22 @@ class UtilisateurController extends Controller
     public function destroy(User $user)
     {
         $this->authorize('delete', $user);
-        JournalAudit::log('utilisateur.suppression', 'utilisateurs', ['user_id' => $user->id]);
-        Log::channel('cosud')->info('Utilisateur supprimé', ['user_id' => $user->id, 'email' => $user->email, 'by' => auth()->id()]);
-        $user->delete();
+
+        try {
+            app(UtilisateurSuppressionService::class)->assertPeutSupprimer($user);
+        } catch (InvalidArgumentException $e) {
+            return redirect()
+                ->back()
+                ->with('error', $e->getMessage());
+        }
+
+        $email = $user->email;
+        $userId = $user->id;
+
+        JournalAudit::log('utilisateur.suppression', 'utilisateurs', ['user_id' => $userId, 'email' => $email]);
+        Log::channel('cosud')->info('Utilisateur supprimé', ['user_id' => $userId, 'email' => $email, 'by' => auth()->id()]);
+
+        app(UtilisateurSuppressionService::class)->supprimer($user);
 
         return redirect()->route('utilisateurs.index')->with('success', 'Utilisateur supprimé.');
     }

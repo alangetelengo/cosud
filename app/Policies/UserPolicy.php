@@ -28,6 +28,8 @@ class UserPolicy
 
     public function delete(User $user, User $model): bool
     {
-        return $user->can('utilisateurs.delete') && $model->id !== $user->id;
+        return $user->hasRole('admin')
+            && $user->can('utilisateurs.delete')
+            && $model->id !== $user->id;
     }
 }

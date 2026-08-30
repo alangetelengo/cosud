@@ -170,25 +170,53 @@
         </div>
 
         @if($courrier->documents->isNotEmpty())
-        <div class="rounded-lg border border-slate-200 dark:border-slate-600 p-3 text-xs text-slate-600 dark:text-slate-300">
-            <p class="font-semibold mb-1">Scans déjà joints ({{ $courrier->documents->count() }})</p>
-            <ul class="list-disc list-inside space-y-0.5">
+        <div class="space-y-2">
+            <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">Scans déjà joints ({{ $courrier->documents->count() }})</p>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 @foreach($courrier->documents as $doc)
-                    <li>{{ $doc->nom_original }}</li>
+                @php
+                    $ext = strtolower((string) ($doc->extension ?: pathinfo((string) $doc->nom_original, PATHINFO_EXTENSION)));
+                    $estImage = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
+                    $estPdf = $ext === 'pdf';
+                    $libelle = $doc->titre ?: $doc->nom_original;
+                    $urlApercu = route('courriers.documents.apercu', [$courrier, $doc]);
+                @endphp
+                <article class="rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-900/40 overflow-hidden flex flex-col">
+                    <div class="relative bg-slate-100 dark:bg-slate-950/50 h-28 sm:h-32 flex items-center justify-center">
+                        @if($estImage)
+                        <a href="{{ $urlApercu }}" target="_blank" rel="noopener" class="block w-full h-full">
+                            <img src="{{ $urlApercu }}" alt="{{ $libelle }}" class="w-full h-full object-contain p-2">
+                        </a>
+                        @elseif($estPdf)
+                        <iframe src="{{ $urlApercu }}#toolbar=0&navpanes=0" class="w-full h-full bg-white" title="Aperçu {{ $libelle }}"></iframe>
+                        @else
+                        <span class="text-[11px] text-slate-400 px-2 text-center">Aperçu indisponible</span>
+                        @endif
+                    </div>
+                    <div class="px-2.5 py-1.5 border-t border-slate-200 dark:border-slate-600 flex items-center gap-2 min-w-0">
+                        <span class="truncate text-[11px] font-medium text-slate-700 dark:text-slate-200 flex-1" title="{{ $libelle }}">{{ $libelle }}</span>
+                        <a href="{{ $urlApercu }}" target="_blank" rel="noopener" class="shrink-0 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 no-underline hover:underline">Ouvrir</a>
+                    </div>
+                </article>
                 @endforeach
-            </ul>
+            </div>
         </div>
         @endif
 
         <div>
-            <label class="block text-xs font-semibold mb-1">
+            <p class="block text-xs font-semibold mb-1">
                 Ajouter des scans
                 @if($courrier->documents->isEmpty())<span class="text-red-500">*</span>@endif
-            </label>
-            <input type="file" name="fichiers[]" accept=".pdf,.jpg,.jpeg,.png" multiple
-                   @if($courrier->documents->isEmpty()) required @endif
-                   class="w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-white file:font-semibold">
+            </p>
+            @include('courriers.partials.scans-upload-preview', [
+                'scansRequired' => $courrier->documents->isEmpty(),
+                'scansInputId' => 'fichier-scan-regularisation-edit',
+                'scansLabel' => $courrier->documents->isNotEmpty()
+                    ? 'Ajouter un ou plusieurs fichiers'
+                    : 'Choisir un ou plusieurs fichiers',
+            ])
             @error('fichiers')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            @error('fichiers.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
         </div>
 
         <div class="flex flex-wrap gap-3 pt-2">
@@ -203,4 +231,8 @@
         </div>
     </form>
 </div>
+
+@push('scripts')
+@include('courriers.partials.scans-upload-preview-script')
+@endpush
 @endsection

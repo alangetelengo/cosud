@@ -52,6 +52,18 @@ class CourrierWorkflowNotification extends Notification
     {
         $labels = $this->libelles();
 
+        if ($this->type === CourrierNotificationService::FACTURE_ENREGISTREE_DG) {
+            return (new MailMessage)
+                ->subject('COSUD : facture N° '.$this->referenceFacture().' — instructions DG')
+                ->greeting('Monsieur le Directeur Général,')
+                ->line($labels['body'])
+                ->line('**Courrier :** n° '.$this->courrier->numeroRegistreComplet().' — '.$this->courrier->objet)
+                ->line('**Par :** '.$this->acteur->name)
+                ->when($this->detail, fn (MailMessage $mail) => $mail->line('**Détail :** '.$this->detail))
+                ->action('Voir le courrier', $this->urlAction())
+                ->salutation('L’équipe COSUD — '.config('app.name'));
+        }
+
         return (new MailMessage)
             ->subject('COSUD : '.$labels['title'])
             ->greeting('Bonjour '.$notifiable->name.',')
@@ -184,8 +196,8 @@ class CourrierWorkflowNotification extends Notification
                     : 'L’Agent comptable a établi un chèque : inscrivez-le sur la fiche de suivi des paiements.',
             ],
             CourrierNotificationService::FACTURE_ENREGISTREE_DG => [
-                'title' => 'Facture prestataire à traiter',
-                'body' => 'Une facture / MAD prestataire vient d’être enregistrée : donnez votre Bon pour accord.',
+                'title' => 'Facture enregistrée — vos instructions',
+                'body' => $this->corpsFactureEnregistreeDg(),
             ],
             CourrierNotificationService::BON_POUR_ACCORD_AC => [
                 'title' => $this->courrier->estModePaiementOv()
@@ -209,10 +221,12 @@ class CourrierWorkflowNotification extends Notification
         $fournisseurCourt = $fournisseur !== '' ? mb_substr($fournisseur, 0, 40) : 'fournisseur';
 
         $texte = match ($this->type) {
-            CourrierNotificationService::FACTURE_ENREGISTREE_DG => 'ACSI – COSUD : Facture prestataire ('.$numero.')'
-                .' enregistrée et soumise à votre validation (Bon pour accord). Fournisseur : '.$fournisseurCourt.'.',
+            CourrierNotificationService::FACTURE_ENREGISTREE_DG => 'COSUD : Monsieur le Directeur General, la facture '
+                .$this->referenceFacture()
+                .' du '.$fournisseurCourt
+                .' a ete enregistree dans COSUD et est soumise a vos instructions pour la suite de son traitement.',
             CourrierNotificationService::BON_POUR_ACCORD_AC => $this->texteSmsBonPourAccordAc($numero, $fournisseurCourt),
-            default => 'COSUD n°'.$numero.' : action requise sur un courrier.',
+            default => 'COSUD '.$numero.' : action requise sur un courrier.',
         };
 
         return app(SmsService::class)->sanitizeSmsText($texte);
@@ -223,6 +237,23 @@ class CourrierWorkflowNotification extends Notification
         return $this->toCosudSms($notifiable);
     }
 
+    private function corpsFactureEnregistreeDg(): string
+    {
+        $fournisseur = trim((string) ($this->courrier->expediteur_libelle ?? ''));
+        $fournisseur = $fournisseur !== '' ? $fournisseur : 'fournisseur / prestataire';
+
+        return 'Monsieur le Directeur Général, la facture N° '.$this->referenceFacture()
+            .' du '.$fournisseur
+            .' a été enregistrée dans COSUD et est soumise à vos instructions pour la suite de son traitement.';
+    }
+
+    private function referenceFacture(): string
+    {
+        $reference = trim((string) ($this->courrier->reference ?? ''));
+
+        return $reference !== '' ? $reference : $this->courrier->numeroRegistreComplet();
+    }
+
     private function texteSmsBonPourAccordAc(string $numero, string $fournisseurCourt): string
     {
         $instructions = trim((string) ($this->courrier->instructions_dg ?? ''));
@@ -231,7 +262,7 @@ class CourrierWorkflowNotification extends Notification
             ? 'etablir un OV'
             : 'editer un cheque';
 
-        return 'COSUD n°'.$numero
+        return 'COSUD '.$numero
             .' : Bon pour accord DG — '.$action.'. Fournisseur : '.$fournisseurCourt
             .'. Instructions : '.$extrait;
     }

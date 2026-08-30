@@ -85,8 +85,26 @@
                 <dd class="mt-0.5">{{ $fiche->email ?: '—' }}</dd>
             </div>
             <div>
-                <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Téléphone</dt>
-                <dd class="mt-0.5">{{ $fiche->telephone ?: '—' }}</dd>
+                <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Téléphone 1</dt>
+                <dd class="mt-0.5">
+                    {{ $fiche->telephone ?: '—' }}
+                    @if($fiche->telephone)
+                        <span class="ml-1 text-[11px] {{ $fiche->notifier_telephone ? 'text-emerald-600' : 'text-slate-400' }}">
+                            ({{ $fiche->notifier_telephone ? 'notifié' : 'non notifié' }})
+                        </span>
+                    @endif
+                </dd>
+            </div>
+            <div>
+                <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Téléphone 2</dt>
+                <dd class="mt-0.5">
+                    {{ $fiche->telephone_2 ?: '—' }}
+                    @if($fiche->telephone_2)
+                        <span class="ml-1 text-[11px] {{ $fiche->notifier_telephone_2 ? 'text-emerald-600' : 'text-slate-400' }}">
+                            ({{ $fiche->notifier_telephone_2 ? 'notifié' : 'non notifié' }})
+                        </span>
+                    @endif
+                </dd>
             </div>
             <div class="sm:col-span-2">
                 <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Observation</dt>

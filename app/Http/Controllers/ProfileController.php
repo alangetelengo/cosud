@@ -6,7 +6,6 @@ use App\Http\Requests\ProfileUpdateRequest;
 use App\Models\Structure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\View\View;
@@ -62,25 +61,10 @@ class ProfileController extends Controller
     }
 
     /**
-     * Delete the user's account.
+     * Auto-suppression désactivée : seul un admin peut supprimer les comptes des autres via Utilisateurs.
      */
     public function destroy(Request $request): RedirectResponse
     {
-        $request->validateWithBag('userDeletion', [
-            'password' => ['required', 'current_password'],
-        ]);
-
-        $user = $request->user();
-
-        Log::channel('cosud')->info('Compte supprimé', ['user_id' => $user->id, 'email' => $user->email]);
-
-        Auth::logout();
-
-        $user->delete();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return Redirect::to('/');
+        abort(403, 'La suppression de compte se fait uniquement par un administrateur (module Utilisateurs).');
     }
 }

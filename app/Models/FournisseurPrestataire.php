@@ -33,6 +33,9 @@ class FournisseurPrestataire extends Model
         'type',
         'email',
         'telephone',
+        'telephone_2',
+        'notifier_telephone',
+        'notifier_telephone_2',
         'type_contrat',
         'a_contrat',
         'scan_contrat_pieces',
@@ -52,6 +55,8 @@ class FournisseurPrestataire extends Model
             'actif' => 'boolean',
             'scan_contrat_pieces' => 'array',
             'scan_fiscal_pieces' => 'array',
+            'notifier_telephone' => 'boolean',
+            'notifier_telephone_2' => 'boolean',
         ];
     }
 

@@ -13,8 +13,12 @@ use App\Models\User;
 use Database\Seeders\CircuitCourrierSeeder;
 use Database\Seeders\CourrierReferentielSeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
+use Database\Seeders\StatutDocumentSeeder;
 use Database\Seeders\StructureSeeder;
+use Database\Seeders\TypeDocumentSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class CourrierCorrectionArriveeTest extends TestCase
@@ -29,7 +33,10 @@ class CourrierCorrectionArriveeTest extends TestCase
             StructureSeeder::class,
             CourrierReferentielSeeder::class,
             CircuitCourrierSeeder::class,
+            TypeDocumentSeeder::class,
+            StatutDocumentSeeder::class,
         ]);
+        Storage::fake('public');
     }
 
     public function test_particuliere_peut_corriger_enregistrement_arrivee(): void
@@ -48,6 +55,7 @@ class CourrierCorrectionArriveeTest extends TestCase
             ->get(route('courriers.edit', $courrier, absolute: false))
             ->assertOk()
             ->assertSee('Corrigez une erreur de saisie', false)
+            ->assertSee('Scans du courrier', false)
             ->assertSee('id="bloc-service-demandeur"', false)
             ->assertSee('id="bloc-fournisseur-prestataire"', false)
             ->assertSee('data-telephone-requis="1"', false)
@@ -63,6 +71,9 @@ class CourrierCorrectionArriveeTest extends TestCase
                 'type_courrier_id' => $courrier->type_courrier_id,
                 'service_demandeur_structure_id' => $dafId,
                 'montant_facture' => '1250000',
+                'fichiers' => [
+                    UploadedFile::fake()->create('facture-corrigee.pdf', 40, 'application/pdf'),
+                ],
             ])
             ->assertRedirect(route('courriers.show', $courrier, absolute: false));
 
@@ -74,6 +85,168 @@ class CourrierCorrectionArriveeTest extends TestCase
             'fournisseur_prestataire_id' => $fiche->id,
             'service_demandeur_structure_id' => $dafId,
         ]);
+        $this->assertCount(1, $courrier->fresh()->documents);
+    }
+
+    public function test_correction_arrivee_sans_scan_exige_fichier(): void
+    {
+        $particuliere = $this->creerUtilisateurAvecRole('particulier_dg');
+        $courrier = $this->creerCourrierArrivee($particuliere);
+        $dafId = Structure::where('code', 'DAF')->value('id');
+        $fiche = FournisseurPrestataire::factory()->create([
+            'nom' => 'EEC sans scan',
+            'telephone' => '+242060000099',
+        ]);
+
+        $this->actingAs($particuliere)
+            ->from(route('courriers.edit', $courrier, absolute: false))
+            ->put(route('courriers.update', $courrier, absolute: false), [
+                'objet' => 'Facture sans scan',
+                'fournisseur_prestataire_id' => $fiche->id,
+                'expediteur_telephone' => '+242060000099',
+                'numero_fulgurant' => $courrier->numero_fulgurant,
+                'type_courrier_id' => $courrier->type_courrier_id,
+                'service_demandeur_structure_id' => $dafId,
+                'montant_facture' => '1250000',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('fichiers');
+    }
+
+    public function test_correction_peut_ajouter_scans_si_documents_deja_presents(): void
+    {
+        $particuliere = $this->creerUtilisateurAvecRole('particulier_dg');
+        $courrier = $this->creerCourrierArrivee($particuliere);
+        $dafId = Structure::where('code', 'DAF')->value('id');
+        $fiche = FournisseurPrestataire::factory()->create([
+            'nom' => 'EEC multi',
+            'telephone' => '+242060000077',
+        ]);
+
+        $this->actingAs($particuliere)
+            ->put(route('courriers.update', $courrier, absolute: false), [
+                'objet' => $courrier->objet,
+                'fournisseur_prestataire_id' => $fiche->id,
+                'expediteur_telephone' => '+242060000077',
+                'numero_fulgurant' => $courrier->numero_fulgurant,
+                'type_courrier_id' => $courrier->type_courrier_id,
+                'service_demandeur_structure_id' => $dafId,
+                'montant_facture' => '1250000',
+                'fichiers' => [
+                    UploadedFile::fake()->create('facture-initiale.pdf', 40, 'application/pdf'),
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertCount(1, $courrier->fresh()->documents);
+
+        $this->actingAs($particuliere)
+            ->put(route('courriers.update', $courrier, absolute: false), [
+                'objet' => $courrier->objet,
+                'fournisseur_prestataire_id' => $fiche->id,
+                'expediteur_telephone' => '+242060000077',
+                'numero_fulgurant' => $courrier->numero_fulgurant,
+                'type_courrier_id' => $courrier->type_courrier_id,
+                'service_demandeur_structure_id' => $dafId,
+                'montant_facture' => '1250000',
+                'fichiers' => [
+                    UploadedFile::fake()->create('annexe.pdf', 20, 'application/pdf'),
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertCount(2, $courrier->fresh()->documents);
+    }
+
+    public function test_page_correction_affiche_apercu_des_scans_existants(): void
+    {
+        $particuliere = $this->creerUtilisateurAvecRole('particulier_dg');
+        $courrier = $this->creerCourrierArrivee($particuliere);
+        $dafId = Structure::where('code', 'DAF')->value('id');
+        $fiche = FournisseurPrestataire::factory()->create([
+            'nom' => 'AFCOM',
+            'telephone' => '+242066835332',
+        ]);
+
+        $this->actingAs($particuliere)
+            ->put(route('courriers.update', $courrier, absolute: false), [
+                'objet' => $courrier->objet,
+                'fournisseur_prestataire_id' => $fiche->id,
+                'expediteur_telephone' => '+242066835332',
+                'numero_fulgurant' => $courrier->numero_fulgurant,
+                'type_courrier_id' => $courrier->type_courrier_id,
+                'service_demandeur_structure_id' => $dafId,
+                'montant_facture' => '1250000',
+                'fichiers' => [
+                    UploadedFile::fake()->image('cheque.jpeg', 200, 120),
+                ],
+            ])
+            ->assertRedirect();
+
+        $doc = $courrier->fresh()->documents->first();
+        $this->assertNotNull($doc);
+        $urlApercu = route('courriers.documents.apercu', [$courrier, $doc], absolute: false);
+
+        $this->actingAs($particuliere)
+            ->get(route('courriers.edit', $courrier, absolute: false))
+            ->assertOk()
+            ->assertSee('cheque.jpeg', false)
+            ->assertSee($urlApercu, false)
+            ->assertSee('Retirer (erreur / remplacement)', false);
+
+        $this->actingAs($particuliere)
+            ->get(route('courriers.documents.apercu', [$courrier, $doc], absolute: false))
+            ->assertOk();
+    }
+
+    public function test_correction_peut_retirer_un_scan_et_le_remplacer(): void
+    {
+        $particuliere = $this->creerUtilisateurAvecRole('particulier_dg');
+        $courrier = $this->creerCourrierArrivee($particuliere);
+        $dafId = Structure::where('code', 'DAF')->value('id');
+        $fiche = FournisseurPrestataire::factory()->create([
+            'nom' => 'AFCOM replace',
+            'telephone' => '+242066835332',
+        ]);
+
+        $this->actingAs($particuliere)
+            ->put(route('courriers.update', $courrier, absolute: false), [
+                'objet' => $courrier->objet,
+                'fournisseur_prestataire_id' => $fiche->id,
+                'expediteur_telephone' => '+242066835332',
+                'numero_fulgurant' => $courrier->numero_fulgurant,
+                'type_courrier_id' => $courrier->type_courrier_id,
+                'service_demandeur_structure_id' => $dafId,
+                'montant_facture' => '1250000',
+                'fichiers' => [
+                    UploadedFile::fake()->create('mauvais.pdf', 40, 'application/pdf'),
+                ],
+            ])
+            ->assertRedirect();
+
+        $ancien = $courrier->fresh()->documents->first();
+        $this->assertNotNull($ancien);
+
+        $this->actingAs($particuliere)
+            ->put(route('courriers.update', $courrier, absolute: false), [
+                'objet' => $courrier->objet,
+                'fournisseur_prestataire_id' => $fiche->id,
+                'expediteur_telephone' => '+242066835332',
+                'numero_fulgurant' => $courrier->numero_fulgurant,
+                'type_courrier_id' => $courrier->type_courrier_id,
+                'service_demandeur_structure_id' => $dafId,
+                'montant_facture' => '1250000',
+                'documents_a_retirer' => [$ancien->id],
+                'fichiers' => [
+                    UploadedFile::fake()->create('bon.pdf', 40, 'application/pdf'),
+                ],
+            ])
+            ->assertRedirect();
+
+        $courrier->refresh();
+        $this->assertCount(1, $courrier->documents);
+        $this->assertSame('bon.pdf', $courrier->documents->first()->nom_original);
+        $this->assertNull($ancien->fresh());
     }
 
     public function test_responsable_dossiers_peut_corriger_enregistrement_arrivee(): void
@@ -92,6 +265,9 @@ class CourrierCorrectionArriveeTest extends TestCase
                 'type_courrier_id' => $courrier->type_courrier_id,
                 'service_demandeur_structure_id' => $dafId,
                 'montant_facture' => '1250000',
+                'fichiers' => [
+                    UploadedFile::fake()->create('scan-responsable.pdf', 30, 'application/pdf'),
+                ],
             ])
             ->assertRedirect(route('courriers.show', $courrier, absolute: false));
 

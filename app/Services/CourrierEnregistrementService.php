@@ -67,7 +67,7 @@ class CourrierEnregistrementService
             $courrierVerrouille->documents()->detach();
 
             foreach ($documents as $document) {
-                $this->supprimerDocumentOrphelin($document);
+                $this->supprimerSiOrphelin($document);
             }
 
             JournalAudit::log('courrier.supprimer', 'courriers', [
@@ -84,7 +84,31 @@ class CourrierEnregistrementService
         });
     }
 
-    private function supprimerDocumentOrphelin(Document $document): void
+    /**
+     * Détache des pièces du courrier et supprime le fichier s’il n’est plus rattaché ailleurs.
+     *
+     * @param  list<int>  $documentIds
+     */
+    public function retirerDocuments(Courrier $courrier, array $documentIds): int
+    {
+        $ids = collect($documentIds)->map(fn ($id) => (int) $id)->filter()->unique()->values();
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+
+        $documents = $courrier->documents()->whereIn('documents.id', $ids)->get();
+        $retirés = 0;
+
+        foreach ($documents as $document) {
+            $courrier->documents()->detach($document->id);
+            $this->supprimerSiOrphelin($document);
+            $retirés++;
+        }
+
+        return $retirés;
+    }
+
+    public function supprimerSiOrphelin(Document $document): void
     {
         if ($document->courriers()->exists()) {
             return;

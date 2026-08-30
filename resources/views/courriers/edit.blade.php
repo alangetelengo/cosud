@@ -22,7 +22,7 @@
 </div>
 @endif
 
-<form method="post" action="{{ route('courriers.update', $courrier) }}" class="w-full space-y-5" data-loading-text="Enregistrement...">
+<form method="post" action="{{ route('courriers.update', $courrier) }}" enctype="multipart/form-data" class="w-full space-y-5" data-loading-text="Enregistrement...">
     @csrf
     @method('PUT')
 
@@ -126,6 +126,9 @@
                         data-nom="{{ $fp->nom }}"
                         data-email="{{ $fp->email }}"
                         data-telephone="{{ $fp->telephone }}"
+                        data-telephone-2="{{ $fp->telephone_2 }}"
+                        data-notifier-telephone="{{ $fp->notifier_telephone ? '1' : '0' }}"
+                        data-notifier-telephone-2="{{ $fp->notifier_telephone_2 ? '1' : '0' }}"
                         @selected((int) old('fournisseur_prestataire_id', $courrier->fournisseur_prestataire_id) === (int) $fp->id)
                     >{{ $fp->nom }}</option>
                     @endforeach
@@ -145,21 +148,42 @@
                 @error('expediteur_libelle')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
             </div>
 
-            <div id="bloc-contacts-expediteur" class="grid sm:grid-cols-2 gap-4">
+            <div id="bloc-contacts-expediteur" class="space-y-4">
                 <div>
                     <label class="{{ $label }}">E-mail expéditeur <span class="text-slate-400 normal-case tracking-normal font-medium">(optionnel)</span></label>
                     <input type="email" name="expediteur_email" id="input-expediteur-email" value="{{ old('expediteur_email', $courrier->expediteur_email) }}" class="{{ $field }}" placeholder="contact@exemple.cg">
                     @error('expediteur_email')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                 </div>
-                <div>
-                    <label class="{{ $label }}" id="label-telephone-expediteur">
-                        Téléphone expéditeur
-                        <span id="asterisque-telephone" class="text-red-500 normal-case tracking-normal hidden">*</span>
-                        <span id="hint-telephone-optionnel" class="text-slate-400 normal-case tracking-normal font-medium">(optionnel, SMS)</span>
-                    </label>
-                    <input type="text" name="expediteur_telephone" id="input-expediteur-telephone" value="{{ old('expediteur_telephone', $courrier->expediteur_telephone) }}" class="{{ $field }}" placeholder="+24206…">
-                    <p id="aide-telephone" class="text-xs text-slate-500 mt-1.5 hidden">Obligatoire pour facture / demande (SMS ou mail à la validation).</p>
-                    @error('expediteur_telephone')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="{{ $label }}" id="label-telephone-expediteur">
+                            Téléphone 1
+                            <span id="asterisque-telephone" class="text-red-500 normal-case tracking-normal hidden">*</span>
+                            <span id="hint-telephone-optionnel" class="text-slate-400 normal-case tracking-normal font-medium">(optionnel, SMS)</span>
+                        </label>
+                        <input type="text" name="expediteur_telephone" id="input-expediteur-telephone" value="{{ old('expediteur_telephone', $courrier->expediteur_telephone) }}" class="{{ $field }}" placeholder="+24206…">
+                        <p id="aide-telephone" class="text-xs text-slate-500 mt-1.5 hidden">Obligatoire pour facture / demande (SMS ou mail à la validation).</p>
+                        @error('expediteur_telephone')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
+                        <label class="inline-flex items-center gap-2 mt-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                            <input type="hidden" name="expediteur_notifier_telephone" value="0">
+                            <input type="checkbox" name="expediteur_notifier_telephone" id="input-expediteur-notifier-telephone" value="1"
+                                   @checked(old('expediteur_notifier_telephone', $courrier->expediteur_notifier_telephone ?? true))
+                                   class="rounded border-slate-300 text-emerald-600">
+                            Notifier ce numéro
+                        </label>
+                    </div>
+                    <div>
+                        <label class="{{ $label }}">Téléphone 2 <span class="text-slate-400 normal-case tracking-normal font-medium">(optionnel)</span></label>
+                        <input type="text" name="expediteur_telephone_2" id="input-expediteur-telephone-2" value="{{ old('expediteur_telephone_2', $courrier->expediteur_telephone_2) }}" class="{{ $field }}" placeholder="+24206…">
+                        @error('expediteur_telephone_2')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
+                        <label class="inline-flex items-center gap-2 mt-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                            <input type="hidden" name="expediteur_notifier_telephone_2" value="0">
+                            <input type="checkbox" name="expediteur_notifier_telephone_2" id="input-expediteur-notifier-telephone-2" value="1"
+                                   @checked(old('expediteur_notifier_telephone_2', $courrier->expediteur_notifier_telephone_2 ?? true))
+                                   class="rounded border-slate-300 text-emerald-600">
+                            Notifier ce numéro
+                        </label>
+                    </div>
                 </div>
             </div>
 
@@ -203,6 +227,77 @@
         </div>
     </section>
 
+    @if($courrier->estArrivee())
+    <section class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
+        <div class="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40">
+            <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Scans du courrier</h2>
+            <p class="text-xs text-slate-500 mt-0.5">
+                Cochez « Retirer » pour remplacer une pièce erronée, puis importez le bon fichier.
+            </p>
+        </div>
+        <div class="p-5 space-y-4">
+            @if($courrier->documents->isNotEmpty())
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                @foreach($courrier->documents as $doc)
+                @php
+                    $ext = strtolower((string) ($doc->extension ?: pathinfo((string) $doc->nom_original, PATHINFO_EXTENSION)));
+                    $estImage = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
+                    $estPdf = $ext === 'pdf';
+                    $libelle = $doc->titre ?: $doc->nom_original;
+                    $urlApercu = route('courriers.documents.apercu', [$courrier, $doc]);
+                @endphp
+                <article class="rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-900/40 overflow-hidden flex flex-col"
+                         x-data="{ retirer: {{ collect(old('documents_a_retirer', []))->contains($doc->id) ? 'true' : 'false' }} }">
+                    <div class="relative bg-slate-100 dark:bg-slate-950/50 h-28 sm:h-32 flex items-center justify-center"
+                         :class="retirer ? 'opacity-40 grayscale' : ''">
+                        @if($estImage)
+                        <a href="{{ $urlApercu }}" target="_blank" rel="noopener" class="block w-full h-full" title="Ouvrir l’aperçu">
+                            <img src="{{ $urlApercu }}" alt="{{ $libelle }}" class="w-full h-full object-contain p-2">
+                        </a>
+                        @elseif($estPdf)
+                        <iframe src="{{ $urlApercu }}#toolbar=0&navpanes=0" class="w-full h-full bg-white" title="Aperçu {{ $libelle }}"></iframe>
+                        @else
+                        <div class="flex flex-col items-center gap-2 text-slate-400 px-4 text-center">
+                            <span class="text-xs font-medium">Aperçu indisponible</span>
+                        </div>
+                        @endif
+                    </div>
+                    <div class="px-3 py-2 border-t border-slate-200 dark:border-slate-600 space-y-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="truncate text-xs font-medium text-slate-700 dark:text-slate-200 flex-1" title="{{ $libelle }}">{{ $libelle }}</span>
+                            <a href="{{ $urlApercu }}" target="_blank" rel="noopener"
+                               class="shrink-0 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 no-underline hover:underline">
+                                Ouvrir
+                            </a>
+                        </div>
+                        <label class="inline-flex items-center gap-2 text-[11px] font-semibold text-red-700 dark:text-red-300 cursor-pointer">
+                            <input type="checkbox" name="documents_a_retirer[]" value="{{ $doc->id }}"
+                                   class="rounded border-slate-300 text-red-600 focus:ring-red-500"
+                                   x-model="retirer">
+                            Retirer (erreur / remplacement)
+                        </label>
+                    </div>
+                </article>
+                @endforeach
+            </div>
+            @endif
+
+            @include('courriers.partials.scans-upload-preview', [
+                'scansRequired' => $courrier->documents->isEmpty(),
+                'scansInputId' => 'fichier-scan-edit',
+                'scansLabel' => $courrier->documents->isNotEmpty()
+                    ? 'Ajouter un ou plusieurs fichiers'
+                    : 'Choisir un ou plusieurs fichiers',
+            ])
+            @error('fichiers')<p class="text-sm text-red-600 mt-2 text-center">{{ $message }}</p>@enderror
+            @error('fichiers.*')<p class="text-sm text-red-600 mt-2 text-center">{{ $message }}</p>@enderror
+            @error('fichier')<p class="text-sm text-red-600 mt-2 text-center">{{ $message }}</p>@enderror
+            @error('documents_a_retirer')<p class="text-sm text-red-600 mt-2 text-center">{{ $message }}</p>@enderror
+            @error('documents_a_retirer.*')<p class="text-sm text-red-600 mt-2 text-center">{{ $message }}</p>@enderror
+        </div>
+    </section>
+    @endif
+
     <div class="flex flex-wrap items-center gap-3 pb-6">
         <button type="submit" data-loading-text="Enregistrement..." class="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 shadow-sm transition-colors">
             Enregistrer les corrections
@@ -215,6 +310,7 @@
 
 @if($courrier->estArrivee())
 @push('scripts')
+@include('courriers.partials.scans-upload-preview-script')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var typeSelect = document.getElementById('type_courrier_id');
@@ -223,6 +319,9 @@ document.addEventListener('DOMContentLoaded', function () {
     var blocMontantFacture = document.getElementById('bloc-montant-facture');
     var inputMontantFacture = document.getElementById('montant_facture');
     var inputTelephone = document.getElementById('input-expediteur-telephone');
+    var inputTelephone2 = document.getElementById('input-expediteur-telephone-2');
+    var inputNotifierTel = document.getElementById('input-expediteur-notifier-telephone');
+    var inputNotifierTel2 = document.getElementById('input-expediteur-notifier-telephone-2');
     var asterisqueTel = document.getElementById('asterisque-telephone');
     var hintTelOptionnel = document.getElementById('hint-telephone-optionnel');
     var aideTelephone = document.getElementById('aide-telephone');
@@ -253,10 +352,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (forceContacts) {
             if (inputEmail) inputEmail.value = opt.getAttribute('data-email') || '';
             if (inputTelephone) inputTelephone.value = opt.getAttribute('data-telephone') || '';
+            if (inputTelephone2) inputTelephone2.value = opt.getAttribute('data-telephone-2') || '';
+            if (inputNotifierTel) inputNotifierTel.checked = opt.getAttribute('data-notifier-telephone') !== '0';
+            if (inputNotifierTel2) inputNotifierTel2.checked = opt.getAttribute('data-notifier-telephone-2') !== '0';
             return;
         }
         if (inputEmail && !inputEmail.value) inputEmail.value = opt.getAttribute('data-email') || '';
         if (inputTelephone && !inputTelephone.value) inputTelephone.value = opt.getAttribute('data-telephone') || '';
+        if (inputTelephone2 && !inputTelephone2.value) inputTelephone2.value = opt.getAttribute('data-telephone-2') || '';
     }
 
     function synchroniserSelonType() {

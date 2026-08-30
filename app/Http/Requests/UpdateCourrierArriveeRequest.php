@@ -41,6 +41,9 @@ class UpdateCourrierArriveeRequest extends FormRequest
                 'string',
                 'max:40',
             ],
+            'expediteur_telephone_2' => ['nullable', 'string', 'max:40'],
+            'expediteur_notifier_telephone' => ['nullable', 'boolean'],
+            'expediteur_notifier_telephone_2' => ['nullable', 'boolean'],
             'fournisseur_prestataire_id' => [
                 Rule::requiredIf(fn () => $this->typeCourrierCodeDans(['facture'])),
                 'nullable',
@@ -61,6 +64,16 @@ class UpdateCourrierArriveeRequest extends FormRequest
                     $query->whereIn('type', ['direction', 'antenne'])->where('actif', true);
                 }),
             ],
+            'fichiers' => ['nullable', 'array', 'max:20'],
+            'fichiers.*' => ['file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'fichier' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'documents_a_retirer' => ['nullable', 'array'],
+            'documents_a_retirer.*' => [
+                'integer',
+                Rule::exists('courrier_document', 'document_id')->where(function ($query) {
+                    $query->where('courrier_id', $this->route('courrier')?->id);
+                }),
+            ],
         ];
     }
 
@@ -71,6 +84,15 @@ class UpdateCourrierArriveeRequest extends FormRequest
                 'montant_facture' => preg_replace('/\s+/', '', (string) $this->input('montant_facture')),
             ]);
         }
+
+        $this->merge([
+            'expediteur_notifier_telephone' => $this->has('expediteur_notifier_telephone')
+                ? $this->boolean('expediteur_notifier_telephone')
+                : true,
+            'expediteur_notifier_telephone_2' => $this->has('expediteur_notifier_telephone_2')
+                ? $this->boolean('expediteur_notifier_telephone_2')
+                : true,
+        ]);
 
         if ($this->filled('fournisseur_prestataire_id') && $this->typeCourrierCodeDans(['facture'])) {
             $fiche = FournisseurPrestataire::query()
@@ -85,6 +107,9 @@ class UpdateCourrierArriveeRequest extends FormRequest
                 if (! $this->filled('expediteur_telephone') && filled($fiche->telephone)) {
                     $merge['expediteur_telephone'] = $fiche->telephone;
                 }
+                if (! $this->filled('expediteur_telephone_2') && filled($fiche->telephone_2)) {
+                    $merge['expediteur_telephone_2'] = $fiche->telephone_2;
+                }
                 $this->merge($merge);
             }
         }
@@ -94,6 +119,26 @@ class UpdateCourrierArriveeRequest extends FormRequest
     {
         $validator->after(function ($validator) {
             $courrier = $this->route('courrier');
+
+            $aDesScansUpload = $this->hasFile('fichier')
+                || collect($this->file('fichiers', []))->filter()->isNotEmpty();
+
+            $idsARetirer = collect($this->input('documents_a_retirer', []))
+                ->map(fn ($id) => (int) $id)
+                ->filter()
+                ->unique();
+
+            $resteApresRetrait = $courrier
+                ? $courrier->documents()->whereNotIn('documents.id', $idsARetirer)->exists()
+                : false;
+
+            if (! $aDesScansUpload && ! $resteApresRetrait) {
+                $validator->errors()->add(
+                    'fichiers',
+                    'Au moins un scan (PDF ou image) est obligatoire : conservez une pièce existante ou importez un fichier.'
+                );
+            }
+
             $service = app(CourrierDoublonService::class);
 
             $doublon = $service->trouverDoublonArrivee([
@@ -134,6 +179,8 @@ class UpdateCourrierArriveeRequest extends FormRequest
             'montant_facture.required' => 'Le montant de la facture est obligatoire.',
             'montant_facture.numeric' => 'Le montant de la facture doit être un nombre.',
             'montant_facture.min' => 'Le montant de la facture doit être supérieur à zéro.',
+            'fichiers.*.mimes' => 'Chaque scan doit être un PDF ou une image (jpg, png).',
+            'fichiers.*.max' => 'Chaque scan ne doit pas dépasser 10 Mo.',
         ];
     }
 

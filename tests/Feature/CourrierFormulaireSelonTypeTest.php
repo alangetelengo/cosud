@@ -40,6 +40,8 @@ class CourrierFormulaireSelonTypeTest extends TestCase
             ->get(route('courriers.create', ['sens' => 'arrivee'], absolute: false))
             ->assertOk()
             ->assertDontSee('N° fulgurant', false)
+            ->assertSee('scansUploadPreview', false)
+            ->assertSee('Aperçu avant enregistrement', false)
             ->getContent();
 
         $this->assertStringContainsString('id="bloc-contacts-expediteur"', $html);

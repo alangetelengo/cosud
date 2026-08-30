@@ -88,16 +88,14 @@
                 <span x-show="loading" x-cloak class="inline-flex items-center gap-2"><span class="link-modifier-spinner" style="width:1em;height:1em;flex-shrink:0"></span> Chargement...</span>
             </a>
             @endcan
-            @can('utilisateurs.delete')
-            @if($utilisateur->id !== auth()->id())
+            @can('delete', $utilisateur)
             <form action="{{ route('utilisateurs.destroy', $utilisateur) }}" method="POST" class="inline">
                 @csrf
                 @method('DELETE')
-                <button type="button" onclick="flashAlert('Supprimer définitivement cet utilisateur ? Cette action est irréversible.', this.closest('form'), {icon:'🗑️', danger:true, confirmText:'Supprimer'})" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition-all">
+                <button type="button" onclick="flashAlert('Supprimer définitivement ce compte ? Impossible s’il a créé des courriers ou des paiements — préférez alors désactiver le compte (édition). Cette action est irréversible.', this.closest('form'), {icon:'🗑️', danger:true, confirmText:'Supprimer'})" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition-all">
                     <span>🗑️</span> Supprimer
                 </button>
             </form>
-            @endif
             @endcan
             <a href="{{ $retourUrl }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all no-underline">
                 ← Retour à la liste

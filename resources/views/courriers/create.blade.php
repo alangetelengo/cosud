@@ -58,6 +58,9 @@
                                 data-nom="{{ $fp->nom }}"
                                 data-email="{{ $fp->email }}"
                                 data-telephone="{{ $fp->telephone }}"
+                                data-telephone-2="{{ $fp->telephone_2 }}"
+                                data-notifier-telephone="{{ $fp->notifier_telephone ? '1' : '0' }}"
+                                data-notifier-telephone-2="{{ $fp->notifier_telephone_2 ? '1' : '0' }}"
                                 @selected((int) old('fournisseur_prestataire_id') === (int) $fp->id)
                             >{{ $fp->nom }}</option>
                             @endforeach
@@ -77,22 +80,43 @@
                         @error('expediteur_libelle')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                     </div>
 
-                    <div id="bloc-contacts-expediteur" class="grid sm:grid-cols-2 gap-4">
+                    <div id="bloc-contacts-expediteur" class="space-y-4">
                         <div>
                             <label class="{{ $label }}">E-mail expéditeur <span class="text-slate-400 normal-case tracking-normal font-medium">(optionnel)</span></label>
                             <input type="email" name="expediteur_email" id="input-expediteur-email" value="{{ old('expediteur_email') }}" class="{{ $field }}" placeholder="contact@exemple.cg">
                             <p class="text-xs text-slate-500 mt-1.5">Pour informer l’expéditeur à la validation / clôture.</p>
                             @error('expediteur_email')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
                         </div>
-                        <div>
-                            <label class="{{ $label }}">
-                                Téléphone expéditeur
-                                <span id="asterisque-telephone" class="text-red-500 normal-case tracking-normal hidden">*</span>
-                                <span id="hint-telephone-optionnel" class="text-slate-400 normal-case tracking-normal font-medium">(optionnel)</span>
-                            </label>
-                            <input type="text" name="expediteur_telephone" id="input-expediteur-telephone" value="{{ old('expediteur_telephone') }}" class="{{ $field }}" placeholder="+24206…">
-                            <p id="aide-telephone" class="text-xs text-slate-500 mt-1.5">SMS / notification à la validation ou signature DG.</p>
-                            @error('expediteur_telephone')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
+                        <div class="grid sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="{{ $label }}">
+                                    Téléphone 1
+                                    <span id="asterisque-telephone" class="text-red-500 normal-case tracking-normal hidden">*</span>
+                                    <span id="hint-telephone-optionnel" class="text-slate-400 normal-case tracking-normal font-medium">(optionnel)</span>
+                                </label>
+                                <input type="text" name="expediteur_telephone" id="input-expediteur-telephone" value="{{ old('expediteur_telephone') }}" class="{{ $field }}" placeholder="+24206…">
+                                <p id="aide-telephone" class="text-xs text-slate-500 mt-1.5">SMS / notification à la validation ou signature DG.</p>
+                                @error('expediteur_telephone')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
+                                <label class="inline-flex items-center gap-2 mt-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                                    <input type="hidden" name="expediteur_notifier_telephone" value="0">
+                                    <input type="checkbox" name="expediteur_notifier_telephone" id="input-expediteur-notifier-telephone" value="1"
+                                           @checked(old('expediteur_notifier_telephone', true))
+                                           class="rounded border-slate-300 text-emerald-600">
+                                    Notifier ce numéro
+                                </label>
+                            </div>
+                            <div>
+                                <label class="{{ $label }}">Téléphone 2 <span class="text-slate-400 normal-case tracking-normal font-medium">(optionnel)</span></label>
+                                <input type="text" name="expediteur_telephone_2" id="input-expediteur-telephone-2" value="{{ old('expediteur_telephone_2') }}" class="{{ $field }}" placeholder="+24206…">
+                                @error('expediteur_telephone_2')<p class="text-sm text-red-600 mt-1.5">{{ $message }}</p>@enderror
+                                <label class="inline-flex items-center gap-2 mt-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                                    <input type="hidden" name="expediteur_notifier_telephone_2" value="0">
+                                    <input type="checkbox" name="expediteur_notifier_telephone_2" id="input-expediteur-notifier-telephone-2" value="1"
+                                           @checked(old('expediteur_notifier_telephone_2', true))
+                                           class="rounded border-slate-300 text-emerald-600">
+                                    Notifier ce numéro
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -115,17 +139,14 @@
             <section class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden">
                 <div class="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40">
                     <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Scans du courrier</h2>
-                    <p class="text-xs text-slate-500 mt-0.5">Un ou plusieurs PDF / images — obligatoire pour une arrivée externe</p>
+                    <p class="text-xs text-slate-500 mt-0.5">Un ou plusieurs PDF / images — obligatoire pour une arrivée externe. Aperçu avant enregistrement.</p>
                 </div>
                 <div class="p-5">
-                    <label class="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-900/30 px-4 py-8 cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-colors">
-                        <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                        <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">Choisir un ou plusieurs fichiers <span class="text-red-500">*</span></span>
-                        <span class="text-xs text-slate-500">PDF, JPG, PNG — max. 10 Mo par fichier</span>
-                        <input type="file" name="fichiers[]" accept=".pdf,.jpg,.jpeg,.png" multiple required class="sr-only" id="fichier-scan"
-                               onchange="(function(input){var n=input.files?.length||0;document.getElementById('fichier-scan-name').textContent=n===0?'Aucun fichier choisi':(n===1?input.files[0].name:(n+' fichiers sélectionnés'));})(this)">
-                    </label>
-                    <p id="fichier-scan-name" class="mt-2 text-xs text-slate-500 text-center">Aucun fichier choisi</p>
+                    @include('courriers.partials.scans-upload-preview', [
+                        'scansRequired' => true,
+                        'scansInputId' => 'fichier-scan',
+                        'scansLabel' => 'Choisir un ou plusieurs fichiers',
+                    ])
                     @error('fichiers')<p class="text-sm text-red-600 mt-2 text-center">{{ $message }}</p>@enderror
                     @error('fichiers.*')<p class="text-sm text-red-600 mt-2 text-center">{{ $message }}</p>@enderror
                     @error('fichier')<p class="text-sm text-red-600 mt-2 text-center">{{ $message }}</p>@enderror
@@ -214,6 +235,7 @@
 </div>
 
 @push('scripts')
+@include('courriers.partials.scans-upload-preview-script')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var typeSelect = document.getElementById('type_courrier_id');
@@ -233,6 +255,9 @@ document.addEventListener('DOMContentLoaded', function () {
     var aideFacture = document.getElementById('aide-arrivee-facture');
     var aideMad = document.getElementById('aide-arrivee-mad');
     var inputTelephone = document.getElementById('input-expediteur-telephone');
+    var inputTelephone2 = document.getElementById('input-expediteur-telephone-2');
+    var inputNotifierTel = document.getElementById('input-expediteur-notifier-telephone');
+    var inputNotifierTel2 = document.getElementById('input-expediteur-notifier-telephone-2');
     var asterisqueTel = document.getElementById('asterisque-telephone');
     var hintTelOptionnel = document.getElementById('hint-telephone-optionnel');
     var blocFournisseur = document.getElementById('bloc-fournisseur-prestataire');
@@ -260,6 +285,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (inputExpediteur) inputExpediteur.value = opt.getAttribute('data-nom') || '';
         if (inputEmail && !inputEmail.value) inputEmail.value = opt.getAttribute('data-email') || '';
         if (inputTelephone && !inputTelephone.value) inputTelephone.value = opt.getAttribute('data-telephone') || '';
+        if (inputTelephone2 && !inputTelephone2.value) inputTelephone2.value = opt.getAttribute('data-telephone-2') || '';
+        if (inputNotifierTel) inputNotifierTel.checked = opt.getAttribute('data-notifier-telephone') !== '0';
+        if (inputNotifierTel2) inputNotifierTel2.checked = opt.getAttribute('data-notifier-telephone-2') !== '0';
     }
 
     function profilPour(code) {

@@ -22,18 +22,40 @@
     @error('type')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
 </div>
 
-<div class="grid sm:grid-cols-2 gap-3">
-    <div>
-        <label class="block text-xs font-semibold mb-1">E-mail</label>
-        <input type="email" name="email" value="{{ old('email', $fiche?->email) }}"
-               class="w-full rounded-lg border px-3 py-2 text-sm dark:bg-slate-900">
-        @error('email')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+<div class="space-y-3">
+    <div class="grid sm:grid-cols-2 gap-3">
+        <div>
+            <label class="block text-xs font-semibold mb-1">E-mail</label>
+            <input type="email" name="email" value="{{ old('email', $fiche?->email) }}"
+                   class="w-full rounded-lg border px-3 py-2 text-sm dark:bg-slate-900">
+            @error('email')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+        </div>
+        <div class="space-y-1.5">
+            <label class="block text-xs font-semibold mb-1">Téléphone 1</label>
+            <input type="text" name="telephone" value="{{ old('telephone', $fiche?->telephone) }}"
+                   class="w-full rounded-lg border px-3 py-2 text-sm dark:bg-slate-900" placeholder="+24206…">
+            @error('telephone')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+            <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                <input type="hidden" name="notifier_telephone" value="0">
+                <input type="checkbox" name="notifier_telephone" value="1"
+                       @checked(old('notifier_telephone', $fiche?->notifier_telephone ?? true))
+                       class="rounded border-slate-300 text-emerald-600">
+                Notifier ce numéro
+            </label>
+        </div>
     </div>
-    <div>
-        <label class="block text-xs font-semibold mb-1">Téléphone</label>
-        <input type="text" name="telephone" value="{{ old('telephone', $fiche?->telephone) }}"
-               class="w-full rounded-lg border px-3 py-2 text-sm dark:bg-slate-900">
-        @error('telephone')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+    <div class="space-y-1.5 max-w-md">
+        <label class="block text-xs font-semibold mb-1">Téléphone 2 <span class="font-normal text-slate-400">(optionnel)</span></label>
+        <input type="text" name="telephone_2" value="{{ old('telephone_2', $fiche?->telephone_2) }}"
+               class="w-full rounded-lg border px-3 py-2 text-sm dark:bg-slate-900" placeholder="+24206…">
+        @error('telephone_2')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+        <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+            <input type="hidden" name="notifier_telephone_2" value="0">
+            <input type="checkbox" name="notifier_telephone_2" value="1"
+                   @checked(old('notifier_telephone_2', $fiche?->notifier_telephone_2 ?? true))
+                   class="rounded border-slate-300 text-emerald-600">
+            Notifier ce numéro
+        </label>
     </div>
 </div>
 

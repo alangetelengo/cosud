@@ -213,6 +213,7 @@ Route::middleware(['auth', 'verified', '2fa', 'password.changed'])->group(functi
     Route::post('/courriers', [CourrierController::class, 'store'])->name('courriers.store');
     Route::get('/courriers/{courrier}', [CourrierController::class, 'show'])->name('courriers.show');
     Route::get('/courriers/{courrier}/edit', [CourrierController::class, 'edit'])->name('courriers.edit');
+    Route::get('/courriers/{courrier}/documents/{document}/apercu', [CourrierController::class, 'apercuDocument'])->name('courriers.documents.apercu');
     Route::put('/courriers/{courrier}', [CourrierController::class, 'update'])->name('courriers.update');
     Route::delete('/courriers/{courrier}', [CourrierController::class, 'destroy'])->name('courriers.destroy');
     Route::post('/courriers/{courrier}/parapheur', [CourrierController::class, 'mettreEnParapheur'])->name('courriers.parapheur');

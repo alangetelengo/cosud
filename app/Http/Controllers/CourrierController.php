@@ -44,6 +44,8 @@ use App\Services\ParapheurDepartService;
 use App\Support\ReturnUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class CourrierController extends Controller
 {
@@ -163,7 +165,9 @@ class CourrierController extends Controller
         );
 
         $fournisseursPrestataires = $sensCode === 'arrivee'
-            ? FournisseurPrestataire::query()->actifs()->orderBy('nom')->get(['id', 'nom', 'email', 'telephone'])
+            ? FournisseurPrestataire::query()->actifs()->orderBy('nom')->get([
+                'id', 'nom', 'email', 'telephone', 'telephone_2', 'notifier_telephone', 'notifier_telephone_2',
+            ])
             : collect();
 
         return view('courriers.create', compact(
@@ -201,6 +205,13 @@ class CourrierController extends Controller
             'expediteur_libelle' => $request->expediteur_libelle,
             'expediteur_email' => $request->expediteur_email,
             'expediteur_telephone' => $request->expediteur_telephone,
+            'expediteur_telephone_2' => $request->expediteur_telephone_2,
+            'expediteur_notifier_telephone' => $request->has('expediteur_notifier_telephone')
+                ? $request->boolean('expediteur_notifier_telephone')
+                : true,
+            'expediteur_notifier_telephone_2' => $request->has('expediteur_notifier_telephone_2')
+                ? $request->boolean('expediteur_notifier_telephone_2')
+                : true,
             'destinataire_libelle' => $destinataire?->nom ?? $request->destinataire_libelle,
             'est_expediteur_externe' => $request->boolean('est_expediteur_externe', $sens->code === SensCourrier::ARRIVEE),
             'structure_expediteur_id' => $request->structure_expediteur_id,
@@ -340,13 +351,17 @@ class CourrierController extends Controller
     {
         $this->authorize('corriger', $courrier);
 
+        $courrier->load('documents');
+
         $types = TypeCourrier::where('actif', true)->orderBy('libelle')->get();
         $priorites = PrioriteCourrier::where('actif', true)->orderBy('ordre')->get();
         $directions = $courrier->estArrivee()
             ? Structure::servicesDemandeurs()->get()
             : collect();
         $fournisseursPrestataires = $courrier->estArrivee()
-            ? FournisseurPrestataire::query()->actifs()->orderBy('nom')->get(['id', 'nom', 'email', 'telephone'])
+            ? FournisseurPrestataire::query()->actifs()->orderBy('nom')->get([
+                'id', 'nom', 'email', 'telephone', 'telephone_2', 'notifier_telephone', 'notifier_telephone_2',
+            ])
             : collect();
 
         return view('courriers.edit', compact(
@@ -388,6 +403,13 @@ class CourrierController extends Controller
             'expediteur_libelle' => $request->expediteur_libelle,
             'expediteur_email' => $request->expediteur_email,
             'expediteur_telephone' => $request->expediteur_telephone,
+            'expediteur_telephone_2' => $request->expediteur_telephone_2,
+            'expediteur_notifier_telephone' => $request->has('expediteur_notifier_telephone')
+                ? $request->boolean('expediteur_notifier_telephone')
+                : true,
+            'expediteur_notifier_telephone_2' => $request->has('expediteur_notifier_telephone_2')
+                ? $request->boolean('expediteur_notifier_telephone_2')
+                : true,
             'fournisseur_prestataire_id' => $estFacture && $request->filled('fournisseur_prestataire_id')
                 ? (int) $request->fournisseur_prestataire_id
                 : null,
@@ -399,14 +421,56 @@ class CourrierController extends Controller
             'service_demandeur_structure_id' => $request->service_demandeur_structure_id,
         ]);
 
+        $idsARetirer = array_values(array_filter(array_map('intval', (array) $request->input('documents_a_retirer', []))));
+        $nbRetires = $this->enregistrementService->retirerDocuments($courrier, $idsARetirer);
+
+        $scans = $this->collecterFichiersUpload($request, 'fichiers', 'fichier');
+        if ($scans !== []) {
+            $dejaDesDocs = $courrier->documents()->exists();
+            foreach ($scans as $index => $scan) {
+                $this->attacherDocument(
+                    $courrier,
+                    $scan,
+                    SensCourrier::ARRIVEE,
+                    ! $dejaDesDocs && $index === 0
+                );
+            }
+        }
+
         $this->auditerCourrier('courrier.update', $courrier->fresh(), [
             'sens' => 'arrivee',
             'correction' => true,
+            'scans_ajoutes' => count($scans),
+            'scans_retires' => $nbRetires,
         ]);
 
         return redirect()
             ->route('courriers.show', $courrier)
             ->with('success', 'Enregistrement du courrier corrigé.');
+    }
+
+    /**
+     * Aperçu inline d’une pièce jointe du courrier (auth via droits courrier, pas /storage).
+     */
+    public function apercuDocument(Courrier $courrier, Document $document): BinaryFileResponse
+    {
+        abort_unless(
+            auth()->user()?->can('view', $courrier) || auth()->user()?->can('corriger', $courrier),
+            403
+        );
+
+        abort_unless(
+            $courrier->documents()->where('documents.id', $document->id)->exists(),
+            404
+        );
+
+        $chemin = Storage::disk('public')->path($document->chemin);
+        abort_unless(is_file($chemin), 404);
+
+        return response()->file($chemin, [
+            'Content-Type' => Storage::disk('public')->mimeType($document->chemin) ?: 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="'.$document->nom_original.'"',
+        ]);
     }
 
     public function updateDepart(UpdateCourrierDepartRequest $request, Courrier $courrier)

@@ -22,6 +22,9 @@ class StoreFournisseurPrestataireRequest extends FormRequest
             'type' => ['required', Rule::in(FournisseurPrestataire::TYPES)],
             'email' => ['nullable', 'email', 'max:255'],
             'telephone' => ['nullable', 'string', 'max:40'],
+            'telephone_2' => ['nullable', 'string', 'max:40'],
+            'notifier_telephone' => ['nullable', 'boolean'],
+            'notifier_telephone_2' => ['nullable', 'boolean'],
             'type_contrat' => ['nullable', 'string', 'max:255'],
             'a_contrat' => ['nullable', 'boolean'],
             'a_dossier_fiscal' => ['nullable', 'boolean'],
@@ -78,6 +81,12 @@ class StoreFournisseurPrestataireRequest extends FormRequest
         $this->merge([
             'a_contrat' => $this->boolean('a_contrat'),
             'a_dossier_fiscal' => $this->boolean('a_dossier_fiscal'),
+            'notifier_telephone' => $this->has('notifier_telephone')
+                ? $this->boolean('notifier_telephone')
+                : true,
+            'notifier_telephone_2' => $this->has('notifier_telephone_2')
+                ? $this->boolean('notifier_telephone_2')
+                : true,
             'actif' => $this->has('actif') ? $this->boolean('actif') : true,
         ]);
     }

@@ -8,6 +8,7 @@ use App\Services\WhatsAppService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Carbon;
 
 /**
  * Fournisseur / prestataire : pièce de paiement signée (chèque ou OV).
@@ -52,41 +53,49 @@ class CourrierFournisseurRecouvrementNotification extends Notification
     {
         if ($this->courrier->estModePaiementOv()) {
             return (new MailMessage)
-                ->subject('COSUD : dossier n° '.$this->numero().' — ordre de virement transmis à la banque')
+                ->subject('ACSI – COSUD : ordre de virement transmis à '.$this->banque())
                 ->greeting('Bonjour,')
-                ->line('**État de votre dossier :** l’ordre de virement relatif à votre facture (courrier n° '.$this->numero().') a été **signé** et transmis à la banque.')
+                ->line(
+                    'L’ordre de virement relatif à votre facture N° '.$this->referenceFacture()
+                    .' du mois de '.$this->moisFacture()
+                    .' a été transmis à '.$this->banque().' pour traitement.'
+                )
                 ->line('**Objet :** '.$this->objet())
                 ->line('**Référence OV :** '.$this->numeroPiece())
-                ->line('**Banque :** '.$this->banque())
-                ->line('Merci de votre confiance.')
+                ->line('Merci.')
                 ->salutation('L’équipe COSUD — '.config('app.name'));
         }
 
         return (new MailMessage)
-            ->subject('COSUD : dossier n° '.$this->numero().' — chèque signé, recouvrement possible')
+            ->subject('ACSI – COSUD : chèque disponible pour recouvrement')
             ->greeting('Bonjour,')
-            ->line('**État de votre dossier :** le chèque relatif à votre facture (courrier n° '.$this->numero().') a été **signé** par la Direction.')
+            ->line(
+                'Le chèque relatif à votre facture N° '.$this->referenceFacture()
+                .' du mois de '.$this->moisFacture()
+                .' est disponible pour recouvrement.'
+            )
+            ->line('Présentez-vous à l’ACSI muni(e) de votre pièce d’identité et de la référence de la facture.')
             ->line('**Objet :** '.$this->objet())
-            ->line('**Ce que cela signifie :** le paiement est autorisé ; votre dossier est prêt pour le recouvrement.')
-            ->line('**Ce que vous devez faire :** présentez-vous auprès de l’ACSI (ou contactez le service comptable) pour procéder au **recouvrement** du chèque, en rappelant le n° '.$this->numero().'.')
-            ->line('Merci de votre confiance.')
+            ->line('Merci.')
             ->salutation('L’équipe COSUD — '.config('app.name'));
     }
 
     public function toCosudSms(object $notifiable): string
     {
         if ($this->courrier->estModePaiementOv()) {
-            $ets = $this->libelleFournisseurCourt();
-            $ref = $this->numeroPiece();
-            $banque = $this->banque();
-
-            return app(SmsService::class)->sanitizeSmsText(
-                $ets.' votre ordre de virement '.$ref.' a ete envoye a '.$banque.' banque.'
-            );
+            $texte = 'ACSI - COSUD : L\'ordre de virement relatif a votre facture '
+                .$this->referenceFacture()
+                .' du mois de '.$this->moisFacture()
+                .' a ete transmis a '.$this->banque()
+                .' pour traitement. Merci.';
+        } else {
+            $texte = 'ACSI - COSUD : Le cheque relatif a votre facture '
+                .$this->referenceFacture()
+                .' du mois de '.$this->moisFacture()
+                .' est disponible pour recouvrement. Presentez-vous a l\'ACSI muni(e) de votre piece d\'identite et de la reference de la facture. Merci.';
         }
 
-        return 'COSUD n°'.$this->numero().' : chèque SIGNÉ. '
-            .'Présentez-vous à l’ACSI pour le RECOUVREMENT (rappeler ce n°).';
+        return app(SmsService::class)->sanitizeSmsText($texte);
     }
 
     public function toCosudWhatsapp(object $notifiable): string
@@ -101,7 +110,7 @@ class CourrierFournisseurRecouvrementNotification extends Notification
     {
         if ($this->courrier->estModePaiementOv()) {
             return [
-                'message' => 'Dossier n° '.$this->numero().' : OV '.$this->numeroPiece().' envoyé à '.$this->banque().'.',
+                'message' => 'OV facture '.$this->referenceFacture().' transmis à '.$this->banque().'.',
                 'message_title' => 'OV signé — transmis à la banque',
                 'courrier_id' => $this->courrier->id,
                 'type' => 'fournisseur_recouvrement',
@@ -109,16 +118,27 @@ class CourrierFournisseurRecouvrementNotification extends Notification
         }
 
         return [
-            'message' => 'Dossier n° '.$this->numero().' : chèque signé — présentez-vous à l’ACSI pour le recouvrement.',
+            'message' => 'Chèque facture '.$this->referenceFacture().' disponible pour recouvrement à l’ACSI.',
             'message_title' => 'Chèque signé — à recouvrer',
             'courrier_id' => $this->courrier->id,
             'type' => 'fournisseur_recouvrement',
         ];
     }
 
-    protected function numero(): string
+    protected function referenceFacture(): string
     {
-        return $this->courrier->numeroRegistreComplet();
+        $reference = trim((string) ($this->courrier->reference ?? ''));
+
+        return $reference !== '' ? $reference : $this->courrier->numeroRegistreComplet();
+    }
+
+    protected function moisFacture(): string
+    {
+        $date = $this->courrier->date_reception
+            ?? $this->courrier->date_orientation
+            ?? Carbon::now();
+
+        return $date->copy()->locale('fr')->translatedFormat('F Y');
     }
 
     protected function objet(): string
@@ -139,20 +159,6 @@ class CourrierFournisseurRecouvrementNotification extends Notification
     {
         $banque = trim((string) ($this->courrier->suiviPaiement?->banque ?? ''));
 
-        return $banque !== '' ? $banque : '—';
-    }
-
-    protected function libelleFournisseurCourt(): string
-    {
-        $nom = trim((string) ($this->courrier->expediteur_libelle ?? ''));
-        if ($nom === '') {
-            return 'Ets';
-        }
-
-        if (! str_starts_with(mb_strtolower($nom), 'ets')) {
-            $nom = 'Ets '.$nom;
-        }
-
-        return mb_substr($nom, 0, 40);
+        return $banque !== '' ? $banque : 'la banque';
     }
 }

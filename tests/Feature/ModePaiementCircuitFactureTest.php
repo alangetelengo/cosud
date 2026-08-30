@@ -166,6 +166,8 @@ class ModePaiementCircuitFactureTest extends TestCase
             'expediteur_telephone' => '242066844444',
             'expediteur_libelle' => 'NETPLUS SARL',
             'origine' => 'externe',
+            'reference' => 'FAC01147/06BZV',
+            'date_reception' => '2026-06-15',
         ]);
 
         $this->actingAs($dg)
@@ -189,10 +191,12 @@ class ModePaiementCircuitFactureTest extends TestCase
                 $sms = $notification->toCosudSms($notifiable);
 
                 return in_array('cosud_sms', $channels, true)
-                    && str_contains($sms, 'NETPLUS SARL')
-                    && str_contains($sms, 'OV-9988')
+                    && str_contains($sms, 'FAC01147/06BZV')
                     && str_contains($sms, 'UBA')
-                    && str_contains(mb_strtolower($sms), 'ordre de virement');
+                    && str_contains(mb_strtolower($sms), 'juin 2026')
+                    && str_contains(mb_strtolower($sms), 'ordre de virement')
+                    && ! str_contains($sms, 'N ')
+                    && ! str_contains($sms, 'OV-9988');
             }
         );
 

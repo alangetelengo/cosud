@@ -63,7 +63,10 @@ class FacturePrestataireSmsNotificationTest extends TestCase
         $dg->assignRole('dg');
 
         $courrier = $this->creerFacture($secretaire, 'NETPLUS SARL');
-        $courrier->forceFill(['numero_fulgurant' => '883/DG'])->save();
+        $courrier->forceFill([
+            'numero_fulgurant' => '883/DG',
+            'reference' => 'FAC-0188',
+        ])->save();
         $circuit = CircuitCourrier::where('code', 'facture_prestataire')->firstOrFail();
 
         app(CircuitCourrierMoteurService::class)->demarrer($courrier->fresh(), $circuit, $secretaire);
@@ -82,9 +85,11 @@ class FacturePrestataireSmsNotificationTest extends TestCase
             ->first(fn (CourrierWorkflowNotification $n): bool => $n->type === CourrierNotificationService::FACTURE_ENREGISTREE_DG);
         $this->assertNotNull($notification);
         $sms = $notification->toCosudSms($dg);
-        $this->assertStringContainsString('ACSI-COSUD : Facture prestataire (883/DG)', $sms);
-        $this->assertStringContainsString('enregistree et soumise a votre validation (Bon pour accord)', $sms);
-        $this->assertStringContainsString('Fournisseur : NETPLUS SARL', $sms);
+        $this->assertStringContainsString('COSUD : Monsieur le Directeur General, la facture FAC-0188', $sms);
+        $this->assertStringContainsString('du NETPLUS SARL', $sms);
+        $this->assertStringContainsString('soumise a vos instructions', $sms);
+        $this->assertStringNotContainsString('N ', $sms);
+        $this->assertStringNotContainsString('ndeg', mb_strtolower($sms));
         Notification::assertSentToTimes($dg, CourrierWorkflowNotification::class, 1);
         Notification::assertNotSentTo($dg, CourrierWorkflowNotification::class, function (CourrierWorkflowNotification $n) {
             return $n->type === CourrierNotificationService::ETAPE_CIRCUIT;

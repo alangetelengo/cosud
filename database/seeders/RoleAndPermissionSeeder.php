@@ -67,6 +67,7 @@ class RoleAndPermissionSeeder extends Seeder
             'types-documents.delete',
             'recherche.view',
             'corbeille.view',
+            'utilisateurs.delete',
             'parametres.view',
             'parametres.structures.view',
             'parametres.roles.view',

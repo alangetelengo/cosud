@@ -99,6 +99,18 @@ class FactureRegularisationTest extends TestCase
         $this->assertSame(1, $dette['nb_factures']);
     }
 
+    public function test_formulaire_creation_expose_apercu_scans(): void
+    {
+        $taty = User::factory()->create();
+        $taty->assignRole('responsable_dossiers_prestataires');
+
+        $this->actingAs($taty)
+            ->get(route('factures-regularisation.create', absolute: false))
+            ->assertOk()
+            ->assertSee('scansUploadPreview', false)
+            ->assertSee('Choisir un ou plusieurs fichiers', false);
+    }
+
     public function test_eleni_ne_peut_pas_creer_une_regularisation(): void
     {
         $eleni = User::factory()->create();

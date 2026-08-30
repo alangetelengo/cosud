@@ -174,13 +174,16 @@
         </div>
 
         <div>
-            <label class="block text-xs font-semibold mb-1">
+            <p class="block text-xs font-semibold mb-1">
                 <span x-show="paiement === 'contrat_mensuel'">Scan du contrat (PDF / images)</span>
                 <span x-show="paiement !== 'contrat_mensuel'">Scans facture (PDF / images)</span>
                 <span class="text-red-500">*</span>
-            </label>
-            <input type="file" name="fichiers[]" accept=".pdf,.jpg,.jpeg,.png" multiple required
-                   class="w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-white file:font-semibold">
+            </p>
+            @include('courriers.partials.scans-upload-preview', [
+                'scansRequired' => true,
+                'scansInputId' => 'fichier-scan-regularisation',
+                'scansLabel' => 'Choisir un ou plusieurs fichiers',
+            ])
             @error('fichiers')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
             @error('fichiers.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
         </div>
@@ -197,4 +200,8 @@
         </div>
     </form>
 </div>
+
+@push('scripts')
+@include('courriers.partials.scans-upload-preview-script')
+@endpush
 @endsection

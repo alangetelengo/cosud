@@ -39,6 +39,9 @@ class Courrier extends Model
         'fournisseur_prestataire_id',
         'expediteur_email',
         'expediteur_telephone',
+        'expediteur_telephone_2',
+        'expediteur_notifier_telephone',
+        'expediteur_notifier_telephone_2',
         'destinataire_libelle',
         'est_expediteur_externe',
         'structure_expediteur_id',
@@ -105,6 +108,8 @@ class Courrier extends Model
             'est_expediteur_externe' => 'boolean',
             'est_confidentiel' => 'boolean',
             'reponse_confidentielle' => 'boolean',
+            'expediteur_notifier_telephone' => 'boolean',
+            'expediteur_notifier_telephone_2' => 'boolean',
             'nombre_pieces' => 'integer',
             'montant_facture' => 'decimal:2',
             'est_regularisation' => 'boolean',
@@ -129,6 +134,32 @@ class Courrier extends Model
         }
 
         return $this->typeCourrier()->where('code', 'facture')->exists();
+    }
+
+    /**
+     * Numéros SMS/WhatsApp cochés « Notifier » (sans doublon).
+     *
+     * @return list<string>
+     */
+    public function telephonesExpediteurPourNotification(): array
+    {
+        $numeros = [];
+
+        if ($this->expediteur_notifier_telephone !== false) {
+            $tel = trim((string) ($this->expediteur_telephone ?? ''));
+            if ($tel !== '') {
+                $numeros[] = $tel;
+            }
+        }
+
+        if ($this->expediteur_notifier_telephone_2 !== false) {
+            $tel2 = trim((string) ($this->expediteur_telephone_2 ?? ''));
+            if ($tel2 !== '') {
+                $numeros[] = $tel2;
+            }
+        }
+
+        return array_values(array_unique($numeros));
     }
 
     public function necessiteChoixModePaiementCircuit(): bool

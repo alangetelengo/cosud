@@ -45,6 +45,9 @@ class StoreCourrierRequest extends FormRequest
                 'string',
                 'max:40',
             ],
+            'expediteur_telephone_2' => ['nullable', 'string', 'max:40'],
+            'expediteur_notifier_telephone' => ['nullable', 'boolean'],
+            'expediteur_notifier_telephone_2' => ['nullable', 'boolean'],
             'fournisseur_prestataire_id' => [
                 Rule::requiredIf(fn () => $this->typeCourrierCodeDans(['facture'])),
                 'nullable',
@@ -103,6 +106,15 @@ class StoreCourrierRequest extends FormRequest
             ]);
         }
 
+        $this->merge([
+            'expediteur_notifier_telephone' => $this->has('expediteur_notifier_telephone')
+                ? $this->boolean('expediteur_notifier_telephone')
+                : true,
+            'expediteur_notifier_telephone_2' => $this->has('expediteur_notifier_telephone_2')
+                ? $this->boolean('expediteur_notifier_telephone_2')
+                : true,
+        ]);
+
         if ($this->filled('fournisseur_prestataire_id') && $this->typeCourrierCodeDans(['facture'])) {
             $fiche = FournisseurPrestataire::query()
                 ->actifs()
@@ -115,6 +127,9 @@ class StoreCourrierRequest extends FormRequest
                 }
                 if (! $this->filled('expediteur_telephone') && filled($fiche->telephone)) {
                     $merge['expediteur_telephone'] = $fiche->telephone;
+                }
+                if (! $this->filled('expediteur_telephone_2') && filled($fiche->telephone_2)) {
+                    $merge['expediteur_telephone_2'] = $fiche->telephone_2;
                 }
                 $this->merge($merge);
             }

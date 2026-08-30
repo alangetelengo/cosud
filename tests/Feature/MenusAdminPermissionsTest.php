@@ -24,7 +24,7 @@ class MenusAdminPermissionsTest extends TestCase
         $utilisateur = Role::findByName('utilisateur', 'web');
         $dg = Role::findByName('dg', 'web');
 
-        foreach (['types-documents.view', 'recherche.view', 'corbeille.view'] as $permission) {
+        foreach (['types-documents.view', 'recherche.view', 'corbeille.view', 'utilisateurs.delete'] as $permission) {
             $this->assertTrue($admin->hasPermissionTo($permission));
             $this->assertFalse($utilisateur->hasPermissionTo($permission));
             $this->assertFalse($dg->hasPermissionTo($permission));

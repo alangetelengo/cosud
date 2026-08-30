@@ -133,12 +133,27 @@
                             <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Expéditeur</dt>
                             <dd class="font-medium text-slate-800 dark:text-slate-100 mt-0.5">{{ $courrier->expediteur_libelle ?? $courrier->structureExpediteur?->nom ?? '—' }}</dd>
                         </div>
-                        @if($courrier->estOrigineExterne() && ($courrier->expediteur_email || $courrier->expediteur_telephone))
+                        @if($courrier->estOrigineExterne() && ($courrier->expediteur_email || $courrier->expediteur_telephone || $courrier->expediteur_telephone_2))
                         <div>
                             <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Contact expéditeur</dt>
                             <dd class="mt-0.5 text-slate-700 dark:text-slate-200">
                                 @if($courrier->expediteur_email)<div>{{ $courrier->expediteur_email }}</div>@endif
-                                @if($courrier->expediteur_telephone)<div>{{ $courrier->expediteur_telephone }}</div>@endif
+                                @if($courrier->expediteur_telephone)
+                                    <div>
+                                        {{ $courrier->expediteur_telephone }}
+                                        <span class="text-[11px] {{ $courrier->expediteur_notifier_telephone !== false ? 'text-emerald-600' : 'text-slate-400' }}">
+                                            ({{ $courrier->expediteur_notifier_telephone !== false ? 'notifié' : 'non notifié' }})
+                                        </span>
+                                    </div>
+                                @endif
+                                @if($courrier->expediteur_telephone_2)
+                                    <div>
+                                        {{ $courrier->expediteur_telephone_2 }}
+                                        <span class="text-[11px] {{ $courrier->expediteur_notifier_telephone_2 !== false ? 'text-emerald-600' : 'text-slate-400' }}">
+                                            ({{ $courrier->expediteur_notifier_telephone_2 !== false ? 'notifié' : 'non notifié' }})
+                                        </span>
+                                    </div>
+                                @endif
                             </dd>
                         </div>
                         @endif

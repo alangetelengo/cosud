@@ -88,9 +88,12 @@
         </div>
 
         <div>
-            <label class="block text-xs font-semibold mb-1">Preuve de paiement (optionnel)</label>
-            <input type="file" name="fichiers[]" accept=".pdf,.jpg,.jpeg,.png" multiple
-                   class="w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-white file:font-semibold">
+            <p class="block text-xs font-semibold mb-1">Preuve de paiement (optionnel)</p>
+            @include('courriers.partials.scans-upload-preview', [
+                'scansRequired' => false,
+                'scansInputId' => 'fichier-scan-regularisation-payer',
+                'scansLabel' => 'Ajouter un ou plusieurs fichiers',
+            ])
             <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Ajoutez un scan si besoin (déposé dans « À classer — dépenses »).</p>
             @error('fichiers')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
             @error('fichiers.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
@@ -108,4 +111,8 @@
         </div>
     </form>
 </div>
+
+@push('scripts')
+@include('courriers.partials.scans-upload-preview-script')
+@endpush
 @endsection
