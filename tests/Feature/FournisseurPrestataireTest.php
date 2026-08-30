@@ -37,6 +37,8 @@ class FournisseurPrestataireTest extends TestCase
 
     public function test_dg_peut_lister_et_creer_fournisseur_prestataire(): void
     {
+        Storage::fake('local');
+
         $dg = Structure::where('code', 'DG')->firstOrFail();
         $user = User::factory()->create(['structure_id' => $dg->id]);
         $user->assignRole('dg');
@@ -53,6 +55,7 @@ class FournisseurPrestataireTest extends TestCase
                 'type_contrat' => 'Entretien des groupes électrogènes',
                 'a_contrat' => '1',
                 'a_dossier_fiscal' => '0',
+                'scan_contrat' => [UploadedFile::fake()->create('contrat-acs.pdf', 40, 'application/pdf')],
             ])
             ->assertRedirect();
 
@@ -61,6 +64,106 @@ class FournisseurPrestataireTest extends TestCase
             'a_contrat' => 1,
             'a_dossier_fiscal' => 0,
         ]);
+
+        $fiche = FournisseurPrestataire::query()
+            ->where('nom_normalise', FournisseurPrestataire::normaliserNom('ACS - Approvisionnement Congo Services'))
+            ->firstOrFail();
+        $this->assertTrue($fiche->aScanContrat());
+        Storage::disk('local')->assertExists($fiche->piecesContrat()[0]['chemin']);
+    }
+
+    public function test_scan_contrat_prive_exige_autorisation(): void
+    {
+        Storage::fake('local');
+
+        $user = User::factory()->create();
+        $user->assignRole('dg');
+
+        $this->actingAs($user)
+            ->post(route('fournisseurs-prestataires.store', absolute: false), [
+                'nom' => 'Scan Prive SARL',
+                'type' => 'fournisseur',
+                'a_contrat' => '1',
+                'scan_contrat' => [UploadedFile::fake()->create('contrat.pdf', 40, 'application/pdf')],
+            ])
+            ->assertRedirect();
+
+        $fiche = FournisseurPrestataire::query()
+            ->where('nom_normalise', FournisseurPrestataire::normaliserNom('Scan Prive SARL'))
+            ->firstOrFail();
+
+        $url = route('fournisseurs-prestataires.pieces.show', [$fiche, 'contrat', 0], absolute: false);
+
+        auth()->logout();
+        $this->get($url)->assertRedirect();
+
+        $invite = User::factory()->create();
+        $invite->assignRole('utilisateur');
+
+        $this->actingAs($invite)
+            ->get($url)
+            ->assertForbidden();
+
+        $this->actingAs($user)
+            ->get($url)
+            ->assertOk();
+    }
+
+    public function test_scan_ignore_si_contrat_non_coche(): void
+    {
+        Storage::fake('local');
+
+        $user = User::factory()->create();
+        $user->assignRole('dg');
+
+        $this->actingAs($user)
+            ->post(route('fournisseurs-prestataires.store', absolute: false), [
+                'nom' => 'Sans Contrat Mais Fichier',
+                'type' => 'fournisseur',
+                'scan_contrat' => [UploadedFile::fake()->create('contrat.pdf', 40, 'application/pdf')],
+                'scan_fiscal' => [UploadedFile::fake()->create('fiscal.pdf', 40, 'application/pdf')],
+            ])
+            ->assertRedirect();
+
+        $fiche = FournisseurPrestataire::query()
+            ->where('nom_normalise', FournisseurPrestataire::normaliserNom('Sans Contrat Mais Fichier'))
+            ->firstOrFail();
+
+        $this->assertFalse($fiche->a_contrat);
+        $this->assertFalse($fiche->a_dossier_fiscal);
+        $this->assertFalse($fiche->aScanContrat());
+        $this->assertFalse($fiche->aScanFiscal());
+        $this->assertSame([], Storage::disk('local')->allFiles('fournisseurs-prestataires/'.$fiche->id));
+    }
+
+    public function test_contrat_formalise_exige_un_scan(): void
+    {
+        $user = User::factory()->create();
+        $user->assignRole('dg');
+
+        $this->actingAs($user)
+            ->from(route('fournisseurs-prestataires.create', absolute: false))
+            ->post(route('fournisseurs-prestataires.store', absolute: false), [
+                'nom' => 'Sans Scan SARL',
+                'type' => 'fournisseur',
+                'a_contrat' => '1',
+            ])
+            ->assertSessionHasErrors('scan_contrat');
+    }
+
+    public function test_dossier_fiscal_exige_un_scan(): void
+    {
+        $user = User::factory()->create();
+        $user->assignRole('dg');
+
+        $this->actingAs($user)
+            ->from(route('fournisseurs-prestataires.create', absolute: false))
+            ->post(route('fournisseurs-prestataires.store', absolute: false), [
+                'nom' => 'Fiscal Sans Piece',
+                'type' => 'fournisseur',
+                'a_dossier_fiscal' => '1',
+            ])
+            ->assertSessionHasErrors('scan_fiscal');
     }
 
     public function test_utilisateur_sans_permission_ne_peut_pas_acceder(): void

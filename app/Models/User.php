@@ -30,6 +30,7 @@ class User extends Authenticatable
         'email_professionnel',
         'telephone',
         'password',
+        'must_change_password',
         'structure_id',
         'actif',
     ];
@@ -55,6 +56,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
             'actif' => 'boolean',
             'google2fa_enabled' => 'boolean',
             'recovery_codes' => 'array',

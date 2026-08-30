@@ -141,6 +141,7 @@ class RoleAndPermissionSeeder extends Seeder
             ]),
             'responsable_dossiers_prestataires' => array_merge($permissionsSecretariatCourrier, [
                 'courriers.voir-factures',
+                'courriers.voir-depenses',
                 'suivi-factures.view',
                 'factures-regularisation.view',
                 'factures-regularisation.create',
@@ -149,6 +150,7 @@ class RoleAndPermissionSeeder extends Seeder
                 'moratoires.view',
             ]),
             'responsable_suivi_depenses' => array_merge($permissionsSecretariatCourrier, [
+                'courriers.voir-factures',
                 'courriers.voir-depenses',
                 'suivi-paiements.view',
                 'suivi-paiements.create',

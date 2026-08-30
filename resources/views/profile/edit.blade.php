@@ -139,7 +139,7 @@
                     </div>
                     <div>
                         <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Mot de passe</h2>
-                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Mettez à jour votre mot de passe régulièrement</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Mettez à jour votre mot de passe à tout moment depuis cet écran</p>
                     </div>
                 </div>
                 <div class="p-5 sm:p-7 lg:p-8">

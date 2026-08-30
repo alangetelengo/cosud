@@ -6,6 +6,7 @@ use App\Models\FournisseurPrestataire;
 use App\Models\JournalAudit;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -22,7 +23,9 @@ class FournisseurPrestataireService
      *     a_dossier_fiscal?: bool,
      *     observation?: ?string,
      *     dossier_id?: ?int,
-     *     actif?: bool
+     *     actif?: bool,
+     *     scan_contrat?: list<UploadedFile>|UploadedFile|null,
+     *     scan_fiscal?: list<UploadedFile>|UploadedFile|null
      * }  $donnees
      */
     public function creer(User $acteur, array $donnees): FournisseurPrestataire
@@ -31,6 +34,9 @@ class FournisseurPrestataireService
         $normalise = FournisseurPrestataire::normaliserNom($nom);
         $this->assertNomUnique($normalise);
 
+        $aContrat = (bool) ($donnees['a_contrat'] ?? false);
+        $aFiscal = (bool) ($donnees['a_dossier_fiscal'] ?? false);
+
         $fiche = FournisseurPrestataire::query()->create([
             'nom' => $nom,
             'nom_normalise' => $normalise,
@@ -38,12 +44,29 @@ class FournisseurPrestataireService
             'email' => $donnees['email'] ?? null,
             'telephone' => $donnees['telephone'] ?? null,
             'type_contrat' => $donnees['type_contrat'] ?? null,
-            'a_contrat' => (bool) ($donnees['a_contrat'] ?? false),
-            'a_dossier_fiscal' => (bool) ($donnees['a_dossier_fiscal'] ?? false),
+            'a_contrat' => $aContrat,
+            'a_dossier_fiscal' => $aFiscal,
             'observation' => $donnees['observation'] ?? null,
             'dossier_id' => $donnees['dossier_id'] ?? null,
             'actif' => (bool) ($donnees['actif'] ?? true),
             'createur_id' => $acteur->id,
+        ]);
+
+        $fiche->update([
+            'scan_contrat_pieces' => $aContrat
+                ? $this->stockerPieces(
+                    $fiche,
+                    'contrat',
+                    $this->collecterFichiers($donnees['scan_contrat'] ?? null)
+                )
+                : [],
+            'scan_fiscal_pieces' => $aFiscal
+                ? $this->stockerPieces(
+                    $fiche,
+                    'fiscal',
+                    $this->collecterFichiers($donnees['scan_fiscal'] ?? null)
+                )
+                : [],
         ]);
 
         JournalAudit::log('fournisseur_prestataire.create', 'fournisseur_prestataires', [
@@ -54,7 +77,7 @@ class FournisseurPrestataireService
             ]),
         ]);
 
-        return $fiche;
+        return $fiche->fresh();
     }
 
     /**
@@ -68,7 +91,9 @@ class FournisseurPrestataireService
      *     a_dossier_fiscal?: bool,
      *     observation?: ?string,
      *     dossier_id?: ?int,
-     *     actif?: bool
+     *     actif?: bool,
+     *     scan_contrat?: list<UploadedFile>|UploadedFile|null,
+     *     scan_fiscal?: list<UploadedFile>|UploadedFile|null
      * }  $donnees
      */
     public function mettreAJour(FournisseurPrestataire $fiche, User $acteur, array $donnees): FournisseurPrestataire
@@ -77,6 +102,31 @@ class FournisseurPrestataireService
         $normalise = FournisseurPrestataire::normaliserNom($nom);
         $this->assertNomUnique($normalise, $fiche->id);
 
+        $aContrat = (bool) ($donnees['a_contrat'] ?? false);
+        $aFiscal = (bool) ($donnees['a_dossier_fiscal'] ?? false);
+
+        $piecesContrat = $fiche->piecesContrat();
+        if ($aContrat) {
+            $scansContrat = $this->collecterFichiers($donnees['scan_contrat'] ?? null);
+            if ($scansContrat !== []) {
+                $piecesContrat = array_merge(
+                    $piecesContrat,
+                    $this->stockerPieces($fiche, 'contrat', $scansContrat)
+                );
+            }
+        }
+
+        $piecesFiscal = $fiche->piecesFiscal();
+        if ($aFiscal) {
+            $scansFiscal = $this->collecterFichiers($donnees['scan_fiscal'] ?? null);
+            if ($scansFiscal !== []) {
+                $piecesFiscal = array_merge(
+                    $piecesFiscal,
+                    $this->stockerPieces($fiche, 'fiscal', $scansFiscal)
+                );
+            }
+        }
+
         $fiche->update([
             'nom' => $nom,
             'nom_normalise' => $normalise,
@@ -84,8 +134,10 @@ class FournisseurPrestataireService
             'email' => $donnees['email'] ?? null,
             'telephone' => $donnees['telephone'] ?? null,
             'type_contrat' => $donnees['type_contrat'] ?? null,
-            'a_contrat' => (bool) ($donnees['a_contrat'] ?? false),
-            'a_dossier_fiscal' => (bool) ($donnees['a_dossier_fiscal'] ?? false),
+            'a_contrat' => $aContrat,
+            'a_dossier_fiscal' => $aFiscal,
+            'scan_contrat_pieces' => $piecesContrat,
+            'scan_fiscal_pieces' => $piecesFiscal,
             'observation' => $donnees['observation'] ?? null,
             'dossier_id' => $donnees['dossier_id'] ?? null,
             'actif' => (bool) ($donnees['actif'] ?? true),
@@ -100,6 +152,50 @@ class FournisseurPrestataireService
         ]);
 
         return $fiche->fresh();
+    }
+
+    /**
+     * @param  list<UploadedFile>|UploadedFile|null  $fichiers
+     * @return list<UploadedFile>
+     */
+    private function collecterFichiers(mixed $fichiers): array
+    {
+        if ($fichiers instanceof UploadedFile) {
+            return [$fichiers];
+        }
+
+        if (! is_array($fichiers)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $fichiers,
+            fn ($f): bool => $f instanceof UploadedFile && $f->isValid()
+        ));
+    }
+
+    /**
+     * @param  list<UploadedFile>  $fichiers
+     * @return list<array{chemin: string, nom: string}>
+     */
+    private function stockerPieces(FournisseurPrestataire $fiche, string $type, array $fichiers): array
+    {
+        $pieces = [];
+        $dossier = 'fournisseurs-prestataires/'.$fiche->id.'/'.$type;
+
+        foreach ($fichiers as $fichier) {
+            $chemin = $fichier->store($dossier, 'local');
+            if (! is_string($chemin) || $chemin === '') {
+                continue;
+            }
+
+            $pieces[] = [
+                'chemin' => $chemin,
+                'nom' => $fichier->getClientOriginalName(),
+            ];
+        }
+
+        return $pieces;
     }
 
     public function desactiver(FournisseurPrestataire $fiche, User $acteur): FournisseurPrestataire

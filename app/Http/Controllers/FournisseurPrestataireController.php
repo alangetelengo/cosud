@@ -15,7 +15,9 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class FournisseurPrestataireController extends Controller
 {
@@ -109,6 +111,43 @@ class FournisseurPrestataireController extends Controller
         ]);
     }
 
+    /**
+     * Téléchargement / consultation d’un scan contrat ou fiscal (disque privé).
+     */
+    public function showPiece(FournisseurPrestataire $fournisseur_prestataire, string $type, int $index): BinaryFileResponse
+    {
+        $this->authorize('view', $fournisseur_prestataire);
+
+        if (! in_array($type, ['contrat', 'fiscal'], true)) {
+            abort(404);
+        }
+
+        $pieces = $type === 'contrat'
+            ? $fournisseur_prestataire->piecesContrat()
+            : $fournisseur_prestataire->piecesFiscal();
+
+        $piece = $pieces[$index] ?? null;
+        if ($piece === null) {
+            abort(404);
+        }
+
+        $disk = Storage::disk('local');
+        $chemin = $piece['chemin'];
+
+        if (! $disk->exists($chemin)) {
+            abort(404);
+        }
+
+        $cheminAbsolu = $disk->path($chemin);
+        $mime = $disk->mimeType($chemin) ?: 'application/octet-stream';
+        $nom = $piece['nom'] !== '' ? $piece['nom'] : basename($chemin);
+
+        return response()->file($cheminAbsolu, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="'.$nom.'"',
+        ]);
+    }
+
     public function edit(Request $request, FournisseurPrestataire $fournisseur_prestataire): View
     {
         $this->authorize('update', $fournisseur_prestataire);
@@ -167,7 +206,8 @@ class FournisseurPrestataireController extends Controller
         ])
             ->setPaper('a4', 'landscape')
             ->setOption('isRemoteEnabled', true)
-            ->setOption('isHtml5ParserEnabled', true);
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isPhpEnabled', true);
 
         return view('fournisseurs-prestataires.viewer', [
             'content' => $pdf->output(),

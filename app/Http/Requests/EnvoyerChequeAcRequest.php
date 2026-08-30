@@ -4,7 +4,9 @@ namespace App\Http\Requests;
 
 use App\Models\Courrier;
 use App\Services\CircuitCourrierMoteurService;
+use App\Services\SuiviFacturesFournisseursService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 /**
  * L’Agent comptable envoie le chèque au DG : message, montant et références bordereau obligatoires.
@@ -50,6 +52,31 @@ class EnvoyerChequeAcRequest extends FormRequest
             'scans_cheque' => ['nullable', 'array', 'max:20'],
             'scans_cheque.*' => ['file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            /** @var Courrier $courrier */
+            $courrier = $this->route('courrier');
+
+            if ($courrier->montant_facture === null) {
+                return;
+            }
+
+            $montants = app(SuiviFacturesFournisseursService::class)->montantsSurFacture($courrier);
+            $plafond = $montants['montant_facture'];
+            $montant = (float) preg_replace('/\s+/', '', (string) $this->input('montant', '0'));
+
+            if ($montant > 0 && $montant - $plafond > 0.009) {
+                $validator->errors()->add(
+                    'montant',
+                    'Le montant ne peut pas dépasser le montant de la facture ('
+                    .number_format($plafond, 0, ',', ' ')
+                    .' FCFA).'
+                );
+            }
+        });
     }
 
     /**

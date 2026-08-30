@@ -187,6 +187,7 @@ class UsersAvecDirectionsSeeder extends Seeder
                 [
                     'name' => $u['name'],
                     'password' => Hash::make('password'),
+                    'must_change_password' => true,
                     'telephone' => $u['telephone'] ?? null,
                     'email_professionnel' => $emailPro,
                     'structure_id' => $structure?->id,

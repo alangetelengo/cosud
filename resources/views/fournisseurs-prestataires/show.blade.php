@@ -57,10 +57,28 @@
             <div>
                 <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Contrat</dt>
                 <dd class="mt-0.5 font-semibold {{ $fiche->a_contrat ? 'text-emerald-700' : 'text-rose-700' }}">{{ $fiche->libelleContratCourt() }}</dd>
+                @if($fiche->aScanContrat())
+                    <ul class="mt-1 space-y-0.5 text-xs font-normal">
+                        @foreach($fiche->piecesContrat() as $i => $piece)
+                            <li>
+                                <a href="{{ route('fournisseurs-prestataires.pieces.show', [$fiche, 'contrat', $i]) }}" target="_blank" class="text-emerald-700 dark:text-emerald-300 no-underline hover:underline">{{ $piece['nom'] }}</a>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
             </div>
             <div>
                 <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Dossier fiscal</dt>
                 <dd class="mt-0.5 font-semibold {{ $fiche->a_dossier_fiscal ? 'text-emerald-700' : 'text-rose-700' }}">{{ $fiche->libelleDossierFiscalCourt() }}</dd>
+                @if($fiche->aScanFiscal())
+                    <ul class="mt-1 space-y-0.5 text-xs font-normal">
+                        @foreach($fiche->piecesFiscal() as $i => $piece)
+                            <li>
+                                <a href="{{ route('fournisseurs-prestataires.pieces.show', [$fiche, 'fiscal', $i]) }}" target="_blank" class="text-sky-700 dark:text-sky-300 no-underline hover:underline">{{ $piece['nom'] }}</a>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
             </div>
             <div>
                 <dt class="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">E-mail</dt>

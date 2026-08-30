@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Notifications\CourrierWorkflowNotification;
 use App\Services\CourrierFilService;
 use App\Services\CourrierNotificationService;
+use App\Support\ReturnUrl;
 use Database\Seeders\CourrierReferentielSeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Database\Seeders\StatutDocumentSeeder;
@@ -149,6 +150,34 @@ class CourrierModuleTest extends TestCase
             ->assertOk()
             ->assertSee('192/2026/DAF/SAGP', false)
             ->assertDontSee('>'.$courrier->numero_registre.'/'.$courrier->numero_registre_annee.'<', false);
+    }
+
+    public function test_liste_courriers_ligne_cliquable_ouvre_fiche(): void
+    {
+        Storage::fake('public');
+        $user = $this->creerSecretaire();
+
+        $this->actingAs($user)
+            ->post(route('courriers.store', absolute: false), [
+                'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-clic/2026',
+                'objet' => 'Courrier ligne cliquable',
+                'expediteur_libelle' => 'SOMAC',
+                'date_reception' => now()->toDateString(),
+                'fichier' => UploadedFile::fake()->create('courrier.pdf', 50, 'application/pdf'),
+            ])
+            ->assertRedirect();
+
+        $courrier = Courrier::query()->where('objet', 'Courrier ligne cliquable')->firstOrFail();
+        $indexUrl = route('courriers.index', ['sens' => 'arrivee']);
+        $showUrl = route('courriers.show', ReturnUrl::forRoute($courrier, $indexUrl));
+
+        $this->actingAs($user)
+            ->get(route('courriers.index', ['sens' => 'arrivee'], absolute: false))
+            ->assertOk()
+            ->assertSee('cursor-pointer', false)
+            ->assertSee("window.location='{$showUrl}'", false)
+            ->assertDontSee('title="Consulter"', false);
     }
 
     public function test_workflow_depart_secretaire_directeur_expedition_reception(): void
@@ -811,7 +840,7 @@ class CourrierModuleTest extends TestCase
         $this->assertSame('annule', $depart->statutCourrier->code);
     }
 
-    public function test_responsable_dossiers_peut_annuler_courrier_arrivee_recu(): void
+    public function test_responsable_dossiers_ne_peut_pas_annuler_courrier_arrivee(): void
     {
         $taty = $this->creerResponsableDossiers();
 
@@ -830,13 +859,37 @@ class CourrierModuleTest extends TestCase
             ->post(route('courriers.annuler', $arrivee, absolute: false), [
                 'motif_annulation' => 'Doublon de saisie',
             ])
+            ->assertForbidden();
+
+        $this->assertSame('recu', $arrivee->fresh()->statutCourrier->code);
+    }
+
+    public function test_particuliere_dg_peut_annuler_courrier_arrivee_recu(): void
+    {
+        $particuliere = $this->creerParticuliereDg();
+
+        $arrivee = Courrier::create([
+            'sens_courrier_id' => SensCourrier::where('code', 'arrivee')->value('id'),
+            'statut_courrier_id' => StatutCourrier::where('code', 'recu')->value('id'),
+            'numero_registre' => 906,
+            'numero_registre_annee' => (int) now()->format('Y'),
+            'objet' => 'Courrier annulé par particulière',
+            'expediteur_libelle' => 'TEST FOURNISSEUR',
+            'createur_id' => $particuliere->id,
+            'structure_id' => $particuliere->structure_id,
+        ]);
+
+        $this->actingAs($particuliere)
+            ->post(route('courriers.annuler', $arrivee, absolute: false), [
+                'motif_annulation' => 'Doublon de saisie',
+            ])
             ->assertRedirect(route('courriers.index', ['sens' => 'arrivee'], absolute: false));
 
         $arrivee->refresh();
         $this->assertSame('annule', $arrivee->statutCourrier->code);
     }
 
-    public function test_responsable_dossiers_peut_supprimer_courrier_arrivee_recu(): void
+    public function test_responsable_dossiers_ne_peut_pas_supprimer_courrier_arrivee(): void
     {
         $taty = $this->creerResponsableDossiers();
 
@@ -853,6 +906,28 @@ class CourrierModuleTest extends TestCase
 
         $this->actingAs($taty)
             ->delete(route('courriers.destroy', $arrivee, absolute: false))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('courriers', ['id' => $arrivee->id]);
+    }
+
+    public function test_particuliere_dg_peut_supprimer_courrier_arrivee_recu(): void
+    {
+        $particuliere = $this->creerParticuliereDg();
+
+        $arrivee = Courrier::create([
+            'sens_courrier_id' => SensCourrier::where('code', 'arrivee')->value('id'),
+            'statut_courrier_id' => StatutCourrier::where('code', 'recu')->value('id'),
+            'numero_registre' => 907,
+            'numero_registre_annee' => (int) now()->format('Y'),
+            'objet' => 'Courrier supprimé par particulière',
+            'expediteur_libelle' => 'TEST FOURNISSEUR',
+            'createur_id' => $particuliere->id,
+            'structure_id' => $particuliere->structure_id,
+        ]);
+
+        $this->actingAs($particuliere)
+            ->delete(route('courriers.destroy', $arrivee, absolute: false))
             ->assertRedirect(route('courriers.index', ['sens' => 'arrivee'], absolute: false));
 
         $this->assertDatabaseMissing('courriers', ['id' => $arrivee->id]);
@@ -860,7 +935,7 @@ class CourrierModuleTest extends TestCase
 
     public function test_courrier_arrivee_cloture_ne_peut_pas_etre_supprime(): void
     {
-        $taty = $this->creerResponsableDossiers();
+        $particuliere = $this->creerParticuliereDg();
 
         $arrivee = Courrier::create([
             'sens_courrier_id' => SensCourrier::where('code', 'arrivee')->value('id'),
@@ -869,11 +944,11 @@ class CourrierModuleTest extends TestCase
             'numero_registre_annee' => (int) now()->format('Y'),
             'objet' => 'Courrier clôturé',
             'expediteur_libelle' => 'TEST',
-            'createur_id' => $taty->id,
-            'structure_id' => $taty->structure_id,
+            'createur_id' => $particuliere->id,
+            'structure_id' => $particuliere->structure_id,
         ]);
 
-        $this->actingAs($taty)
+        $this->actingAs($particuliere)
             ->delete(route('courriers.destroy', $arrivee, absolute: false))
             ->assertForbidden();
     }
@@ -901,7 +976,7 @@ class CourrierModuleTest extends TestCase
 
     public function test_liste_peut_annuler_directement_courrier_arrivee_recu(): void
     {
-        $taty = $this->creerResponsableDossiers();
+        $particuliere = $this->creerParticuliereDg();
 
         $arrivee = Courrier::create([
             'sens_courrier_id' => SensCourrier::where('code', 'arrivee')->value('id'),
@@ -910,17 +985,17 @@ class CourrierModuleTest extends TestCase
             'numero_registre_annee' => (int) now()->format('Y'),
             'objet' => 'Annulation depuis liste',
             'expediteur_libelle' => 'TEST',
-            'createur_id' => $taty->id,
-            'structure_id' => $taty->structure_id,
+            'createur_id' => $particuliere->id,
+            'structure_id' => $particuliere->structure_id,
         ]);
 
-        $this->actingAs($taty)
+        $this->actingAs($particuliere)
             ->get(route('courriers.index', ['sens' => 'arrivee', 'q' => 'Annulation depuis liste'], absolute: false))
             ->assertOk()
             ->assertSee('Annuler ce courrier ?', false)
             ->assertSee(route('courriers.annuler', $arrivee, absolute: false), false);
 
-        $this->actingAs($taty)
+        $this->actingAs($particuliere)
             ->post(route('courriers.annuler', $arrivee, absolute: false), [])
             ->assertRedirect(route('courriers.index', ['sens' => 'arrivee'], absolute: false));
 
@@ -1145,6 +1220,15 @@ class CourrierModuleTest extends TestCase
         $secDir = Structure::where('code', 'SEC-DIR')->firstOrFail();
         $user = User::factory()->create(['structure_id' => $secDir->id]);
         $user->assignRole('responsable_dossiers_prestataires');
+
+        return $user;
+    }
+
+    private function creerParticuliereDg(): User
+    {
+        $secDir = Structure::where('code', 'SEC-DIR')->firstOrFail();
+        $user = User::factory()->create(['structure_id' => $secDir->id]);
+        $user->assignRole('particulier_dg');
 
         return $user;
     }

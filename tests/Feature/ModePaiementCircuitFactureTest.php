@@ -102,7 +102,7 @@ class ModePaiementCircuitFactureTest extends TestCase
         $this->actingAs($ac)
             ->post(route('courriers.circuit.envoyer-cheque', $courrier, absolute: false), [
                 'message' => 'OV établi.',
-                'montant' => '750000',
+                'montant' => '450000',
                 'numero_piece' => 'OV-2026-0045',
                 'banque' => 'BCH',
                 'scans_cheque' => [UploadedFile::fake()->create('ov.pdf', 40, 'application/pdf')],
@@ -136,7 +136,7 @@ class ModePaiementCircuitFactureTest extends TestCase
             null,
             Courrier::MODE_PAIEMENT_OV,
         );
-        $courrier = $moteur->envoyerChequeAuDg($courrier, $ac, 'OV prêt.', 1_200_000, [
+        $courrier = $moteur->envoyerChequeAuDg($courrier, $ac, 'OV prêt.', 400_000, [
             'numero_piece' => 'OV-9988',
             'banque' => 'UBA',
             'beneficiaire_libelle' => 'NETPLUS SARL',
@@ -177,6 +177,37 @@ class ModePaiementCircuitFactureTest extends TestCase
             ->assertOk()
             ->assertSee('Bordereau — accusé de réception banque', false)
             ->assertSee('Enregistrer l’accusé banque', false);
+    }
+
+    public function test_montant_cheque_ne_peut_pas_depasser_montant_facture(): void
+    {
+        Storage::fake('public');
+
+        $dg = $this->creerDg();
+        $ac = User::factory()->create(['structure_id' => Structure::where('code', 'DAF')->value('id')]);
+        $ac->assignRole('agent_comptable');
+
+        $courrier = $this->demarrerFacture($dg);
+        app(CircuitCourrierMoteurService::class)->instruire(
+            $courrier,
+            $dg,
+            'Bon pour accord.',
+            $ac->id,
+            null,
+            null,
+            Courrier::MODE_PAIEMENT_CHEQUE,
+        );
+
+        $this->actingAs($ac)
+            ->from(route('courriers.show', $courrier, absolute: false))
+            ->post(route('courriers.circuit.envoyer-cheque', $courrier, absolute: false), [
+                'message' => 'Chèque trop élevé.',
+                'montant' => '500001',
+                'numero_piece' => 'CHQ-1',
+                'banque' => 'BCH',
+                'scans_cheque' => [UploadedFile::fake()->create('cheque.pdf', 40, 'application/pdf')],
+            ])
+            ->assertSessionHasErrors('montant');
     }
 
     private function creerDg(): User

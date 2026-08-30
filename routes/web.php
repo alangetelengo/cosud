@@ -37,9 +37,9 @@ use Illuminate\Support\Facades\Route;
 Route::post('/webhooks/infobip/whatsapp', InfobipWhatsAppWebhookController::class)
     ->name('webhooks.infobip.whatsapp');
 
-Route::get('/', HomeController::class)->middleware(['auth', 'verified', '2fa'])->name('home');
+Route::get('/', HomeController::class)->middleware(['auth', 'verified', '2fa', 'password.changed'])->name('home');
 
-Route::middleware(['auth', 'verified', '2fa'])->group(function () {
+Route::middleware(['auth', 'verified', '2fa', 'password.changed'])->group(function () {
     Route::get('/dashboard', fn () => redirect()->route('home'))->name('dashboard');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -182,6 +182,10 @@ Route::middleware(['auth', 'verified', '2fa'])->group(function () {
     Route::get('/fournisseurs-prestataires/create', [FournisseurPrestataireController::class, 'create'])->name('fournisseurs-prestataires.create');
     Route::post('/fournisseurs-prestataires', [FournisseurPrestataireController::class, 'store'])->name('fournisseurs-prestataires.store');
     Route::get('/fournisseurs-prestataires/{fournisseur_prestataire}', [FournisseurPrestataireController::class, 'show'])->name('fournisseurs-prestataires.show');
+    Route::get('/fournisseurs-prestataires/{fournisseur_prestataire}/pieces/{type}/{index}', [FournisseurPrestataireController::class, 'showPiece'])
+        ->whereIn('type', ['contrat', 'fiscal'])
+        ->whereNumber('index')
+        ->name('fournisseurs-prestataires.pieces.show');
     Route::get('/fournisseurs-prestataires/{fournisseur_prestataire}/edit', [FournisseurPrestataireController::class, 'edit'])->name('fournisseurs-prestataires.edit');
     Route::put('/fournisseurs-prestataires/{fournisseur_prestataire}', [FournisseurPrestataireController::class, 'update'])->name('fournisseurs-prestataires.update');
     Route::delete('/fournisseurs-prestataires/{fournisseur_prestataire}', [FournisseurPrestataireController::class, 'destroy'])->name('fournisseurs-prestataires.destroy');

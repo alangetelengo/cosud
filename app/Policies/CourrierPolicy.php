@@ -49,13 +49,17 @@ class CourrierPolicy
             return false;
         }
 
-        if ($user->hasRole('particulier_dg')
+        if (! $courrier->visiblePar($user)) {
+            return false;
+        }
+
+        if ($user->aAccesTotal()
+            || $user->hasRole('particulier_dg')
             || $user->hasRole('particulier_ac')
             || $user->hasRole('responsable_dossiers_prestataires')
             || $user->hasRole('responsable_suivi_depenses')
             || $user->hasRole('agent_comptable')
-            || $user->hasRole('caissier')
-            || $user->aAccesTotal()) {
+            || $user->hasRole('caissier')) {
             return true;
         }
 
@@ -187,8 +191,9 @@ class CourrierPolicy
     }
 
     /**
-     * Classement d’une facture dans un dossier fournisseur.
-     * Réservé à la responsable dossiers prestataires (Mme Taty) — hors MAD / secrétaires / Eleni.
+     * Classement d’un courrier dans un dossier COSUD.
+     * — Facture : responsable dossiers prestataires (ou admin) — 1 fiche référentiel = 1 dossier.
+     * — Divers / non-factures : secrétariat / particulière DG / responsable prestataires / admin.
      */
     public function classerDossier(User $user, Courrier $courrier): bool
     {
@@ -196,11 +201,19 @@ class CourrierPolicy
             return false;
         }
 
-        if (! $user->hasRole('responsable_dossiers_prestataires') && ! $user->hasRole('admin')) {
-            return false;
+        if ($user->hasRole('admin')) {
+            return true;
         }
 
-        return $courrier->typeCourrier?->code === 'facture';
+        $code = $courrier->typeCourrier?->code;
+
+        if ($code === 'facture') {
+            return $user->hasRole('responsable_dossiers_prestataires');
+        }
+
+        return $user->hasRole('secretaire_direction')
+            || $user->hasRole('particulier_dg')
+            || $user->hasRole('responsable_dossiers_prestataires');
     }
 
     public function annuler(User $user, Courrier $courrier): bool

@@ -4,24 +4,41 @@ namespace App\Services;
 
 use App\Models\Courrier;
 use App\Models\Dossier;
+use App\Models\DossierPartage;
+use App\Models\FournisseurPrestataire;
 use App\Models\JournalAudit;
 use App\Models\SuiviPaiement;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Role;
 
 class CourrierClassementDossierService
 {
     private const LIMITE_SELECTEUR = 400;
+
+    /** Rôles de la direction / circuit qui doivent pouvoir réutiliser le dossier classé. */
+    private const ROLES_PARTAGE_DIRECTION = [
+        'secretaire_direction',
+        'particulier_dg',
+        'particulier_ac',
+        'responsable_dossiers_prestataires',
+        'responsable_suivi_depenses',
+        'agent_comptable',
+        'caissier',
+    ];
+
+    public const COMMENTAIRE_PARTAGE_AUTO = 'cosud:auto-classement-direction';
 
     public function __construct(
         private readonly MesDossiersRacineService $mesDossiersRacine,
     ) {}
 
     /**
-     * Dossiers dans lesquels l’utilisateur peut classer une facture (dépôt / écriture).
+     * Dossiers dans lesquels l’utilisateur peut classer (dépôt / écriture).
      *
      * @return Collection<int, Dossier>
      */
@@ -39,8 +56,6 @@ class CourrierClassementDossierService
             );
         }
 
-        // Filtrer l’écriture en PHP, puis limiter : le préfiltre SQL évite de couper
-        // trop tôt des dossiers réellement accessibles (ex. Mes dossiers / propriétaire).
         $dossiers = $query
             ->orderBy('nom')
             ->limit(self::LIMITE_SELECTEUR * 3)
@@ -62,6 +77,13 @@ class CourrierClassementDossierService
 
     public function suggererDossier(User $user, Courrier $courrier): ?Dossier
     {
+        $courrier->loadMissing('fournisseurPrestataire.dossier');
+
+        $ficheDossier = $courrier->fournisseurPrestataire?->dossier;
+        if ($ficheDossier && $ficheDossier->actif && $this->peutClasserDans($user, $ficheDossier)) {
+            return $ficheDossier;
+        }
+
         $libelle = trim((string) ($courrier->expediteur_libelle ?? ''));
         if ($libelle === '') {
             return null;
@@ -93,7 +115,7 @@ class CourrierClassementDossierService
 
         return DB::transaction(function () use ($courrier, $user, $data, $mode) {
             $dossier = $mode === 'nouveau'
-                ? $this->creerDossierFournisseur($user, $data, $courrier)
+                ? $this->creerDossierClassement($user, $data, $courrier)
                 : $this->resoudreDossierExistant($user, $data);
 
             $avant = $courrier->dossier_id;
@@ -108,12 +130,16 @@ class CourrierClassementDossierService
                 ->where('courrier_id', $courrier->id)
                 ->update(['dossier_id' => $dossier->id]);
 
+            $this->synchroniserFicheFournisseur($courrier, $dossier);
+            $this->partagerAvecDirection($dossier, $user);
+
             JournalAudit::log('courrier.classer_dossier', 'courriers', [
                 'commentaire' => json_encode([
                     'courrier_id' => $courrier->id,
                     'dossier_id' => $dossier->id,
                     'dossier_avant_id' => $avant,
                     'mode' => $mode,
+                    'type' => $courrier->typeCourrier?->code,
                 ]),
             ]);
 
@@ -131,9 +157,66 @@ class CourrierClassementDossierService
     }
 
     /**
-     * Préfiltre SQL des dossiers où l’utilisateur a typiquement un droit d’écriture
-     * (propriétaire, créateur, partage écriture, arbre « Mes dossiers »).
-     *
+     * Accorde lecture + écriture aux rôles direction / circuit (réutilisation du même dossier).
+     */
+    public function partagerAvecDirection(Dossier $dossier, User $acteur): void
+    {
+        $userIds = collect();
+        foreach (self::ROLES_PARTAGE_DIRECTION as $roleName) {
+            if (! Role::query()->where('name', $roleName)->where('guard_name', 'web')->exists()) {
+                continue;
+            }
+            $userIds = $userIds->merge(
+                User::role($roleName)
+                    ->where('actif', true)
+                    ->pluck('id')
+            );
+        }
+
+        $userIds = $userIds
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->reject(fn (int $id) => $id === (int) $acteur->id || $id === (int) $dossier->proprietaire_id)
+            ->values();
+
+        foreach ($userIds as $userId) {
+            $existant = DossierPartage::query()
+                ->where('dossier_id', $dossier->id)
+                ->where('user_id', $userId)
+                ->first();
+
+            if ($existant) {
+                $existant->update([
+                    'droits_lecture' => true,
+                    'droits_ecriture' => true,
+                    'date_expiration' => null,
+                    'commentaire' => $existant->commentaire ?: self::COMMENTAIRE_PARTAGE_AUTO,
+                ]);
+
+                continue;
+            }
+
+            DossierPartage::create([
+                'dossier_id' => $dossier->id,
+                'user_id' => $userId,
+                'partage_par_id' => $acteur->id,
+                'droits_lecture' => true,
+                'droits_ecriture' => true,
+                'droits_suppression' => false,
+                'propager_aux_sous_dossiers' => false,
+                'date_expiration' => null,
+                'commentaire' => self::COMMENTAIRE_PARTAGE_AUTO,
+            ]);
+        }
+
+        Log::channel('cosud')->info('Partage direction auto après classement courrier', [
+            'dossier_id' => $dossier->id,
+            'acteur_id' => $acteur->id,
+            'beneficiaires' => $userIds->all(),
+        ]);
+    }
+
+    /**
      * @return Builder<Dossier>
      */
     private function requeteDossiersEcriturePotentielle(User $user): Builder
@@ -180,7 +263,7 @@ class CourrierClassementDossierService
     /**
      * @param  array{nom_dossier?: string|null, parent_id?: int|null}  $data
      */
-    private function creerDossierFournisseur(User $user, array $data, Courrier $courrier): Dossier
+    private function creerDossierClassement(User $user, array $data, Courrier $courrier): Dossier
     {
         $nom = trim((string) ($data['nom_dossier'] ?? ''));
         if ($nom === '') {
@@ -188,7 +271,7 @@ class CourrierClassementDossierService
         }
         if ($nom === '') {
             throw ValidationException::withMessages([
-                'nom_dossier' => 'Indiquez le nom du dossier fournisseur.',
+                'nom_dossier' => 'Indiquez le nom du dossier.',
             ]);
         }
 
@@ -228,12 +311,15 @@ class CourrierClassementDossierService
             return $existant;
         }
 
+        $estFacture = $courrier->typeCourrier?->code === 'facture';
         $ordre = (int) (Dossier::query()->where('parent_id', $parent->id)->max('ordre') ?? -1) + 1;
 
         return Dossier::create([
             'parent_id' => $parent->id,
             'nom' => $nom,
-            'description' => 'Dossier fournisseur / prestataire (classement factures).',
+            'description' => $estFacture
+                ? 'Dossier fournisseur / prestataire (classement factures).'
+                : 'Dossier de classement courrier — partagé direction.',
             'actif' => true,
             'ordre' => $ordre,
             'structure_id' => $parent->structure_id ?? $user->structure_id,
@@ -242,5 +328,24 @@ class CourrierClassementDossierService
             'confidentiel' => false,
             'notify_sms' => false,
         ]);
+    }
+
+    private function synchroniserFicheFournisseur(Courrier $courrier, Dossier $dossier): void
+    {
+        if ($courrier->typeCourrier?->code !== 'facture') {
+            return;
+        }
+
+        $courrier->loadMissing('fournisseurPrestataire');
+        $fiche = $courrier->fournisseurPrestataire;
+        if (! $fiche instanceof FournisseurPrestataire) {
+            return;
+        }
+
+        if ((int) $fiche->dossier_id === (int) $dossier->id) {
+            return;
+        }
+
+        $fiche->update(['dossier_id' => $dossier->id]);
     }
 }

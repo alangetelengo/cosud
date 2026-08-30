@@ -629,8 +629,7 @@ class Courrier extends Model
             }
 
             return $user->aAccesTotal()
-                || $user->hasRole('particulier_dg')
-                || $user->hasRole('responsable_dossiers_prestataires');
+                || $user->hasRole('particulier_dg');
         }
 
         if ($this->estDepart()) {
@@ -692,8 +691,7 @@ class Courrier extends Model
 
         if ($this->estArrivee()) {
             return $user->aAccesTotal()
-                || $user->hasRole('particulier_dg')
-                || $user->hasRole('responsable_dossiers_prestataires');
+                || $user->hasRole('particulier_dg');
         }
 
         if ($this->estDepart()) {

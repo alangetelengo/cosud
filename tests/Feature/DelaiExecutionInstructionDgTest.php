@@ -42,6 +42,7 @@ class DelaiExecutionInstructionDgTest extends TestCase
             ->post(route('courriers.circuit.instruire', $courrier, absolute: false), [
                 'instructions' => 'Bon pour accord — traiter sous 5 jours.',
                 'delai_execution_jours' => 5,
+                'mode_paiement_circuit' => Courrier::MODE_PAIEMENT_CHEQUE,
             ])
             ->assertRedirect();
 

@@ -46,9 +46,9 @@ class ClasserCourrierDossierRequest extends FormRequest
     {
         return [
             'mode.required' => 'Choisissez un mode de classement.',
-            'dossier_id.required' => 'Sélectionnez le dossier fournisseur.',
+            'dossier_id.required' => 'Sélectionnez le dossier de classement.',
             'dossier_id.exists' => 'Le dossier sélectionné est invalide.',
-            'nom_dossier.required' => 'Indiquez le nom du nouveau dossier fournisseur.',
+            'nom_dossier.required' => 'Indiquez le nom du nouveau dossier.',
             'nom_dossier.max' => 'Le nom du dossier ne peut pas dépasser 255 caractères.',
         ];
     }

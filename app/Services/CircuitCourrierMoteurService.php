@@ -511,6 +511,17 @@ class CircuitCourrierMoteurService
             throw new InvalidArgumentException('Vous n’êtes pas autorisé à envoyer le chèque au DG.');
         }
 
+        if ($courrier->montant_facture !== null) {
+            $plafond = (float) $courrier->montant_facture;
+            if ($montant - $plafond > 0.009) {
+                throw new InvalidArgumentException(
+                    'Le montant ne peut pas dépasser le montant de la facture ('
+                    .number_format($plafond, 0, ',', ' ')
+                    .' FCFA).'
+                );
+            }
+        }
+
         $courrier = DB::transaction(function () use ($courrier, $acteur, $message, $montant, $references): Courrier {
             $courrier->update([
                 'message_ac' => $message,

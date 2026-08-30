@@ -399,9 +399,13 @@
                 <div class="p-3 space-y-2 max-h-[min(70vh,40rem)] overflow-y-auto">
                     @include('courriers.partials.actions-annuler-supprimer')
                     @can('classerDossier', $courrier)
+                    @php
+                        $estClassementFacture = ($courrier->typeCourrier?->code === 'facture');
+                        $libelleBlocClassement = $estClassementFacture ? 'Dossier fournisseur' : 'Dossier de classement';
+                    @endphp
                     <div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/20 p-3 space-y-2"
                          x-data="{ mode: @js(old('mode', $courrier->dossier_id ? 'existant' : ($dossierSuggere ? 'existant' : 'nouveau'))) }">
-                        <p class="text-xs font-semibold text-emerald-900 dark:text-emerald-200">Dossier fournisseur</p>
+                        <p class="text-xs font-semibold text-emerald-900 dark:text-emerald-200">{{ $libelleBlocClassement }}</p>
                         @if($courrier->dossier)
                             <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
                                 Classé dans
@@ -416,7 +420,11 @@
                             </button>
                         @else
                             <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug" x-show="form !== 'classer-dossier'">
-                                Non classée — rattachez la facture au dossier du fournisseur (Mes dossiers ou dossier existant).
+                                @if($estClassementFacture)
+                                    Non classée — rattachez la facture au dossier du fournisseur (fiche référentiel = 1 dossier).
+                                @else
+                                    Non classé — créez un dossier ou réutilisez un dossier existant (partagé avec la direction).
+                                @endif
                             </p>
                             <button type="button"
                                     x-show="form !== 'classer-dossier'"
@@ -431,7 +439,11 @@
                               class="space-y-2 pt-2 border-t border-emerald-200 dark:border-emerald-800">
                             @csrf
                             <p class="text-[11px] text-slate-500 leading-snug">
-                                Classement hors circuit paiement : la facture et ses pièces sont rattachées au dossier COSUD du fournisseur.
+                                @if($estClassementFacture)
+                                    Classement hors circuit paiement : la facture et ses pièces sont rattachées au dossier COSUD du fournisseur (lié à la fiche référentiel).
+                                @else
+                                    Le dossier créé ou choisi est partagé en lecture/écriture avec la direction pour éviter les doublons.
+                                @endif
                             </p>
                             <div class="flex flex-col gap-1.5">
                                 <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
@@ -445,7 +457,7 @@
                             </div>
 
                             <div x-show="mode === 'existant'" class="space-y-1">
-                                <label class="block text-[11px] font-semibold mb-1">Dossier fournisseur</label>
+                                <label class="block text-[11px] font-semibold mb-1">Dossier</label>
                                 <select name="dossier_id" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900">
                                     <option value="">— Choisir —</option>
                                     @foreach(($dossiersClassement ?? collect()) as $d)
@@ -467,7 +479,7 @@
                                     <input type="text" name="nom_dossier"
                                            value="{{ old('nom_dossier', $courrier->expediteur_libelle) }}"
                                            class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900"
-                                           placeholder="Ex. AF.COM">
+                                           placeholder="Ex. AF.COM ou objet / organisme">
                                     @error('nom_dossier')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                                 </div>
                                 <div>
@@ -484,7 +496,7 @@
 
                             <button type="button"
                                     data-loading-text="Classement..."
-                                    onclick="flashAlert('Classer cette facture dans le dossier sélectionné ? Les pièces jointes y seront rattachées.', this.closest('form'), {icon:'📁', danger:false, confirmText:'Classer', title:'Classement dossier'})"
+                                    onclick="flashAlert('Classer ce courrier dans le dossier sélectionné ? Les pièces jointes y seront rattachées et le dossier partagé avec la direction.', this.closest('form'), {icon:'📁', danger:false, confirmText:'Classer', title:'Classement dossier'})"
                                     class="w-full px-3 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm border border-emerald-700">
                                 Confirmer le classement
                             </button>

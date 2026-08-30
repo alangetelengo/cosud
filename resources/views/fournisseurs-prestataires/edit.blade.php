@@ -8,6 +8,7 @@
 
 <div class="max-w-2xl">
     <form method="post" action="{{ route('fournisseurs-prestataires.update', $fiche) }}"
+          enctype="multipart/form-data"
           data-loading-text="Enregistrement..."
           class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-5 space-y-4">
         @csrf

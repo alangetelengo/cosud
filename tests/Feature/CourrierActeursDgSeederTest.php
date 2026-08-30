@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Courrier;
 use App\Models\Structure;
 use App\Models\User;
 use Database\Seeders\ACSIFonctionsSeeder;
@@ -55,6 +56,14 @@ class CourrierActeursDgSeederTest extends TestCase
         $this->assertTrue($respDepenses->can('documents.view'));
         $this->assertTrue($respDepenses->can('dossiers.view'));
 
+        $secretaireDg = User::where('email', '001970r@acsi.cg')->firstOrFail();
+        $this->assertSame('MIREILLE BLANCHE MANGO NEE BABENGA MOCKO BANGAU', $secretaireDg->name);
+        $this->assertTrue($secretaireDg->hasRole('secretaire_direction'));
+        $this->assertSame($secDir->id, (int) $secretaireDg->structure_id);
+        $this->assertTrue($secretaireDg->gereCourrierSecretariat());
+        $this->assertTrue($secretaireDg->can('courriers.create'));
+        $this->assertTrue($secretaireDg->can('create', Courrier::class));
+
         $ancienSuivi = User::where('email', '003269d@acsi.cg')->first();
         if ($ancienSuivi) {
             $this->assertFalse($ancienSuivi->hasRole('responsable_suivi_depenses'));
@@ -82,6 +91,14 @@ class CourrierActeursDgSeederTest extends TestCase
         $this->assertTrue($agent->hasRole('agent_comptable'));
         $this->assertSame($dac->id, (int) $agent->structure_id);
         $this->assertSame($agent->id, $dac->titulaireValidationActuel()?->id);
+
+        $caissiereAc = User::where('email', '003065g@acsi.cg')->firstOrFail();
+        $this->assertSame('LYDIA EUPHRASIE KOUMOU ANDZALE', $caissiereAc->name);
+        $this->assertTrue($caissiereAc->hasRole('agent_comptable'));
+        $this->assertSame($dac->id, (int) $caissiereAc->structure_id);
+        $this->assertTrue($caissiereAc->can('courriers.view'));
+        $this->assertTrue($caissiereAc->can('courriers.voir-factures'));
+        $this->assertTrue($caissiereAc->can('bordereau-transmission.view'));
 
         $particuliere = User::where('email', '002871v@acsi.cg')->firstOrFail();
         $this->assertSame('NICOLE BIENVENUE OBA', $particuliere->name);

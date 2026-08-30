@@ -134,6 +134,7 @@ class CircuitCourrierInstructionAgentTest extends TestCase
         $this->actingAs($dg)
             ->post(route('courriers.circuit.instruire', $courrier, absolute: false), [
                 'instructions' => 'Bon pour accord — établir le chèque.',
+                'mode_paiement_circuit' => Courrier::MODE_PAIEMENT_CHEQUE,
             ])
             ->assertRedirect();
 

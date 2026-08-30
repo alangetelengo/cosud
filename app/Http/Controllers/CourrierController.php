@@ -912,7 +912,7 @@ class CourrierController extends Controller
 
         return back()->with(
             'success',
-            'Facture classée dans le dossier « '.$dossier->chemin_complet.' ».'
+            'Courrier classé dans le dossier « '.$dossier->chemin_complet.' » (partagé avec la direction).'
         );
     }
 

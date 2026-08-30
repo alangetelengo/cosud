@@ -32,7 +32,7 @@ class CourrierVisibilitePerimetreFacturesDepensesTest extends TestCase
         ]);
     }
 
-    public function test_taty_voit_seulement_les_factures(): void
+    public function test_taty_voit_factures_mad_et_divers_de_sa_structure(): void
     {
         $secDir = Structure::where('code', 'SEC-DIR')->firstOrFail();
         $taty = User::factory()->create(['structure_id' => $secDir->id]);
@@ -40,38 +40,42 @@ class CourrierVisibilitePerimetreFacturesDepensesTest extends TestCase
         $createur = User::factory()->create(['structure_id' => $secDir->id]);
 
         $facture = $this->creerArrivee($secDir, $createur, 'facture', 'Facture périmètre Taty');
-        $mad = $this->creerArrivee($secDir, $createur, 'mad', 'MAD hors périmètre Taty');
-        $demande = $this->creerArrivee($secDir, $createur, 'demande', 'Demande hors périmètre Taty');
+        $mad = $this->creerArrivee($secDir, $createur, 'mad', 'MAD visible Taty');
+        $demande = $this->creerArrivee($secDir, $createur, 'demande', 'Demande visible Taty');
 
+        $this->assertTrue($taty->can('courriers.voir-factures'));
+        $this->assertTrue($taty->can('courriers.voir-depenses'));
         $this->assertTrue($facture->visiblePar($taty));
-        $this->assertFalse($mad->visiblePar($taty));
-        $this->assertFalse($demande->visiblePar($taty));
+        $this->assertTrue($mad->visiblePar($taty));
+        $this->assertTrue($demande->visiblePar($taty));
 
         $ids = Courrier::query()->visibleBy($taty)->pluck('id');
         $this->assertTrue($ids->contains($facture->id));
-        $this->assertFalse($ids->contains($mad->id));
-        $this->assertFalse($ids->contains($demande->id));
+        $this->assertTrue($ids->contains($mad->id));
+        $this->assertTrue($ids->contains($demande->id));
     }
 
-    public function test_eleni_voit_seulement_les_depenses_mad(): void
+    public function test_eleni_voit_factures_mad_et_divers_de_sa_structure(): void
     {
         $secDir = Structure::where('code', 'SEC-DIR')->firstOrFail();
         $eleni = User::factory()->create(['structure_id' => $secDir->id]);
         $eleni->assignRole('responsable_suivi_depenses');
         $createur = User::factory()->create(['structure_id' => $secDir->id]);
 
-        $facture = $this->creerArrivee($secDir, $createur, 'facture', 'Facture hors Eleni');
+        $facture = $this->creerArrivee($secDir, $createur, 'facture', 'Facture visible Eleni');
         $mad = $this->creerArrivee($secDir, $createur, 'mad', 'MAD périmètre Eleni');
-        $demande = $this->creerArrivee($secDir, $createur, 'demande', 'Demande hors Eleni');
+        $demande = $this->creerArrivee($secDir, $createur, 'demande', 'Demande visible Eleni');
 
-        $this->assertFalse($facture->visiblePar($eleni));
+        $this->assertTrue($eleni->can('courriers.voir-factures'));
+        $this->assertTrue($eleni->can('courriers.voir-depenses'));
+        $this->assertTrue($facture->visiblePar($eleni));
         $this->assertTrue($mad->visiblePar($eleni));
-        $this->assertFalse($demande->visiblePar($eleni));
+        $this->assertTrue($demande->visiblePar($eleni));
 
         $ids = Courrier::query()->visibleBy($eleni)->pluck('id');
-        $this->assertFalse($ids->contains($facture->id));
+        $this->assertTrue($ids->contains($facture->id));
         $this->assertTrue($ids->contains($mad->id));
-        $this->assertFalse($ids->contains($demande->id));
+        $this->assertTrue($ids->contains($demande->id));
     }
 
     public function test_eleni_voit_facture_sur_circuit_ou_elle_est_impliquee(): void

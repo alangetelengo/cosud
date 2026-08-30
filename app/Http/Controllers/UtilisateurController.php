@@ -138,6 +138,7 @@ class UtilisateurController extends Controller
             'email_professionnel' => $request->email_professionnel ?: null,
             'telephone' => $this->normaliserTelephoneSms($request->input('telephone')),
             'password' => Hash::make($request->password),
+            'must_change_password' => true,
             'structure_id' => $request->structure_id ?: null,
             'actif' => $request->boolean('actif', true),
         ]);
@@ -215,7 +216,10 @@ class UtilisateurController extends Controller
             $racine->update(['structure_id' => $user->structure_id]);
         }
         if ($request->filled('password')) {
-            $user->update(['password' => Hash::make($request->password)]);
+            $user->update([
+                'password' => Hash::make($request->password),
+                'must_change_password' => true,
+            ]);
         }
         $user->syncRoles([$request->role]);
 

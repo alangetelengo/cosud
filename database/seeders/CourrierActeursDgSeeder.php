@@ -89,6 +89,14 @@ class CourrierActeursDgSeeder extends Seeder
                 'fonction_id' => null,
             ],
             [
+                'email' => '001970r@acsi.cg',
+                'name' => 'MIREILLE BLANCHE MANGO NEE BABENGA MOCKO BANGAU',
+                'role' => 'secretaire_direction',
+                'structure' => $structures['SEC-DIR'],
+                'pivot_role' => 'Secrétaire de la Direction Générale',
+                'fonction_id' => null,
+            ],
+            [
                 'email' => '003064f@acsi.cg',
                 'name' => 'BRIGITTE ESSONGA',
                 'role' => 'secretaire_direction',
@@ -173,6 +181,14 @@ class CourrierActeursDgSeeder extends Seeder
                 'fonction_id' => $fonctionAgentComptable,
             ],
             [
+                'email' => '003065g@acsi.cg',
+                'name' => 'LYDIA EUPHRASIE KOUMOU ANDZALE',
+                'role' => 'agent_comptable',
+                'structure' => $structures['DAC'],
+                'pivot_role' => 'Agent Comptable (caissière DAC)',
+                'fonction_id' => $fonctionAgentComptable,
+            ],
+            [
                 'email' => '002871v@acsi.cg',
                 'name' => 'NICOLE BIENVENUE OBA',
                 'role' => 'particulier_ac',
@@ -200,6 +216,7 @@ class CourrierActeursDgSeeder extends Seeder
                 [
                     'name' => $name,
                     'password' => $password,
+                    'must_change_password' => true,
                     'structure_id' => $acteur['structure']->id,
                     'actif' => true,
                 ]

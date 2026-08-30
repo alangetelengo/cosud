@@ -1,6 +1,8 @@
 @php
     $fiche = $fiche ?? null;
     $isEdit = (bool) $fiche;
+    $aContratInitial = (bool) old('a_contrat', $fiche?->a_contrat);
+    $aFiscalInitial = (bool) old('a_dossier_fiscal', $fiche?->a_dossier_fiscal);
 @endphp
 
 <div>
@@ -43,15 +45,77 @@
     @error('type_contrat')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
 </div>
 
-<div class="flex flex-wrap gap-6">
-    <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-        <input type="checkbox" name="a_contrat" value="1" @checked(old('a_contrat', $fiche?->a_contrat)) class="rounded border-slate-300 text-emerald-600">
-        Contrat formalisé (Oui)
-    </label>
-    <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-        <input type="checkbox" name="a_dossier_fiscal" value="1" @checked(old('a_dossier_fiscal', $fiche?->a_dossier_fiscal)) class="rounded border-slate-300 text-emerald-600">
-        Dossier fiscal à jour (Oui)
-    </label>
+<div class="space-y-3" x-data="{
+    aContrat: {{ $aContratInitial ? 'true' : 'false' }},
+    aFiscal: {{ $aFiscalInitial ? 'true' : 'false' }},
+    viderInput(ref) { if (this.$refs[ref]) { this.$refs[ref].value = ''; } }
+}">
+    <div class="flex flex-wrap gap-6">
+        <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <input type="checkbox" name="a_contrat" value="1"
+                   x-model="aContrat"
+                   @change="if (! aContrat) viderInput('scanContrat')"
+                   class="rounded border-slate-300 text-emerald-600">
+            Contrat formalisé (Oui)
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <input type="checkbox" name="a_dossier_fiscal" value="1"
+                   x-model="aFiscal"
+                   @change="if (! aFiscal) viderInput('scanFiscal')"
+                   class="rounded border-slate-300 text-emerald-600">
+            Dossier fiscal à jour (Oui)
+        </label>
+    </div>
+
+    <div x-show="aContrat" x-cloak class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 space-y-2">
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            Scan du contrat (PDF / images)
+            @if(! $isEdit || ! $fiche?->aScanContrat())
+                <span class="text-red-500">*</span>
+            @endif
+        </label>
+        @if($isEdit && $fiche?->aScanContrat())
+            <ul class="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                @foreach($fiche->piecesContrat() as $i => $piece)
+                    <li>
+                        <a href="{{ route('fournisseurs-prestataires.pieces.show', [$fiche, 'contrat', $i]) }}" target="_blank" class="text-emerald-700 dark:text-emerald-300 font-semibold no-underline hover:underline">
+                            {{ $piece['nom'] }}
+                        </a>
+                    </li>
+                @endforeach
+            </ul>
+            <p class="text-[11px] text-slate-500">Joindre un fichier ajoute des pièces (les scans existants sont conservés).</p>
+        @endif
+        <input type="file" name="scan_contrat[]" x-ref="scanContrat" accept=".pdf,.jpg,.jpeg,.png" multiple
+               class="block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:text-white file:font-semibold file:text-xs hover:file:bg-emerald-700">
+        @error('scan_contrat')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+        @error('scan_contrat.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+    </div>
+
+    <div x-show="aFiscal" x-cloak class="rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-950/20 p-3 space-y-2">
+        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            Scan du dossier fiscal (PDF / images)
+            @if(! $isEdit || ! $fiche?->aScanFiscal())
+                <span class="text-red-500">*</span>
+            @endif
+        </label>
+        @if($isEdit && $fiche?->aScanFiscal())
+            <ul class="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                @foreach($fiche->piecesFiscal() as $i => $piece)
+                    <li>
+                        <a href="{{ route('fournisseurs-prestataires.pieces.show', [$fiche, 'fiscal', $i]) }}" target="_blank" class="text-sky-700 dark:text-sky-300 font-semibold no-underline hover:underline">
+                            {{ $piece['nom'] }}
+                        </a>
+                    </li>
+                @endforeach
+            </ul>
+            <p class="text-[11px] text-slate-500">Joindre un fichier ajoute des pièces (les scans existants sont conservés).</p>
+        @endif
+        <input type="file" name="scan_fiscal[]" x-ref="scanFiscal" accept=".pdf,.jpg,.jpeg,.png" multiple
+               class="block w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-sky-600 file:text-white file:font-semibold file:text-xs hover:file:bg-sky-700">
+        @error('scan_fiscal')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+        @error('scan_fiscal.*')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+    </div>
 </div>
 
 <div>

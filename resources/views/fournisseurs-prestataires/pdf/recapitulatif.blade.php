@@ -4,23 +4,29 @@
 <meta charset="utf-8">
 <title>Tableau récapitulatif contrats et dossiers fiscaux</title>
 <style>
-@page { size: A4 landscape; margin: 12mm 12mm 12mm 14mm; }
+@page { size: A4 landscape; margin: 12mm 12mm 14mm 14mm; }
 body {
     font-family: DejaVu Sans, Arial, sans-serif;
     font-size: 10px;
     color: #000;
     margin: 0;
     padding: 0;
+}
+/*
+ * En-tête Charte uniquement en 1re page (bloc dans le flux).
+ * Un background sur body se répéterait et chevaucherait le tableau.
+ */
+.entete-officiel {
+    height: 42mm;
+    margin: -8mm -8mm 6px -10mm;
     background-image: url("{{ public_path('images/Charte.png') }}");
     background-size: cover;
     background-repeat: no-repeat;
     background-position: top center;
 }
-/* Décalage pour ne pas chevaucher la bande rouge/jaune ni l’en-tête officiel de la Charte */
 main {
-    margin-left: 58px;
-    margin-right: 8px;
-    padding-top: 52mm;
+    margin-left: 48px;
+    margin-right: 4px;
 }
 .zone0 {
     text-align: center;
@@ -67,6 +73,7 @@ table.recap th {
 </style>
 </head>
 <body>
+<div class="entete-officiel" aria-hidden="true"></div>
 <main>
 <div class="zone0">Tableau récapitulatif des contrats et dossiers fiscaux<br>des partenaires et fournisseurs de l’ACSI</div>
 <p class="sous-titre">Édité le {{ $genereLe->format('d/m/Y à H:i') }} — {{ $lignes->count() }} ligne(s)</p>
@@ -106,5 +113,19 @@ table.recap th {
     <strong><u style="font-size: 12px;">{{ $signataire ?? '—' }}</u></strong>
 </div>
 </main>
+{{-- Numérotation uniquement si le document fait plus d’une page --}}
+<script type="text/php">
+if (isset($pdf)) {
+    $pdf->page_script('
+        if ($PAGE_COUNT > 1) {
+            $font = $fontMetrics->getFont("DejaVu Sans");
+            $size = 8;
+            $text = "Page " . $PAGE_NUM . " / " . $PAGE_COUNT;
+            $width = $fontMetrics->getTextWidth($text, $font, $size);
+            $pdf->text($pdf->get_width() - $width - 36, $pdf->get_height() - 28, $text, $font, $size);
+        }
+    ');
+}
+</script>
 </body>
 </html>

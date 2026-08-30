@@ -114,6 +114,7 @@
                     @php
                         $statutCode = strtolower((string) ($c->statutCourrier?->code ?? ''));
                         $estNonLu = ! (bool) ($c->est_lu ?? false);
+                        $showUrl = route('courriers.show', ReturnUrl::forRoute($c));
                         $statutClasses = match (true) {
                             str_contains($statutCode, 'recu') || $statutCode === 'enregistre' => 'bg-sky-50 text-sky-800 border-sky-100 dark:bg-sky-900/30 dark:text-sky-200 dark:border-sky-800/50',
                             str_contains($statutCode, 'trait') || str_contains($statutCode, 'cours') => 'bg-amber-50 text-amber-800 border-amber-100 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-800/50',
@@ -122,7 +123,13 @@
                             default => 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-700/40 dark:text-slate-200 dark:border-slate-600',
                         };
                     @endphp
-                    <tr class="group transition-colors {{ $loop->odd ? 'bg-emerald-100 hover:bg-emerald-200/80 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/45' : 'bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-900/20 dark:hover:bg-amber-900/35' }}">
+                    <tr class="group transition-colors {{ $loop->odd ? 'bg-emerald-100 hover:bg-emerald-200/80 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/45' : 'bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-900/20 dark:hover:bg-amber-900/35' }} @can('view', $c) cursor-pointer @endcan"
+                        @can('view', $c)
+                        role="link"
+                        tabindex="0"
+                        onclick="window.location='{{ $showUrl }}'"
+                        onkeydown="if (event.key === 'Enter') window.location='{{ $showUrl }}'"
+                        @endcan>
                         <td class="px-5 py-3.5 whitespace-nowrap">
                             <span class="inline-flex items-center font-mono text-xs {{ $estNonLu ? 'font-bold' : 'font-semibold' }} text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-700/70 px-2.5 py-1 rounded-lg ring-1 ring-slate-200/80 dark:ring-slate-600/60">
                                 {{ $c->numeroRegistreComplet() }}
@@ -143,17 +150,8 @@
                                 {{ $c->statutCourrier?->libelle ?? '—' }}
                             </span>
                         </td>
-                        <td class="px-5 py-3.5">
+                        <td class="px-5 py-3.5" onclick="event.stopPropagation()">
                             <div class="flex items-center justify-end gap-1">
-                                <a href="{{ route('courriers.show', ReturnUrl::forRoute($c)) }}"
-                                   class="inline-flex items-center justify-center min-w-[2.35rem] min-h-[2.35rem] p-2 rounded-xl text-sky-600 dark:text-sky-400 bg-sky-50/80 dark:bg-sky-900/20 hover:bg-sky-100 dark:hover:bg-sky-900/40 border border-sky-100/80 dark:border-sky-800/40 shadow-sm transition"
-                                   title="Consulter">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
-                                    <span class="sr-only">Consulter</span>
-                                </a>
                                 @can('update', $c)
                                 <a href="{{ route('courriers.edit', ReturnUrl::forRoute($c)) }}"
                                    class="inline-flex items-center justify-center min-w-[2.35rem] min-h-[2.35rem] p-2 rounded-xl text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-200/80 dark:border-slate-600 shadow-sm transition"

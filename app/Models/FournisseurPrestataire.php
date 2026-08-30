@@ -35,7 +35,9 @@ class FournisseurPrestataire extends Model
         'telephone',
         'type_contrat',
         'a_contrat',
+        'scan_contrat_pieces',
         'a_dossier_fiscal',
+        'scan_fiscal_pieces',
         'observation',
         'dossier_id',
         'actif',
@@ -48,13 +50,38 @@ class FournisseurPrestataire extends Model
             'a_contrat' => 'boolean',
             'a_dossier_fiscal' => 'boolean',
             'actif' => 'boolean',
+            'scan_contrat_pieces' => 'array',
+            'scan_fiscal_pieces' => 'array',
         ];
     }
 
     public static function normaliserNom(?string $libelle): string
     {
         $texte = mb_strtolower(trim((string) $libelle));
+        $texte = str_replace(['²', '³'], ['2', '3'], $texte);
         $texte = preg_replace('/\s+/u', ' ', $texte) ?? '';
+
+        $sansPonctuation = preg_replace('/[.,\-]/u', ' ', $texte) ?? '';
+        $sansPonctuation = preg_replace('/\s+/u', ' ', trim($sansPonctuation)) ?? '';
+
+        /** @var array<string, string> $aliases */
+        $aliases = [
+            'edition les sozo' => 'ed. les sozo',
+            'soft renovations' => 'soft-renovation',
+            'soft renovation' => 'soft-renovation',
+            'metre de luxe' => 'metro de luxe',
+            'af,com' => 'afcom',
+            'af com' => 'afcom',
+            'ets db' => 'ets-db',
+        ];
+
+        if (isset($aliases[$texte])) {
+            return $aliases[$texte];
+        }
+
+        if (isset($aliases[$sansPonctuation])) {
+            return $aliases[$sansPonctuation];
+        }
 
         return $texte;
     }
@@ -106,5 +133,59 @@ class FournisseurPrestataire extends Model
     public function libelleDossierFiscalCourt(): string
     {
         return $this->a_dossier_fiscal ? 'Oui' : 'Non';
+    }
+
+    public function aScanContrat(): bool
+    {
+        return $this->piecesContrat() !== [];
+    }
+
+    public function aScanFiscal(): bool
+    {
+        return $this->piecesFiscal() !== [];
+    }
+
+    /**
+     * @return list<array{chemin: string, nom: string}>
+     */
+    public function piecesContrat(): array
+    {
+        return $this->normaliserPieces($this->scan_contrat_pieces);
+    }
+
+    /**
+     * @return list<array{chemin: string, nom: string}>
+     */
+    public function piecesFiscal(): array
+    {
+        return $this->normaliserPieces($this->scan_fiscal_pieces);
+    }
+
+    /**
+     * @return list<array{chemin: string, nom: string}>
+     */
+    private function normaliserPieces(mixed $brut): array
+    {
+        if (! is_array($brut)) {
+            return [];
+        }
+
+        $pieces = [];
+        foreach ($brut as $piece) {
+            if (! is_array($piece)) {
+                continue;
+            }
+            $chemin = trim((string) ($piece['chemin'] ?? ''));
+            $nom = trim((string) ($piece['nom'] ?? ''));
+            if ($chemin === '') {
+                continue;
+            }
+            $pieces[] = [
+                'chemin' => $chemin,
+                'nom' => $nom !== '' ? $nom : basename($chemin),
+            ];
+        }
+
+        return $pieces;
     }
 }
