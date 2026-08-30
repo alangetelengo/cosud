@@ -34,9 +34,9 @@ class DossierPartageNotification extends Notification
         $nb = max(1, (int) $this->nombreDossiersPartages);
 
         $mail = (new MailMessage)
-            ->subject('GED : Un dossier vous a ete partage')
+            ->subject('COSUD : Un dossier vous a ete partage')
             ->greeting('Bonjour '.$notifiable->name.',')
-            ->line('Un dossier vous a ete partage sur GED.')
+            ->line('Un dossier vous a ete partage sur COSUD.')
             ->line('**Dossier :** '.$this->dossier->nom)
             ->line('**Partage par :** '.$this->partagePar->name)
             ->line('**Droits accordes :** '.$droits)
@@ -47,7 +47,7 @@ class DossierPartageNotification extends Notification
             $mail->line('**Expiration :** '.$this->dateExpiration);
         }
 
-        return $mail->line('Merci d\'utiliser GED.');
+        return $mail->line('Merci d\'utiliser COSUD.');
     }
 
     public function toArray(object $notifiable): array

@@ -29,8 +29,19 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            'must_change_password' => false,
             'remember_token' => Str::random(10),
         ];
+    }
+
+    /**
+     * Compte avec mot de passe temporaire à changer à la première connexion.
+     */
+    public function mustChangePassword(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'must_change_password' => true,
+        ]);
     }
 
     /**

@@ -45,7 +45,7 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->assertDatabaseHas('circuit_courriers', ['code' => 'courrier_general', 'actif' => true]);
 
         $facture = CircuitCourrier::where('code', 'facture_prestataire')->firstOrFail();
-        $this->assertGreaterThanOrEqual(9, $facture->etapesActives()->count());
+        $this->assertSame(5, $facture->etapesActives()->count());
         $this->assertDatabaseHas('circuit_courrier_etapes', [
             'circuit_courrier_id' => $facture->id,
             'code' => 'preuve_paiement',
@@ -81,7 +81,8 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->assertSame('instructions_dg', $courrier->circuitEtapeActuelle->code);
 
         $courrier = $moteur->avancer($courrier, $admin, 'Instructions données');
-        $this->assertSame('traitement_dossiers_vers_ac', $courrier->fresh()->circuitEtapeActuelle->code);
+        // Relais « Traitement dossiers → AC » validé automatiquement → étape AC.
+        $this->assertSame('ac_etablit_cheque', $courrier->fresh()->circuitEtapeActuelle->code);
     }
 
     public function test_circuit_general_saute_automatiquement_l_etape_de_notification(): void
@@ -157,43 +158,99 @@ class CircuitCourrierConfigurableTest extends TestCase
         $courrier = $moteur->instruire($courrier, $dg, 'Répondre favorablement.');
         $this->assertSame('traitement_particuliere', $courrier->circuitEtapeActuelle->code);
 
-        // Chemin A : la particulière soumet uniquement le document — le circuit avance
-        // vers la validation du DG, aucun départ n’est créé.
+        // Chemin A : la particulière crée le départ et le transmet pour signature.
+        // Un objet libre posté ne doit pas être accepté (objet forcé côté serveur).
         $this->actingAs($particuliere)
             ->post(route('courriers.circuit.soumettre-reponse', $courrier, absolute: false), [
                 'document_reponse' => UploadedFile::fake()->create('reponse.pdf', 30, 'application/pdf'),
-                'objet' => 'Réponse favorable',
+                'objet' => 'projet de reponse en attente de validation',
+            ])
+            ->assertSessionHasErrors('objet');
+
+        $this->actingAs($particuliere)
+            ->post(route('courriers.circuit.soumettre-reponse', $courrier, absolute: false), [
+                'document_reponse' => UploadedFile::fake()->create('reponse.pdf', 30, 'application/pdf'),
             ])
             ->assertRedirect();
 
         $courrier->refresh();
         $this->assertSame('validation_reponse_dg', $courrier->circuitEtapeActuelle->code);
-        $this->assertNotNull($courrier->document_reponse_id);
-        $this->assertNull($courrier->reponse_structure_destinataire_id);
-        $this->assertNull(Courrier::where('courrier_parent_id', $courrier->id)->first());
+        $reponse = Courrier::where('courrier_parent_id', $courrier->id)->firstOrFail();
+        $this->assertSame('transmis_directeur', $reponse->statutCourrier->code);
+        $this->assertSame($dg->id, $reponse->directeur_en_attente_id);
+        $this->assertSame('Réponse — Dossier test circuit', $reponse->objet);
 
-        // Le DG valide et renvoie à la particulière (aucun départ créé à ce stade).
+        // Le DG signe — la particulière peut ensuite expédier.
         $this->actingAs($dg)
             ->post(route('courriers.circuit.valider-reponse', $courrier, absolute: false), [])
             ->assertRedirect();
 
         $courrier->refresh();
-        $this->assertSame('creation_depart_particuliere', $courrier->circuitEtapeActuelle->code);
-        $this->assertNotNull($courrier->document_reponse_id);
+        $reponse->refresh();
+        $this->assertSame('expedition_reponse', $courrier->circuitEtapeActuelle->code);
+        $this->assertSame('signe', $reponse->statutCourrier->code);
+        $this->assertSame($dg->id, $reponse->signataire_id);
 
-        // Lucienne crée le courrier départ en brouillon avec le destinataire indiqué.
+        // Expédition unique : clôture l’arrivée + circuit.
         $this->actingAs($particuliere)
-            ->post(route('courriers.creer-reponse', $courrier, absolute: false), [
+            ->post(route('courriers.expedier-interne', $reponse, absolute: false), [
                 'structure_destinataire_id' => $secDdsait->id,
+                'numero_archives' => 'DG/DEP/2026/020',
             ])
             ->assertRedirect();
 
+        $this->assertSame('expedie', $reponse->fresh()->statutCourrier->code);
+        $this->assertSame('cloture', $courrier->fresh()->statutCourrier->code);
         $this->assertNull($courrier->fresh()->circuit_etape_actuelle_id);
-        $reponse = Courrier::where('courrier_parent_id', $courrier->id)->firstOrFail();
-        $this->assertSame('brouillon', $reponse->statutCourrier->code);
-        $this->assertNull($reponse->signataire_id);
-        $this->assertSame($secDdsait->id, $reponse->structure_destinataire_id);
-        $this->assertSame($particuliere->id, $reponse->createur_id);
+        $this->assertSame($secDdsait->id, $reponse->fresh()->structure_destinataire_id);
+    }
+
+    public function test_soumission_reponse_notifie_le_dg_une_seule_fois(): void
+    {
+        Notification::fake();
+
+        $dg = $this->creerDg();
+        $particuliere = $this->creerParticuliere();
+        $courrier = $this->creerCourrierArrivee($dg, 'administratif');
+        $circuit = CircuitCourrier::where('code', 'courrier_general')->firstOrFail();
+
+        $moteur = app(CircuitCourrierMoteurService::class);
+        $courrier = $moteur->instruire($moteur->demarrer($courrier, $circuit, $dg), $dg, 'Préparer la note.');
+
+        $this->actingAs($particuliere)
+            ->post(route('courriers.circuit.soumettre-reponse', $courrier, absolute: false), [
+                'document_reponse' => UploadedFile::fake()->create('note.pdf', 20, 'application/pdf'),
+            ])
+            ->assertRedirect();
+
+        Notification::assertSentToTimes($dg, CourrierWorkflowNotification::class, 1);
+        Notification::assertSentTo($dg, CourrierWorkflowNotification::class, function ($n) {
+            return $n->type === CourrierNotificationService::REPONSE_A_VALIDER;
+        });
+    }
+
+    public function test_flash_succes_courrier_utilise_le_bandeau_avec_icone_et_fermeture(): void
+    {
+        $dg = $this->creerDg();
+        $courrier = $this->creerCourrierArrivee($dg, 'administratif');
+        $circuit = CircuitCourrier::where('code', 'courrier_general')->firstOrFail();
+        $courrier = app(CircuitCourrierMoteurService::class)->demarrer($courrier, $circuit, $dg);
+
+        $this->actingAs($dg)
+            ->from(route('courriers.show', $courrier, absolute: false))
+            ->post(route('courriers.circuit.instruire', $courrier, absolute: false), [
+                'instructions' => 'Préparer une note de stage.',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($dg)
+            ->withSession(['success' => 'Instructions enregistrées et transmises pour traitement.'])
+            ->get(route('courriers.show', $courrier->fresh(), absolute: false))
+            ->assertOk()
+            ->assertSee('Instructions enregistrées et transmises pour traitement.', false)
+            ->assertSee('rounded-2xl bg-emerald-50', false)
+            ->assertSee('aria-label="Fermer"', false)
+            ->assertSee('✓', false);
     }
 
     public function test_particuliere_ne_choisit_ni_confidentialite_ni_destinataire_precis_sur_courrier_confidentiel(): void
@@ -221,8 +278,7 @@ class CircuitCourrierConfigurableTest extends TestCase
             ])
             ->assertSessionHasErrors(['reponse_confidentielle', 'destinataire_agent_id', 'structure_destinataire_id']);
 
-        // Sans ces champs interdits, la soumission fonctionne : la confidentialité est reprise
-        // automatiquement du courrier (décidée à l'orientation), sans agent destinataire choisi.
+        // Sans ces champs interdits, la soumission crée le départ en attente de signature.
         $this->actingAs($particuliere)
             ->post(route('courriers.circuit.soumettre-reponse', $courrier, absolute: false), [
                 'document_reponse' => UploadedFile::fake()->create('reponse.pdf', 30, 'application/pdf'),
@@ -230,28 +286,17 @@ class CircuitCourrierConfigurableTest extends TestCase
             ->assertRedirect();
 
         $courrier->refresh();
-        $this->assertTrue((bool) $courrier->reponse_confidentielle);
-        $this->assertNull($courrier->destinataire_agent_id);
         $this->assertSame('validation_reponse_dg', $courrier->circuitEtapeActuelle->code);
+        $reponse = Courrier::where('courrier_parent_id', $courrier->id)->firstOrFail();
+        $this->assertSame('transmis_directeur', $reponse->statutCourrier->code);
 
-        // Le DG valide et renvoie à Lucienne ; c’est elle qui crée le départ (confidentiel → agent).
         $this->actingAs($dg)
             ->post(route('courriers.circuit.valider-reponse', $courrier, absolute: false), [])
             ->assertRedirect();
 
-        $this->assertSame('creation_depart_particuliere', $courrier->fresh()->circuitEtapeActuelle->code);
-
-        $this->actingAs($particuliere)
-            ->post(route('courriers.creer-reponse', $courrier->fresh(), absolute: false), [
-                'reponse_confidentielle' => '1',
-                'destinataire_agent_id' => $agent->id,
-            ])
-            ->assertRedirect();
-
-        $reponse = Courrier::where('courrier_parent_id', $courrier->id)->firstOrFail();
-        $this->assertSame('brouillon', $reponse->statutCourrier->code);
-        $this->assertSame($agent->id, $reponse->destinataire_agent_id);
-        $this->assertNull($reponse->structure_destinataire_id);
+        $this->assertSame('expedition_reponse', $courrier->fresh()->circuitEtapeActuelle->code);
+        $this->assertSame('signe', $reponse->fresh()->statutCourrier->code);
+        $this->assertSame($dg->id, $reponse->fresh()->signataire_id);
     }
 
     public function test_dg_rejette_le_projet_de_reponse_et_le_circuit_retourne_a_traitement_particuliere(): void
@@ -269,16 +314,14 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->actingAs($particuliere)
             ->post(route('courriers.circuit.soumettre-reponse', $courrier, absolute: false), [
                 'document_reponse' => UploadedFile::fake()->create('reponse.pdf', 30, 'application/pdf'),
-                'objet' => 'Réponse favorable',
             ])
             ->assertRedirect();
 
         $courrier->refresh();
         $this->assertSame('validation_reponse_dg', $courrier->circuitEtapeActuelle->code);
-        $documentReponseId = $courrier->document_reponse_id;
+        $reponse = Courrier::where('courrier_parent_id', $courrier->id)->firstOrFail();
 
-        // La particulière ne peut pas rejeter sa propre soumission : c’est réservé à l’acteur
-        // de l’étape « validation_reponse_dg » (le DG).
+        // La particulière ne peut pas rejeter : c’est réservé au DG.
         $this->actingAs($particuliere)
             ->post(route('courriers.circuit.rejeter-reponse', $courrier, absolute: false), [
                 'motif_rejet' => 'Tentative non autorisée',
@@ -294,13 +337,12 @@ class CircuitCourrierConfigurableTest extends TestCase
         $courrier->refresh();
         $this->assertSame('traitement_particuliere', $courrier->circuitEtapeActuelle->code);
         $this->assertNull($courrier->document_reponse_id);
-        $this->assertNotNull($documentReponseId);
         $this->assertSame('Le destinataire proposé n’est pas correct.', $courrier->motif_rejet);
         $this->assertSame($dg->id, $courrier->rejete_par_id);
-        $this->assertNull(Courrier::where('courrier_parent_id', $courrier->id)->first());
+        $this->assertSame('rejete_directeur', $reponse->fresh()->statutCourrier->code);
     }
 
-    public function test_dg_ne_voit_pas_creer_depart_brouillon_apres_validation(): void
+    public function test_apres_signature_particuliere_voit_lexpedition_pas_creer_depart(): void
     {
         $dg = $this->creerDg();
         $particuliere = $this->creerParticuliere();
@@ -319,22 +361,20 @@ class CircuitCourrierConfigurableTest extends TestCase
             ->post(route('courriers.circuit.valider-reponse', $courrier->fresh(), absolute: false), [])
             ->assertRedirect();
 
-        // Après validation, c’est à la particulière de créer le départ : le DG ne doit plus
-        // voir les boutons de création brouillon (même en mode « pas votre tour »).
         $this->actingAs($dg)
             ->get(route('courriers.show', $courrier->fresh(), absolute: false))
             ->assertOk()
-            ->assertDontSee('Créer le courrier départ (brouillon)', false)
-            ->assertDontSee('Créer le courrier départ', false)
+            ->assertDontSee('Créer le courrier départ (signé)', false)
             ->assertDontSee('Répondre moi-même et signer', false);
 
         $this->actingAs($particuliere)
             ->get(route('courriers.show', $courrier->fresh(), absolute: false))
             ->assertOk()
-            ->assertSee('Créer le courrier départ (brouillon)', false);
+            ->assertSee('Ouvrir le départ pour l’expédier', false)
+            ->assertDontSee('Créer le courrier départ (signé)', false);
     }
 
-    public function test_dg_sur_circuit_facture_peut_repondre_lui_meme_et_cloturer_le_circuit(): void
+    public function test_dg_sur_circuit_facture_ne_peut_pas_repondre_lui_meme(): void
     {
         $dg = $this->creerDg();
         $secDdsait = Structure::where('code', 'SEC-DDSAIT')->firstOrFail();
@@ -349,28 +389,20 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->actingAs($dg)
             ->get(route('courriers.show', $courrier, absolute: false))
             ->assertOk()
-            ->assertSee('Répondre moi-même et signer', false)
-            ->assertSee('A — Instruire', false)
+            ->assertSee('A — Instruire le dossier', false)
+            ->assertDontSee('Répondre moi-même et signer', false)
             ->assertDontSee('avant de pouvoir préparer une réponse', false);
 
         $this->actingAs($dg)
             ->post(route('courriers.creer-reponse', $courrier, absolute: false), [
                 'signer_immediatement' => '1',
                 'document_reponse' => UploadedFile::fake()->create('reponse-facture.pdf', 20, 'application/pdf'),
-                'objet' => 'Réponse DG sur facture',
                 'structure_destinataire_id' => $secDdsait->id,
             ])
-            ->assertRedirect();
+            ->assertForbidden();
 
-        $this->assertNull($courrier->fresh()->circuit_etape_actuelle_id);
-        $reponse = Courrier::where('courrier_parent_id', $courrier->id)->firstOrFail();
-        $this->assertSame('signe', $reponse->statutCourrier->code);
-        $this->assertSame($dg->id, $reponse->signataire_id);
-        // Clôture directe : pas de passage vers l’étape AC / chèque.
-        $this->assertDatabaseHas('circuit_courrier_historiques', [
-            'courrier_id' => $courrier->id,
-            'evenement' => 'cloture_circuit',
-        ]);
+        $this->assertSame('instructions_dg', $courrier->fresh()->circuitEtapeActuelle?->code);
+        $this->assertNull(Courrier::where('courrier_parent_id', $courrier->id)->first());
     }
 
     public function test_dg_peut_repondre_lui_meme_sans_passer_par_la_particuliere(): void
@@ -382,20 +414,15 @@ class CircuitCourrierConfigurableTest extends TestCase
         $circuit = CircuitCourrier::where('code', 'courrier_general')->firstOrFail();
 
         $moteur = app(CircuitCourrierMoteurService::class);
-        $courrier = $moteur->instruire(
-            $moteur->demarrer($courrier, $circuit, $dg),
-            $dg,
-            'Répondre favorablement.'
-        );
-        $this->assertSame('traitement_particuliere', $courrier->circuitEtapeActuelle->code);
+        $courrier = $moteur->demarrer($courrier, $circuit, $dg);
+        $this->assertTrue(in_array($courrier->circuitEtapeActuelle->code, ['instruction_dg', 'instructions_dg'], true)
+            || $courrier->circuitEtapeActuelle->action === 'instruire');
 
-        // Chemin B : le DG établit et signe lui-même la réponse, sans attendre la particulière
-        // ni une validation séparée, avec le destinataire de son choix.
+        // Chemin B : uniquement à l’étape d’instructions — le DG établit et signe lui-même.
         $this->actingAs($dg)
             ->post(route('courriers.creer-reponse', $courrier, absolute: false), [
                 'signer_immediatement' => '1',
                 'document_reponse' => UploadedFile::fake()->create('reponse-dg.pdf', 20, 'application/pdf'),
-                'objet' => 'Réponse directe du DG',
                 'structure_destinataire_id' => $secDdsait->id,
             ])
             ->assertRedirect();
@@ -405,7 +432,7 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->assertSame('signe', $reponse->statutCourrier->code);
         $this->assertSame($dg->id, $reponse->signataire_id);
         $this->assertSame($secDdsait->id, $reponse->structure_destinataire_id);
-        $this->assertSame('Réponse directe du DG', $reponse->objet);
+        $this->assertSame('Réponse — Dossier test circuit', $reponse->objet);
     }
 
     public function test_dg_peut_repondre_de_maniere_confidentielle_a_un_agent_precis(): void
@@ -418,17 +445,12 @@ class CircuitCourrierConfigurableTest extends TestCase
         $circuit = CircuitCourrier::where('code', 'courrier_general')->firstOrFail();
 
         $moteur = app(CircuitCourrierMoteurService::class);
-        $courrier = $moteur->instruire(
-            $moteur->demarrer($courrier, $circuit, $dg),
-            $dg,
-            'Traiter en confidentiel.'
-        );
+        $courrier = $moteur->demarrer($courrier, $circuit, $dg);
 
         $this->actingAs($dg)
             ->post(route('courriers.creer-reponse', $courrier, absolute: false), [
                 'signer_immediatement' => '1',
                 'document_reponse' => UploadedFile::fake()->create('reponse-confidentielle.pdf', 20, 'application/pdf'),
-                'objet' => 'Réponse confidentielle du DG',
                 'reponse_confidentielle' => '1',
                 'destinataire_agent_id' => $agent->id,
             ])
@@ -438,6 +460,7 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->assertSame('signe', $reponse->statutCourrier->code);
         $this->assertSame($agent->id, $reponse->destinataire_agent_id);
         $this->assertNull($reponse->structure_destinataire_id);
+        $this->assertSame('Réponse — Dossier test circuit', $reponse->objet);
 
         // L’agent destinataire confidentiel doit pouvoir consulter son courrier départ.
         $this->actingAs($agent)
@@ -484,6 +507,7 @@ class CircuitCourrierConfigurableTest extends TestCase
             ->get(route('courriers.show', $courrier, absolute: false))
             ->assertOk()
             ->assertDontSee('Soumettre le projet de réponse au DG', false)
+            ->assertDontSee('Transmettre pour signature', false)
             ->assertSee('A — Instruire', false)
             ->assertSee('Répondre moi-même et signer', false);
 
@@ -492,7 +516,8 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->actingAs($dg)
             ->get(route('courriers.show', $courrier->fresh(), absolute: false))
             ->assertOk()
-            ->assertSee('Soumettre le projet de réponse au DG', false);
+            ->assertDontSee('Répondre moi-même et signer', false)
+            ->assertDontSee('Préparer une réponse', false);
     }
 
     public function test_secretaire_ne_voit_pas_le_message_dg_tant_que_les_instructions_ne_sont_pas_donnees(): void
@@ -507,12 +532,13 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->actingAs($secretaire)
             ->get(route('courriers.show', $courrier->fresh(), absolute: false))
             ->assertOk()
-            ->assertSee('En attente des instructions du DG / directeur.', false)
-            ->assertDontSee('A — Instruire', false)
+            ->assertSee('Circuit métier', false)
+            ->assertSee('Bon pour accord / instructions DG', false)
+            ->assertDontSee('A — Instruire le dossier', false)
             ->assertDontSee('Répondre moi-même et signer', false);
     }
 
-    public function test_dg_voit_les_boutons_en_mode_degrade_une_fois_les_instructions_donnees(): void
+    public function test_dg_ne_voit_plus_preparer_ni_repondre_apres_avoir_instruit(): void
     {
         $dg = $this->creerDg();
         $courrier = $this->creerCourrierArrivee($dg, 'administratif');
@@ -522,16 +548,14 @@ class CircuitCourrierConfigurableTest extends TestCase
         $moteur->demarrer($courrier, $circuit, $dg);
         $moteur->instruire($courrier->fresh(), $dg, 'Traiter ce dossier.');
 
-        // Le circuit est désormais à l’étape « traitement_particuliere » : ce n’est plus le
-        // tour du DG (aAccesTotal lui laisse tout de même le droit d’agir), donc l’UI doit le
-        // signaler par un style dégradé + une confirmation renforcée plutôt que masquer l’action.
-        $response = $this->actingAs($dg)
+        // Après instruction, c’est le tour de la particulière : le DG ne doit plus voir
+        // « Préparer une réponse » ni « Répondre moi-même », seulement la relance.
+        $this->actingAs($dg)
             ->get(route('courriers.show', $courrier->fresh(), absolute: false))
-            ->assertOk();
-
-        $response->assertSee('pas votre tour', false);
-        $response->assertSee('Ce n’est pas votre tour dans le circuit', false);
-        $response->assertSee('Préparer une réponse', false);
+            ->assertOk()
+            ->assertDontSee('Préparer une réponse', false)
+            ->assertDontSee('Répondre moi-même et signer', false)
+            ->assertSee('Relancer le responsable', false);
     }
 
     public function test_particuliere_ne_voit_pas_le_mode_degrade_quand_c_est_son_tour(): void
@@ -562,17 +586,16 @@ class CircuitCourrierConfigurableTest extends TestCase
         $moteur->demarrer($courrier, $circuit, $dg);
         $moteur->instruire($courrier->fresh(), $dg, 'Traiter ce dossier.');
 
-        // À cette étape, seule la soumission du projet de réponse (avec document + destinataire)
-        // doit faire avancer le circuit : le bouton générique « Valider l’étape » (qui avancerait
-        // sans aucune de ces informations) ne doit pas être proposé.
+        // À cette étape, seule la transmission du courrier de réponse pour signature
+        // doit faire avancer le circuit : le bouton générique « Valider l’étape » ne doit pas être proposé.
         $this->actingAs($particuliere)
             ->get(route('courriers.show', $courrier->fresh(), absolute: false))
             ->assertOk()
             ->assertDontSee('Valider l’étape', false)
-            ->assertSee('Soumettre le projet de réponse au DG', false)
-            ->assertSee('Projet de réponse à soumettre au DG', false)
-            ->assertSee('Document de réponse', false)
-            ->assertSee('Cette étape se termine par la soumission du projet de réponse au DG', false);
+            ->assertSee('Transmettre pour signature', false)
+            ->assertSee('Courrier de réponse à transmettre pour signature', false)
+            ->assertSee('Document', false)
+            ->assertSee('Cette étape se termine en transmettant le courrier de réponse pour signature', false);
     }
 
     public function test_correction_enregistrement_est_repliee_dans_autres_actions(): void
@@ -681,6 +704,7 @@ class CircuitCourrierConfigurableTest extends TestCase
         $this->actingAs($user)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-0932bed9/2026',
                 'objet' => 'Note de service test circuit',
                 'expediteur_libelle' => 'Service X',
                 'date_reception' => now()->toDateString(),
@@ -767,6 +791,10 @@ class CircuitCourrierConfigurableTest extends TestCase
             'objet' => 'Dossier test circuit',
             'createur_id' => $user->id,
             'structure_id' => $user->structure_id,
+            'service_demandeur_structure_id' => in_array($typeCode, ['facture', 'mad'], true)
+                ? Structure::where('code', 'DAF')->value('id')
+                : null,
+            'montant_facture' => in_array($typeCode, ['facture', 'mad'], true) ? 500_000 : null,
         ]);
     }
 }

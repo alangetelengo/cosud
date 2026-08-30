@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CircuitCourrier;
 use App\Models\Courrier;
+use App\Models\FournisseurPrestataire;
 use App\Models\PrioriteCourrier;
 use App\Models\SensCourrier;
 use App\Models\StatutCourrier;
@@ -49,27 +50,34 @@ class CourrierNotificationsEtRetardsTest extends TestCase
         $particuliere->assignRole('particulier_dg');
 
         $type = TypeCourrier::where('code', 'facture')->firstOrFail();
+        $fiche = FournisseurPrestataire::factory()->create(['nom' => 'Fournisseur']);
 
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-3a50bd68/2026',
                 'objet' => 'Facture test notif',
-                'expediteur_libelle' => 'Fournisseur',
+                'fournisseur_prestataire_id' => $fiche->id,
+                'expediteur_telephone' => '+242060000001',
                 'date_reception' => now()->toDateString(),
                 'type_courrier_id' => $type->id,
+                'service_demandeur_structure_id' => Structure::where('code', 'DAF')->value('id'),
+                'montant_facture' => '600000',
                 'fichier' => UploadedFile::fake()->create('f.pdf', 20, 'application/pdf'),
             ])
             ->assertRedirect();
 
-        // Un circuit est attaché : seule l’étape réellement atteinte notifie (pas de
-        // notification « enregistrement » redondante en plus).
+        // Un circuit facture est attaché : le DG reçoit la notif métier dédiée (pas ETAPE_CIRCUIT).
         Notification::assertSentTo($dg, CourrierWorkflowNotification::class, function ($n) {
-            return $n->type === CourrierNotificationService::ETAPE_CIRCUIT;
+            return $n->type === CourrierNotificationService::FACTURE_ENREGISTREE_DG;
         });
         Notification::assertSentTo($particuliere, CourrierWorkflowNotification::class, function ($n) {
             return $n->type === CourrierNotificationService::ETAPE_CIRCUIT;
         });
         Notification::assertSentToTimes($dg, CourrierWorkflowNotification::class, 1);
+        Notification::assertNotSentTo($dg, CourrierWorkflowNotification::class, function ($n) {
+            return $n->type === CourrierNotificationService::ETAPE_CIRCUIT;
+        });
         Notification::assertNotSentTo($dg, CourrierWorkflowNotification::class, function ($n) {
             return $n->type === CourrierNotificationService::ENREGISTREMENT_ARRIVEE;
         });
@@ -95,6 +103,7 @@ class CourrierNotificationsEtRetardsTest extends TestCase
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-bffc7268/2026',
                 'objet' => 'Courrier sans circuit test notif',
                 'expediteur_libelle' => 'Expéditeur externe',
                 'date_reception' => now()->toDateString(),
@@ -164,7 +173,7 @@ class CourrierNotificationsEtRetardsTest extends TestCase
         app(CircuitCourrierMoteurService::class)->demarrer($courrier, $circuit, $admin);
 
         $courrier->refresh();
-        $courrier->circuit_etape_depuis = now()->subHours(config('ged.circuit_retard_heures', 48) + 2);
+        $courrier->circuit_etape_depuis = now()->subHours(config('cosud.circuit_retard_heures', 48) + 2);
         $courrier->dernier_alerte_retard_at = null;
         $courrier->save();
 

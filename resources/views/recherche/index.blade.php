@@ -63,7 +63,7 @@
                                 <td class="px-6 py-4 text-slate-600 dark:text-slate-400">{{ $doc->typeDocument->libelle }}</td>
                                 <td class="px-6 py-4 text-right">
                                     @can('documents.view')
-                                    <a href="{{ route('documents.download', $doc) }}" class="text-[#00b464] hover:underline text-sm">Télécharger</a>
+                                    <x-table-action :href="route('documents.download', $doc)">Télécharger</x-table-action>
                                     @endcan
                                 </td>
                             </tr>

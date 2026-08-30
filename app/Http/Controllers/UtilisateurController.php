@@ -7,11 +7,14 @@ use App\Models\Fonction;
 use App\Models\JournalAudit;
 use App\Models\Structure;
 use App\Models\User;
+use App\Services\SmsService;
+use App\Support\ReturnUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\Rules\ValidationRule;
 use PragmaRX\Google2FA\Google2FA;
 use Spatie\Permission\Models\Role;
 
@@ -25,7 +28,8 @@ class UtilisateurController extends Controller
             $q = $request->q;
             $query->where(function ($qry) use ($q) {
                 $qry->where('name', 'like', "%{$q}%")
-                    ->orWhere('email', 'like', "%{$q}%");
+                    ->orWhere('email', 'like', "%{$q}%")
+                    ->orWhere('telephone', 'like', "%{$q}%");
             });
         }
         if ($request->filled('role')) {
@@ -61,7 +65,8 @@ class UtilisateurController extends Controller
             $q = $request->q;
             $query->where(function ($qry) use ($q) {
                 $qry->where('name', 'like', "%{$q}%")
-                    ->orWhere('email', 'like', "%{$q}%");
+                    ->orWhere('email', 'like', "%{$q}%")
+                    ->orWhere('telephone', 'like', "%{$q}%");
             });
         }
         if ($request->filled('role')) {
@@ -103,13 +108,14 @@ class UtilisateurController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $this->authorize('create', User::class);
         $roles = Role::where('guard_name', 'web')->orderBy('name')->get();
         $structures = Structure::where('actif', true)->orderBy('nom')->get();
+        $retourUrl = ReturnUrl::resolve($request->query('return'), route('utilisateurs.index'));
 
-        return view('utilisateurs.create', compact('roles', 'structures'));
+        return view('utilisateurs.create', compact('roles', 'structures', 'retourUrl'));
     }
 
     public function store(Request $request)
@@ -119,39 +125,43 @@ class UtilisateurController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'email_professionnel' => ['nullable', 'string', 'email', 'max:255'],
-            'telephone' => ['nullable', 'string', 'max:20'],
+            'telephone' => $this->reglesTelephoneSms(),
             'password' => ['required', 'confirmed', Password::defaults()],
             'role' => ['required', 'exists:roles,name'],
             'structure_id' => ['nullable', 'exists:structures,id'],
             'actif' => ['boolean'],
-        ]);
+        ], $this->messagesTelephoneSms());
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'email_professionnel' => $request->email_professionnel ?: null,
-            'telephone' => $request->telephone ?: null,
+            'telephone' => $this->normaliserTelephoneSms($request->input('telephone')),
             'password' => Hash::make($request->password),
+            'must_change_password' => true,
             'structure_id' => $request->structure_id ?: null,
             'actif' => $request->boolean('actif', true),
         ]);
         $user->assignRole($request->role);
 
         JournalAudit::log('utilisateur.creation', 'utilisateurs', ['user_id' => $user->id]);
-        Log::channel('eged')->info('Utilisateur créé', ['user_id' => $user->id, 'email' => $user->email, 'by' => auth()->id()]);
+        Log::channel('cosud')->info('Utilisateur créé', ['user_id' => $user->id, 'email' => $user->email, 'by' => auth()->id()]);
 
         return redirect()->route('utilisateurs.index')->with('success', 'Utilisateur créé.');
     }
 
-    public function show(User $user)
+    public function show(Request $request, User $user)
     {
         $this->authorize('view', $user);
         $user->load('roles', 'structure');
 
-        return view('utilisateurs.show', ['utilisateur' => $user]);
+        return view('utilisateurs.show', [
+            'utilisateur' => $user,
+            'retourUrl' => ReturnUrl::resolve($request->query('return'), route('utilisateurs.index')),
+        ]);
     }
 
-    public function edit(User $user)
+    public function edit(Request $request, User $user)
     {
         $this->authorize('update', $user);
         $user->load([
@@ -170,6 +180,7 @@ class UtilisateurController extends Controller
             'structures' => $structures,
             'fonctions' => $fonctions,
             'structuresDisponibles' => $structuresDisponibles,
+            'retourUrl' => ReturnUrl::resolve($request->query('return'), route('utilisateurs.index')),
         ]);
     }
 
@@ -179,13 +190,13 @@ class UtilisateurController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,'.$user->id],
-            'telephone' => ['nullable', 'string', 'max:20'],
+            'telephone' => $this->reglesTelephoneSms(),
             'password' => ['nullable', 'confirmed', Password::defaults()],
             'role' => ['required', 'exists:roles,name'],
             'structure_id' => ['nullable', 'exists:structures,id'],
             'actif' => ['boolean'],
             'documents_view_hierarchique' => ['nullable', 'boolean'],
-        ]);
+        ], $this->messagesTelephoneSms());
 
         $actif = $request->boolean('actif', true);
         if ($user->id === auth()->id() && ! $actif) {
@@ -196,7 +207,7 @@ class UtilisateurController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'email_professionnel' => $request->email_professionnel ?: null,
-            'telephone' => $request->telephone ?: null,
+            'telephone' => $this->normaliserTelephoneSms($request->input('telephone')),
             'structure_id' => $request->structure_id ?: null,
             'actif' => $actif,
         ]);
@@ -205,7 +216,10 @@ class UtilisateurController extends Controller
             $racine->update(['structure_id' => $user->structure_id]);
         }
         if ($request->filled('password')) {
-            $user->update(['password' => Hash::make($request->password)]);
+            $user->update([
+                'password' => Hash::make($request->password),
+                'must_change_password' => true,
+            ]);
         }
         $user->syncRoles([$request->role]);
 
@@ -216,7 +230,7 @@ class UtilisateurController extends Controller
         }
 
         JournalAudit::log('utilisateur.modification', 'utilisateurs', ['user_id' => $user->id]);
-        Log::channel('eged')->info('Utilisateur mis à jour', ['user_id' => $user->id, 'by' => auth()->id()]);
+        Log::channel('cosud')->info('Utilisateur mis à jour', ['user_id' => $user->id, 'by' => auth()->id()]);
 
         return redirect()
             ->route('utilisateurs.edit', $user)
@@ -227,7 +241,7 @@ class UtilisateurController extends Controller
     {
         $this->authorize('delete', $user);
         JournalAudit::log('utilisateur.suppression', 'utilisateurs', ['user_id' => $user->id]);
-        Log::channel('eged')->info('Utilisateur supprimé', ['user_id' => $user->id, 'email' => $user->email, 'by' => auth()->id()]);
+        Log::channel('cosud')->info('Utilisateur supprimé', ['user_id' => $user->id, 'email' => $user->email, 'by' => auth()->id()]);
         $user->delete();
 
         return redirect()->route('utilisateurs.index')->with('success', 'Utilisateur supprimé.');
@@ -276,5 +290,48 @@ class UtilisateurController extends Controller
         }
 
         return back()->with('success', count($users).' utilisateur(s) : 2FA désactivée.');
+    }
+
+    /**
+     * @return list<ValidationRule|string|callable>
+     */
+    private function reglesTelephoneSms(): array
+    {
+        return [
+            'nullable',
+            'string',
+            'max:30',
+            function (string $attribute, mixed $value, \Closure $fail): void {
+                if ($value === null || trim((string) $value) === '') {
+                    return;
+                }
+
+                $norm = app(SmsService::class)->normalizeSmsPhone((string) $value);
+                if ($norm === '' || ! preg_match('/^2420\d{8}$/', $norm)) {
+                    $fail('Le numéro SMS doit être un mobile Congo valide (ex. +242 06 XXX XX XX).');
+                }
+            },
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function messagesTelephoneSms(): array
+    {
+        return [
+            'telephone.max' => 'Le numéro de téléphone ne peut pas dépasser 30 caractères.',
+        ];
+    }
+
+    private function normaliserTelephoneSms(?string $telephone): ?string
+    {
+        if ($telephone === null || trim($telephone) === '') {
+            return null;
+        }
+
+        $norm = app(SmsService::class)->normalizeSmsPhone($telephone);
+
+        return $norm !== '' ? $norm : null;
     }
 }

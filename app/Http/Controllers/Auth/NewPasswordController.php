@@ -54,7 +54,7 @@ class NewPasswordController extends Controller
         );
 
         if ($status == Password::PASSWORD_RESET) {
-            Log::channel('eged')->info('Mot de passe réinitialisé', ['email' => $request->email]);
+            Log::channel('cosud')->info('Mot de passe réinitialisé', ['email' => $request->email]);
         }
 
         // If the password was successfully reset, we will redirect the user back to

@@ -32,43 +32,35 @@ class CourrierDoublonTest extends TestCase
         ]);
     }
 
-    public function test_refuse_doublon_par_numero_fulgurant(): void
+    public function test_service_detecte_doublon_legacy_par_numero_fulgurant(): void
     {
-        Storage::fake('public');
         $secretaire = $this->creerSecretaire();
-        $existant = $this->creerArrivee($secretaire, [
+        $this->creerArrivee($secretaire, [
             'numero_fulgurant' => '024/2026',
             'objet' => 'Facture A',
         ]);
 
-        $this->actingAs($secretaire)
-            ->post(route('courriers.store', absolute: false), [
-                'sens' => 'arrivee',
-                'objet' => 'Autre facture',
-                'expediteur_libelle' => 'Autre',
-                'numero_fulgurant' => '024/2026',
-                'fichier' => UploadedFile::fake()->create('scan.pdf', 100, 'application/pdf'),
-            ])
-            ->assertSessionHasErrors('numero_fulgurant');
+        $doublon = app(CourrierDoublonService::class)->trouverDoublonArrivee([
+            'numero_fulgurant' => '024/2026',
+            'objet' => 'Autre',
+        ]);
 
-        $this->assertSame(1, Courrier::where('numero_fulgurant', '024/2026')->count());
-        $this->assertNotNull($existant->fresh());
+        $this->assertNotNull($doublon);
+        $this->assertSame('numero_fulgurant', $doublon['critere']);
     }
 
-    public function test_refuse_doublon_fulgurant_insensible_casse(): void
+    public function test_service_detecte_fulgurant_insensible_casse(): void
     {
-        Storage::fake('public');
         $secretaire = $this->creerSecretaire();
         $this->creerArrivee($secretaire, ['numero_fulgurant' => 'ABC-1']);
 
-        $this->actingAs($secretaire)
-            ->post(route('courriers.store', absolute: false), [
-                'sens' => 'arrivee',
-                'objet' => 'Nouveau',
-                'numero_fulgurant' => ' abc-1 ',
-                'fichier' => UploadedFile::fake()->create('scan.pdf', 100, 'application/pdf'),
-            ])
-            ->assertSessionHasErrors('numero_fulgurant');
+        $doublon = app(CourrierDoublonService::class)->trouverDoublonArrivee([
+            'numero_fulgurant' => ' abc-1 ',
+            'objet' => 'Nouveau',
+        ]);
+
+        $this->assertNotNull($doublon);
+        $this->assertSame('numero_fulgurant', $doublon['critere']);
     }
 
     public function test_refuse_doublon_par_empreinte_expediteur_date_objet(): void
@@ -85,6 +77,7 @@ class CourrierDoublonTest extends TestCase
         $this->actingAs($secretaire)
             ->post(route('courriers.store', absolute: false), [
                 'sens' => 'arrivee',
+                'numero_fulgurant' => 'REG-dba86221/2026',
                 'objet' => 'Facture  électricité',
                 'expediteur_libelle' => 'eec',
                 'date_courrier' => '2026-07-20',
@@ -93,7 +86,7 @@ class CourrierDoublonTest extends TestCase
             ->assertSessionHasErrors('objet');
     }
 
-    public function test_correction_autorise_garder_son_propre_fulgurant(): void
+    public function test_correction_conserve_numero_fulgurant_legacy(): void
     {
         $particuliere = User::factory()->create(['structure_id' => Structure::where('code', 'SEC-DIR')->value('id')]);
         $particuliere->assignRole('particulier_dg');
@@ -106,12 +99,15 @@ class CourrierDoublonTest extends TestCase
         $this->actingAs($particuliere)
             ->put(route('courriers.update', $courrier, absolute: false), [
                 'objet' => 'Objet corrigé',
-                'numero_fulgurant' => '111/2026',
                 'expediteur_libelle' => 'EEC',
+                'expediteur_telephone' => '+242060000011',
+                'numero_fulgurant' => '111/2026',
             ])
             ->assertRedirect(route('courriers.show', $courrier, absolute: false));
 
-        $this->assertSame('Objet corrigé', $courrier->fresh()->objet);
+        $fresh = $courrier->fresh();
+        $this->assertSame('Objet corrigé', $fresh->objet);
+        $this->assertSame('111/2026', $fresh->numero_fulgurant);
     }
 
     public function test_service_detecte_reference(): void

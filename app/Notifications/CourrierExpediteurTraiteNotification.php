@@ -3,11 +3,15 @@
 namespace App\Notifications;
 
 use App\Models\Courrier;
+use App\Services\SmsService;
+use App\Services\WhatsAppService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Messages\VonageMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Expéditeur externe : le courrier arrivée a été traité et clôturé.
+ */
 class CourrierExpediteurTraiteNotification extends Notification
 {
     use Queueable;
@@ -25,8 +29,17 @@ class CourrierExpediteurTraiteNotification extends Notification
             $channels[] = 'mail';
         }
 
-        if ($notifiable->routeNotificationFor('vonage') && config('services.vonage.key')) {
-            $channels[] = 'vonage';
+        $whatsappOk = $notifiable->routeNotificationFor('cosud_whatsapp')
+            && app(WhatsAppService::class)->isConfigured();
+        if ($whatsappOk) {
+            $channels[] = 'cosud_whatsapp';
+        }
+
+        $smsOk = $notifiable->routeNotificationFor('cosud_sms')
+            && app(SmsService::class)->isConfigured()
+            && (! $whatsappOk || (bool) config('cosud.whatsapp.also_sms'));
+        if ($smsOk) {
+            $channels[] = 'cosud_sms';
         }
 
         return $channels;
@@ -34,22 +47,28 @@ class CourrierExpediteurTraiteNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $numero = $this->courrier->numeroRegistreComplet();
+        $numero = $this->numero();
 
         return (new MailMessage)
-            ->subject('GED : votre courrier n° '.$numero.' a été traité')
+            ->subject('COSUD : dossier n° '.$numero.' — traité et clôturé')
             ->greeting('Bonjour,')
-            ->line('Votre courrier n° '.$numero.' a été traité.')
-            ->line('**Objet :** '.$this->courrier->objet)
-            ->line('Merci de votre confiance.');
+            ->line('**État de votre dossier :** votre courrier n° '.$numero.' a été traité. Le dossier est désormais **clôturé**.')
+            ->line('**Objet :** '.$this->objet())
+            ->line('**Ce que cela signifie :** le traitement administratif de votre demande est terminé côté ACSI.')
+            ->line('**Ce que vous devez faire :** aucune action complémentaire n’est attendue de votre part. Pour toute question, contactez le secrétariat de l’ACSI en rappelant le n° '.$numero.'.')
+            ->line('Merci de votre confiance.')
+            ->salutation('L’équipe COSUD — '.config('app.name'));
     }
 
-    public function toVonage(object $notifiable): VonageMessage
+    public function toCosudSms(object $notifiable): string
     {
-        $numero = $this->courrier->numeroRegistreComplet();
+        return 'COSUD n°'.$this->numero().' : dossier TRAITÉ et CLÔTURÉ. '
+            .'Aucune action de votre part. Contactez le secrétariat ACSI si besoin.';
+    }
 
-        return (new VonageMessage)
-            ->content('GED : votre courrier n° '.$numero.' a été traité.');
+    public function toCosudWhatsapp(object $notifiable): string
+    {
+        return $this->toCosudSms($notifiable);
     }
 
     /**
@@ -57,13 +76,23 @@ class CourrierExpediteurTraiteNotification extends Notification
      */
     public function toArray(object $notifiable): array
     {
-        $numero = $this->courrier->numeroRegistreComplet();
-
         return [
-            'message' => 'Votre courrier n° '.$numero.' a été traité.',
-            'message_title' => 'Courrier traité',
+            'message' => 'Dossier n° '.$this->numero().' traité et clôturé — aucune action de votre part.',
+            'message_title' => 'Dossier traité et clôturé',
             'courrier_id' => $this->courrier->id,
             'type' => 'expediteur_traite',
         ];
+    }
+
+    protected function numero(): string
+    {
+        return $this->courrier->numeroRegistreComplet();
+    }
+
+    protected function objet(): string
+    {
+        $objet = trim((string) ($this->courrier->objet ?? ''));
+
+        return $objet !== '' ? $objet : '—';
     }
 }

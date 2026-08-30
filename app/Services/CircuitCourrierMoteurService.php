@@ -8,6 +8,7 @@ use App\Models\CircuitCourrierHistorique;
 use App\Models\Courrier;
 use App\Models\Fonction;
 use App\Models\JournalAudit;
+use App\Models\SuiviPaiement;
 use App\Models\TypeCourrier;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -19,6 +20,7 @@ class CircuitCourrierMoteurService
     public function __construct(
         private readonly CourrierNotificationService $notifications,
         private readonly CourrierSecretariatService $secretariat,
+        private readonly SuiviPaiementService $suiviPaiements,
     ) {}
 
     public function demarrer(Courrier $courrier, ?CircuitCourrier $circuit = null, ?User $acteur = null): Courrier
@@ -71,7 +73,12 @@ class CircuitCourrierMoteurService
                 $this->notifierEtapeCourante($courrier->fresh(['circuitEtapeActuelle']), $acteur);
             }
 
-            return $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'circuitHistoriques.etape', 'circuitHistoriques.user']);
+            $courrier = $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'circuitHistoriques.etape', 'circuitHistoriques.user']);
+            if ($acteur) {
+                $this->notifications->notifierFactureEnregistreeDg($courrier, $acteur);
+            }
+
+            return $courrier;
         });
     }
 
@@ -126,8 +133,8 @@ class CircuitCourrierMoteurService
 
     public function userCorrespondActeur(User $user, CircuitCourrierEtape $etape, ?Courrier $courrier = null): bool
     {
-        if ($courrier?->agent_confie_id) {
-            return (int) $user->id === (int) $courrier->agent_confie_id;
+        if ($courrier && $this->idsAgentsConfies($courrier) !== []) {
+            return in_array((int) $user->id, $this->idsAgentsConfies($courrier), true);
         }
 
         return $this->userCorrespondActeurParRole($user, $etape, $courrier);
@@ -176,20 +183,62 @@ class CircuitCourrierMoteurService
      */
     public function libelleActeurPour(Courrier $courrier, CircuitCourrierEtape $etape): string
     {
-        if ($courrier->agent_confie_id) {
-            $courrier->loadMissing('agentConfie');
-            $nom = $courrier->agentConfie?->name;
-
-            return $nom ? 'Agent confié — '.$nom : 'Agent confié';
+        $libelles = $courrier->libellesAgentsConfies();
+        if ($libelles !== []) {
+            return 'Confié à — '.implode(', ', $libelles);
         }
 
         if ($etape->acteur_type === CircuitCourrierEtape::ACTEUR_DIRECTEUR_DESTINATAIRE) {
             $directeur = $this->resoudreActeurDirecteur($courrier);
 
-            return $directeur ? 'Directeur — '.$directeur->name : $etape->libelleActeur();
+            return $directeur
+                ? 'Directeur — '.$directeur->libelleDestinataireCourrier()
+                : $etape->libelleActeur();
         }
 
         return $etape->libelleActeur();
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function idsAgentsConfies(Courrier $courrier): array
+    {
+        $courrier->loadMissing('agentsConfies');
+
+        $ids = $courrier->agentsConfies->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        if ($courrier->agent_confie_id) {
+            $ids[] = (int) $courrier->agent_confie_id;
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * @param  list<int>  $agentConfieIds
+     */
+    public function synchroniserAgentsConfies(Courrier $courrier, array $agentConfieIds): void
+    {
+        $ids = collect($agentConfieIds)
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $courrier->agentsConfies()->sync($ids);
+        $courrier->forceFill([
+            'agent_confie_id' => $ids[0] ?? null,
+        ])->save();
+    }
+
+    public function viderAgentsConfies(Courrier $courrier): void
+    {
+        $courrier->agentsConfies()->detach();
+        if ($courrier->agent_confie_id !== null) {
+            $courrier->forceFill(['agent_confie_id' => null])->save();
+        }
     }
 
     protected function userAFonction(User $user, string $valeur): bool
@@ -215,16 +264,7 @@ class CircuitCourrierMoteurService
 
     public function avancer(Courrier $courrier, User $acteur, ?string $commentaire = null): Courrier
     {
-        if (! $courrier->circuit_etape_actuelle_id) {
-            throw new InvalidArgumentException('Aucun circuit actif sur ce courrier.');
-        }
-
-        if (! $this->peutAgir($courrier, $acteur)) {
-            throw new InvalidArgumentException('Vous n’êtes pas autorisé à faire avancer cette étape.');
-        }
-
-        $courrier = $this->avancerUneEtape($courrier, $acteur, $commentaire);
-        $courrier = $this->poursuivreEtapesAutomatiques($courrier, $acteur);
+        $courrier = $this->avancerEtapesSansNotifier($courrier, $acteur, $commentaire);
 
         // Une seule notification, sur l’étape réellement atteinte à l’issue de l’enchaînement
         // automatique — pas une par étape intermédiaire traversée (ex. notification auto-validée).
@@ -234,45 +274,158 @@ class CircuitCourrierMoteurService
     }
 
     /**
+     * Avance le circuit (y compris étapes automatiques) sans envoyer de notification.
+     */
+    protected function avancerEtapesSansNotifier(Courrier $courrier, User $acteur, ?string $commentaire = null): Courrier
+    {
+        if (! $courrier->circuit_etape_actuelle_id) {
+            throw new InvalidArgumentException('Aucun circuit actif sur ce courrier.');
+        }
+
+        if (! $this->peutAgir($courrier, $acteur)) {
+            throw new InvalidArgumentException('Vous n’êtes pas autorisé à faire avancer cette étape.');
+        }
+
+        $this->assurerDechargeAvantCloturePreuvePaiement($courrier);
+
+        $courrier = $this->avancerUneEtape($courrier, $acteur, $commentaire);
+
+        return $this->poursuivreEtapesAutomatiques($courrier, $acteur);
+    }
+
+    /**
+     * L’étape finale « preuve_paiement » ne peut être clôturée que via le formulaire de décharge AC
+     * (date_decharge déjà enregistrée), jamais via « Valider l’étape » générique.
+     */
+    protected function assurerDechargeAvantCloturePreuvePaiement(Courrier $courrier): void
+    {
+        $courrier->loadMissing('circuitEtapeActuelle');
+        if ($courrier->circuitEtapeActuelle?->code !== 'preuve_paiement') {
+            return;
+        }
+
+        $aDecharge = SuiviPaiement::query()
+            ->where('courrier_id', $courrier->id)
+            ->whereNotNull('date_decharge')
+            ->exists();
+
+        if (! $aDecharge) {
+            throw new InvalidArgumentException(
+                'La décharge bénéficiaire doit être enregistrée via le formulaire dédié (Actions) avant de clôturer le circuit.'
+            );
+        }
+    }
+
+    /**
      * Enregistre les instructions de l’acteur sur l’étape courante (type « instruire »),
      * les conserve sur le courrier (`instructions_dg`) puis fait avancer le circuit.
      *
-     * Si un agent est désigné (facultatif), il devient le prochain acteur (A2) :
-     * on saute à la première étape suivante dont le rôle lui correspond, sinon on avance
-     * d’une étape avec override `agent_confie_id` jusqu’à ce qu’il valide.
+     * Si un ou plusieurs agents sont désignés (facultatif), ils deviennent les destinataires
+     * du dossier : notification à chacun, et le premier agent dont le rôle correspond à une
+     * étape ultérieure déclenche le saut (sinon avance d’une étape avec override multi).
+     *
+     * @param  list<int>|null  $agentConfieIds
      */
-    public function instruire(Courrier $courrier, User $acteur, string $instructions, ?int $agentConfieId = null): Courrier
-    {
+    public function instruire(
+        Courrier $courrier,
+        User $acteur,
+        string $instructions,
+        ?int $agentConfieId = null,
+        ?array $agentConfieIds = null,
+        ?int $delaiExecutionJours = null,
+        ?string $modePaiementCircuit = null,
+    ): Courrier {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->action !== CircuitCourrierEtape::ACTION_INSTRUIRE) {
             throw new InvalidArgumentException('Aucune étape d’instruction en cours sur ce courrier.');
         }
 
-        $agent = null;
-        if ($agentConfieId !== null) {
-            $agent = User::query()->where('actif', true)->find($agentConfieId);
-            if (! $agent) {
-                throw new InvalidArgumentException('L’agent confié est introuvable ou inactif.');
+        $ids = collect($agentConfieIds ?? [])
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->when($agentConfieId !== null, fn ($c) => $c->prepend((int) $agentConfieId))
+            ->unique()
+            ->values();
+
+        $agents = $ids->isEmpty()
+            ? collect()
+            : User::query()->where('actif', true)->whereIn('id', $ids->all())->get();
+
+        if ($ids->isNotEmpty() && $agents->count() !== $ids->count()) {
+            throw new InvalidArgumentException('Un ou plusieurs destinataires sont introuvables ou inactifs.');
+        }
+
+        if ($courrier->necessiteChoixModePaiementCircuit()) {
+            // Appels service / tests : défaut chèque si non fourni. Le Form Request impose le choix à l’UI.
+            if ($modePaiementCircuit === null || $modePaiementCircuit === '') {
+                $modePaiementCircuit = Courrier::MODE_PAIEMENT_CHEQUE;
             }
+            if (! in_array($modePaiementCircuit, Courrier::MODES_PAIEMENT_CIRCUIT, true)) {
+                throw new InvalidArgumentException('Choisissez le mode de paiement (chèque ou ordre de virement).');
+            }
+        } else {
+            $modePaiementCircuit = null;
         }
 
         $courrier->update([
             'instructions_dg' => $instructions,
+            'mode_paiement_circuit' => $modePaiementCircuit,
+            'delai_execution_jours' => $delaiExecutionJours,
             'date_orientation' => now(),
-            'agent_confie_id' => $agent?->id,
         ]);
+        $this->synchroniserAgentsConfies($courrier, $agents->pluck('id')->all());
 
-        $courrier = $courrier->fresh(['circuitEtapeActuelle', 'circuit.etapesActives', 'agentConfie']);
+        $courrier = $courrier->fresh(['circuitEtapeActuelle', 'circuit.etapesActives', 'agentConfie', 'agentsConfies']);
         $etape = $courrier->circuitEtapeActuelle;
 
-        if ($agent && $etape) {
-            $cible = $this->trouverProchaineEtapePourAgent($courrier, $agent, $etape);
-            if ($cible && (int) $cible->id !== (int) $etape->id) {
-                return $this->sauterVersEtapeApresInstruction($courrier, $acteur, $etape, $cible, $instructions);
+        if ($agents->isNotEmpty() && $etape) {
+            $cible = null;
+            $agentPourSaut = null;
+            foreach ($agents as $agent) {
+                $candidate = $this->trouverProchaineEtapePourAgent($courrier, $agent, $etape);
+                if ($candidate && ($cible === null || $candidate->ordre < $cible->ordre)) {
+                    $cible = $candidate;
+                    $agentPourSaut = $agent;
+                }
             }
+
+            if ($cible && $agentPourSaut && (int) $cible->id !== (int) $etape->id) {
+                $courrier = $this->sauterVersEtapeApresInstruction($courrier, $acteur, $etape, $cible, $instructions);
+            } else {
+                $courrier = $this->avancer($courrier, $acteur, $instructions);
+            }
+        } else {
+            $courrier = $this->avancer($courrier, $acteur, $instructions);
         }
 
-        return $this->avancer($courrier, $acteur, $instructions);
+        $this->notifierSuiviParalleleDossiersPrestataires($courrier, $acteur);
+        $this->notifications->notifierBonPourAccordAc($courrier, $acteur);
+
+        return $courrier;
+    }
+
+    /**
+     * Après Bon pour accord DG : informer la responsable dossiers (suivi parallèle,
+     * sans étape de transmission vers l’AC).
+     */
+    protected function notifierSuiviParalleleDossiersPrestataires(Courrier $courrier, User $acteur): void
+    {
+        $courrier->loadMissing('circuit');
+
+        if ($courrier->circuit?->code !== 'facture_prestataire') {
+            return;
+        }
+
+        $detail = 'Bon pour accord DG — classer la facture dans le dossier fournisseur et suivre le paiement.'
+            .($courrier->instructions_dg ? ' | Instructions : '.$courrier->instructions_dg : '');
+
+        $this->notifications->notifierRoles(
+            ['responsable_dossiers_prestataires'],
+            $courrier,
+            $acteur,
+            CourrierNotificationService::ETAPE_CIRCUIT,
+            $detail
+        );
     }
 
     /**
@@ -315,7 +468,7 @@ class CircuitCourrierMoteurService
                 $cible,
                 $acteur,
                 'etape_suivante',
-                'Confié à '.$courrier->agentConfie?->name.' — passage à : '.$cible->nom
+                'Confié à '.implode(', ', $courrier->libellesAgentsConfies()).' — passage à : '.$courrier->nomEtapeCircuitPourAffichage($cible)
             );
 
             JournalAudit::log('courrier.circuit.instruire', 'courriers', [
@@ -324,10 +477,11 @@ class CircuitCourrierMoteurService
                     'etape' => $depuis->code,
                     'suivante' => $cible->code,
                     'agent_confie_id' => $courrier->agent_confie_id,
+                    'agent_confie_ids' => $this->idsAgentsConfies($courrier),
                 ]),
             ]);
 
-            $courrier = $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'agentConfie']);
+            $courrier = $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'agentConfie', 'agentsConfies']);
             $this->notifierEtapeCourante($courrier, $acteur);
 
             return $courrier;
@@ -335,163 +489,326 @@ class CircuitCourrierMoteurService
     }
 
     /**
-     * L’AC envoie le chèque au DG (message + scan optionnel déjà attaché au courrier) :
-     * enregistre le message et avance automatiquement vers la signature DG.
+     * L’AC envoie le chèque au DG (message + références bordereau) :
+     * enregistre le message, crée la fiche FSP et notifie la responsable suivi dépenses,
+     * puis avance automatiquement vers la signature DG.
+     *
+     * @param  array{
+     *     numero_piece: string,
+     *     banque: string,
+     *     beneficiaire_libelle: string,
+     *     programmation?: ?string
+     * }  $references
      */
-    public function envoyerChequeAuDg(Courrier $courrier, User $acteur, string $message): Courrier
+    public function envoyerChequeAuDg(Courrier $courrier, User $acteur, string $message, float $montant, array $references): Courrier
     {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->code !== 'ac_etablit_cheque') {
-            throw new InvalidArgumentException('Aucune étape « AC établit le chèque » en cours sur ce courrier.');
+            throw new InvalidArgumentException(
+                $courrier->estModePaiementOv()
+                    ? 'Aucune étape « AC établit l’ordre de virement » en cours sur ce courrier.'
+                    : 'Aucune étape « AC établit le chèque » en cours sur ce courrier.'
+            );
         }
 
         if (! $this->peutAgir($courrier, $acteur)) {
-            throw new InvalidArgumentException('Vous n’êtes pas autorisé à envoyer le chèque au DG.');
+            throw new InvalidArgumentException(
+                $courrier->estModePaiementOv()
+                    ? 'Vous n’êtes pas autorisé à envoyer l’ordre de virement au DG.'
+                    : 'Vous n’êtes pas autorisé à envoyer le chèque au DG.'
+            );
         }
 
-        $courrier->update([
-            'message_ac' => $message,
-        ]);
+        if ($courrier->montant_facture !== null) {
+            $plafond = (float) $courrier->montant_facture;
+            if ($montant - $plafond > 0.009) {
+                throw new InvalidArgumentException(
+                    'Le montant ne peut pas dépasser le montant de la facture ('
+                    .number_format($plafond, 0, ',', ' ')
+                    .' FCFA).'
+                );
+            }
+        }
 
-        return $this->avancer(
-            $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
-            $acteur,
-            $message
-        );
+        $courrier = DB::transaction(function () use ($courrier, $acteur, $message, $montant, $references): Courrier {
+            $courrier->update([
+                'message_ac' => $message,
+            ]);
+
+            $this->suiviPaiements->creerDepuisEntreeCheque($courrier->fresh(), $acteur, $montant, $references);
+
+            return $this->avancerEtapesSansNotifier(
+                $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
+                $acteur,
+                $message
+            );
+        });
+
+        $this->notifierEtapeCourante($courrier, $acteur);
+        $this->notifications->notifierEntreeChequeSuiviDepenses($courrier, $acteur, $montant);
+
+        return $courrier;
     }
 
     /**
-     * Le DG enregistre le scan du chèque signé, notifie éventuellement le fournisseur
-     * pour recouvrement, puis avance vers l’AC / caissiers.
+     * Le DG confirme la signature du chèque (sans scan dans COSUD), notifie éventuellement
+     * le fournisseur pour recouvrement, puis renvoie le dossier à l’AC pour la décharge.
      */
     public function signerChequeDg(Courrier $courrier, User $acteur, ?string $message = null, bool $notifierFournisseur = true): Courrier
     {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->code !== 'dg_signe_cheque') {
-            throw new InvalidArgumentException('Aucune étape « DG signe le chèque » en cours sur ce courrier.');
+            throw new InvalidArgumentException(
+                $courrier->estModePaiementOv()
+                    ? 'Aucune étape « DG signe l’ordre de virement » en cours sur ce courrier.'
+                    : 'Aucune étape « DG signe le chèque » en cours sur ce courrier.'
+            );
         }
 
         if (! $this->peutAgir($courrier, $acteur)) {
-            throw new InvalidArgumentException('Vous n’êtes pas autorisé à enregistrer la signature du chèque.');
+            throw new InvalidArgumentException(
+                $courrier->estModePaiementOv()
+                    ? 'Vous n’êtes pas autorisé à confirmer la signature de l’ordre de virement.'
+                    : 'Vous n’êtes pas autorisé à confirmer la signature du chèque.'
+            );
         }
 
-        $commentaire = $message ?: 'Chèque signé par le DG.';
+        $commentaire = $message ?: (
+            $courrier->estModePaiementOv()
+                ? 'Ordre de virement signé par le DG — dossier renvoyé à l’AC pour accusé de réception banque.'
+                : 'Chèque signé par le DG — dossier renvoyé à l’AC pour décharge bénéficiaire.'
+        );
 
         $courrier = $this->avancer(
             $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
             $acteur,
             $commentaire
         );
+
+        // L’étape suivante (décharge AC) est nominative par rôle : ne pas bloquer sur d’anciens destinataires confiés.
+        $this->viderAgentsConfies($courrier);
 
         if ($notifierFournisseur) {
             $this->notifications->notifierFournisseurRecouvrement($courrier->fresh());
         }
 
-        return $courrier;
+        return $courrier->fresh(['circuitEtapeActuelle', 'agentConfie', 'agentsConfies']);
     }
 
     /**
-     * Dépôt de la preuve de paiement puis clôture automatique du dossier facture.
+     * L’AC enregistre la décharge bénéficiaire (date + pièces + observation),
+     * sans modifier les références du chèque déjà saisies à l’envoi DG.
+     * Cette action clôture le circuit ; le contrôle Eleni se fait ensuite hors circuit.
+     *
+     * @param  array{
+     *     date_decharge: string,
+     *     observation?: ?string
+     * }  $bordereau
      */
-    public function deposerPreuvePaiement(Courrier $courrier, User $acteur, ?string $message = null): Courrier
+    public function enregistrerDechargeAc(Courrier $courrier, User $acteur, array $bordereau, ?string $message = null): Courrier
     {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->code !== 'preuve_paiement') {
-            throw new InvalidArgumentException('Aucune étape « preuve de paiement » en cours sur ce courrier.');
+            throw new InvalidArgumentException('Aucune étape d’enregistrement de décharge en cours sur ce courrier.');
         }
 
         if (! $this->peutAgir($courrier, $acteur)) {
-            throw new InvalidArgumentException('Vous n’êtes pas autorisé à déposer la preuve de paiement.');
+            throw new InvalidArgumentException('Vous n’êtes pas autorisé à enregistrer la décharge / le paiement.');
         }
 
-        $commentaire = $message ?: 'Preuve de paiement enregistrée.';
+        $commentaire = $message ?: 'Décharge bénéficiaire enregistrée (bordereau + pièces) — circuit clôturé.';
 
-        $courrier = $this->avancer(
-            $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
-            $acteur,
-            $commentaire
-        );
+        $courrier = DB::transaction(function () use ($courrier, $acteur, $bordereau, $commentaire): Courrier {
+            $this->suiviPaiements->enregistrerDechargeBordereau($courrier, $bordereau);
 
-        // Clôture automatique si l’étape suivante est la clôture finale.
-        if ($courrier->circuitEtapeActuelle?->code === 'cloture_depenses'
-            && $this->peutAgir($courrier, $acteur)) {
-            $courrier = $this->avancer(
-                $courrier,
+            $avance = $this->avancerEtapesSansNotifier(
+                $courrier->fresh(['circuitEtapeActuelle', 'agentConfie', 'suiviPaiement']),
                 $acteur,
-                'Clôture du dossier après preuve de paiement.'
+                $commentaire
             );
-        }
+
+            $this->viderAgentsConfies($avance);
+
+            return $avance->fresh(['circuitEtapeActuelle', 'agentConfie', 'agentsConfies', 'suiviPaiement']);
+        });
+
+        $this->notifications->notifierRoles(
+            ['responsable_suivi_depenses'],
+            $courrier,
+            $acteur,
+            CourrierNotificationService::ETAPE_CIRCUIT,
+            'Décharge enregistrée — contrôler les pièces physiques et joindre les pièces manquantes si besoin (hors circuit).'
+        );
 
         return $courrier;
     }
 
     /**
-     * La particulière soumet un projet de réponse (document + destinataire proposé) à la
-     * validation du DG : les champs de préparation sont enregistrés sur le courrier arrivée
-     * puis le circuit avance vers l’étape « validation_reponse_dg ». Aucun courrier départ
-     * n’est créé à ce stade — cf. `CourrierController::creerReponse()` après validation.
-     *
-     * @param  array{document_reponse_id: ?int, reponse_confidentielle: bool, reponse_structure_destinataire_id: ?int, destinataire_agent_id: ?int, reponse_objet: ?string}  $donnees
+     * Mme Eleni confirme le contrôle des pièces physiques (hors circuit).
+     * N’avance / ne clôture pas le circuit — la clôture a déjà eu lieu à la décharge AC.
      */
-    public function soumettreReponsePourValidation(Courrier $courrier, User $acteur, array $donnees): Courrier
+    public function confirmerControleDepense(Courrier $courrier, User $acteur, ?string $message = null): Courrier
     {
-        $etape = $courrier->circuitEtapeActuelle;
-        if (! $etape || $etape->code !== 'traitement_particuliere') {
-            throw new InvalidArgumentException('Aucune étape de traitement en cours sur ce courrier.');
+        if (! $this->peutConfirmerControleDepenseHorsCircuit($acteur, $courrier)) {
+            throw new InvalidArgumentException('Vous n’êtes pas autorisé à confirmer le contrôle de cette dépense, ou le contrôle a déjà été effectué.');
         }
 
-        $courrier->update([
-            'document_reponse_id' => $donnees['document_reponse_id'] ?? null,
-            'reponse_confidentielle' => (bool) ($donnees['reponse_confidentielle'] ?? false),
-            'reponse_structure_destinataire_id' => $donnees['reponse_structure_destinataire_id'] ?? null,
-            'destinataire_agent_id' => $donnees['destinataire_agent_id'] ?? null,
-            'reponse_objet' => $donnees['reponse_objet'] ?? null,
+        $this->suiviPaiements->marquerControleEffectue($courrier, $acteur);
+
+        $commentaire = $message ?: 'Contrôle des pièces physiques confirmé.';
+
+        $this->historiser(
+            $courrier->fresh(),
+            null,
+            $acteur,
+            'controle_depense',
+            $commentaire
+        );
+
+        return $courrier->fresh(['circuitEtapeActuelle', 'agentConfie', 'agentsConfies', 'suiviPaiement']);
+    }
+
+    /**
+     * Contrôle Eleni après décharge AC (circuit déjà terminé).
+     */
+    public function peutConfirmerControleDepenseHorsCircuit(User $user, Courrier $courrier): bool
+    {
+        if (! $user->can('courriers.view')) {
+            return false;
+        }
+
+        if (! $user->aAccesTotal()
+            && ! $user->hasRole('responsable_suivi_depenses')
+            && ! $user->hasRole('admin')) {
+            return false;
+        }
+
+        if (! $user->aAccesTotal() && ! $courrier->visiblePar($user)) {
+            return false;
+        }
+
+        $courrier->loadMissing('suiviPaiement', 'suiviPaiements');
+        $suivis = $courrier->suiviPaiements;
+
+        return $suivis->isNotEmpty()
+            && $courrier->circuit_etape_actuelle_id === null
+            && $suivis->contains(
+                fn ($suivi): bool => $suivi->date_decharge !== null && $suivi->controle_at === null
+            );
+    }
+
+    /**
+     * @deprecated Conservé pour les tests historiques — préférer enregistrerDechargeAc.
+     */
+    public function deposerPreuvePaiement(Courrier $courrier, User $acteur, ?string $message = null, ?string $observation = null): Courrier
+    {
+        return $this->enregistrerDechargeAc($courrier, $acteur, [
+            'date_decharge' => now()->toDateString(),
+            'observation' => $observation,
+        ], $message);
+    }
+
+    /**
+     * La particulière crée le courrier départ (projet = départ) et le place
+     * en attente de signature DG — le circuit avance vers « validation_reponse_dg ».
+     *
+     * @param  array{document_id: int, objet?: ?string, reponse_id: int}  $donnees
+     */
+    public function soumettreDepartPourSignature(Courrier $arrivee, User $acteur, array $donnees): Courrier
+    {
+        $etape = $arrivee->circuitEtapeActuelle;
+        if (! $etape || $etape->code !== 'traitement_particuliere') {
+            throw new InvalidArgumentException('Aucune étape de préparation de réponse en cours sur ce courrier.');
+        }
+
+        // Exclure le départ qu’on vient de créer (même transaction) : il est déjà
+        // en « transmis_directeur » et serait sinon pris pour un doublon.
+        $dejaEnAttente = $arrivee->reponseDepartEnAttenteSignature();
+        if ($dejaEnAttente && (int) $dejaEnAttente->id !== (int) ($donnees['reponse_id'] ?? 0)) {
+            throw new InvalidArgumentException('Un courrier de réponse est déjà en attente de signature.');
+        }
+
+        $arrivee->update([
+            'document_reponse_id' => $donnees['document_id'] ?? null,
+            'reponse_objet' => $donnees['objet'] ?? null,
             'motif_rejet' => null,
             'rejete_par_id' => null,
             'date_rejet' => null,
         ]);
 
-        return $this->avancer($courrier->fresh(['circuitEtapeActuelle']), $acteur, 'Projet de réponse soumis pour validation.');
-    }
-
-    /**
-     * Le DG valide le projet de réponse et le renvoie à la particulière pour qu’elle
-     * crée le courrier départ en brouillon (étape « creation_depart_particuliere »).
-     */
-    public function validerProjetVersParticuliere(Courrier $courrier, User $acteur, ?string $commentaire = null): Courrier
-    {
-        $etape = $courrier->circuitEtapeActuelle;
-        if (! $etape || $etape->code !== 'validation_reponse_dg') {
-            throw new InvalidArgumentException('Aucune validation de réponse en cours sur ce courrier.');
-        }
-
-        if (! $this->peutAgir($courrier, $acteur)) {
-            throw new InvalidArgumentException('Vous n’êtes pas autorisé à valider cette réponse.');
-        }
-
-        if (! $courrier->document_reponse_id) {
-            throw new InvalidArgumentException('Aucun projet de réponse n’est attaché à ce courrier.');
-        }
-
-        $courrier = $this->avancer(
-            $courrier->fresh(['circuitEtapeActuelle']),
+        $arrivee = $this->avancer(
+            $arrivee->fresh(['circuitEtapeActuelle']),
             $acteur,
-            $commentaire ?: 'Projet de réponse validé — à créer en courrier départ par la particulière.'
+            'Courrier de réponse n° '.($donnees['numero_reponse'] ?? '').' transmis pour signature.'
         );
 
-        return $courrier->fresh(['circuit', 'circuitEtapeActuelle']);
+        // Une seule notif DG : notifierEtapeCourante (via avancer) envoie déjà REPONSE_A_VALIDER.
+
+        return $arrivee->fresh(['circuit', 'circuitEtapeActuelle']);
     }
 
     /**
-     * Le DG rejette le projet de réponse soumis : retour à l’étape « traitement_particuliere »
-     * avec le motif conservé (affiché à la particulière), le document proposé étant effacé
-     * pour qu’elle en soumette un nouveau.
+     * Le DG signe le courrier de réponse : le départ passe à « signé », le circuit
+     * avance vers l’expédition, l’expéditeur externe est informé (dossier validé).
+     */
+    public function signerReponseDepart(Courrier $arrivee, Courrier $depart, User $acteur, ?string $commentaire = null): Courrier
+    {
+        $etape = $arrivee->circuitEtapeActuelle;
+        if (! $etape || $etape->code !== 'validation_reponse_dg') {
+            throw new InvalidArgumentException('Aucune signature de réponse en cours sur ce courrier.');
+        }
+
+        if (! $this->peutAgir($arrivee, $acteur)) {
+            throw new InvalidArgumentException('Vous n’êtes pas autorisé à signer cette réponse.');
+        }
+
+        if ((int) $depart->courrier_parent_id !== (int) $arrivee->id) {
+            throw new InvalidArgumentException('Ce courrier départ n’est pas lié à cette arrivée.');
+        }
+
+        if (! in_array($depart->statutCourrier?->code, ['transmis_directeur', 'signe'], true)) {
+            throw new InvalidArgumentException('Ce courrier de réponse n’est pas en attente de signature.');
+        }
+
+        $arrivee = $this->avancer(
+            $arrivee->fresh(['circuitEtapeActuelle']),
+            $acteur,
+            $commentaire ?: 'Réponse signée — à expédier par la particulière (n° '.$depart->numeroRegistreComplet().').'
+        );
+
+        // Une seule notif particulière : avancer → expedition_reponse (REPONSE_VALIDEE_A_CREER).
+        $this->notifications->notifierExpediteurExterneValide($arrivee->fresh(['sensCourrier', 'statutCourrier']));
+
+        return $arrivee->fresh(['circuit', 'circuitEtapeActuelle']);
+    }
+
+    /**
+     * Signataire historique (rétrocompat) : DG ayant signé / validé l’étape.
+     */
+    public function signataireApresValidationProjet(Courrier $courrier): ?User
+    {
+        $historique = CircuitCourrierHistorique::query()
+            ->where('courrier_id', $courrier->id)
+            ->where('evenement', 'avancement')
+            ->whereHas('etape', fn ($q) => $q->where('code', 'validation_reponse_dg'))
+            ->latest('id')
+            ->first();
+
+        if ($historique?->user_id) {
+            return User::query()->find($historique->user_id);
+        }
+
+        return $this->resoudreActeurDirecteur($courrier);
+    }
+
+    /**
+     * Le DG rejette le courrier de réponse : retour à « traitement_particuliere ».
      */
     public function rejeterReponse(Courrier $courrier, User $acteur, string $motif): Courrier
     {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->code !== 'validation_reponse_dg') {
-            throw new InvalidArgumentException('Aucune validation de réponse en cours sur ce courrier.');
+            throw new InvalidArgumentException('Aucune signature de réponse en cours sur ce courrier.');
         }
 
         if (! $this->peutAgir($courrier, $acteur)) {
@@ -519,7 +836,7 @@ class CircuitCourrierMoteurService
             $courrier->date_rejet = now();
             $courrier->save();
 
-            $this->historiser($courrier, $cible, $acteur, 'etape_suivante', 'Retour à : '.$cible->nom);
+            $this->historiser($courrier, $cible, $acteur, 'etape_suivante', 'Retour à : '.$courrier->nomEtapeCircuitPourAffichage($cible));
 
             $this->notifications->notifierRoles(
                 ['particulier_dg'],
@@ -531,6 +848,31 @@ class CircuitCourrierMoteurService
 
             return $courrier->fresh(['circuit', 'circuitEtapeActuelle']);
         });
+    }
+
+    /**
+     * Après expédition du départ réponse : clôture l’étape finale du circuit arrivée.
+     */
+    public function completerApresExpeditionReponse(Courrier $arrivee, User $acteur, ?string $commentaire = null): Courrier
+    {
+        $etape = $arrivee->circuitEtapeActuelle;
+        if (! $etape || $etape->code !== 'expedition_reponse') {
+            return $arrivee->fresh(['circuit', 'circuitEtapeActuelle']);
+        }
+
+        if (! $this->peutAgir($arrivee, $acteur) && ! $acteur->aAccesTotal() && ! $acteur->hasRole('admin')) {
+            return $arrivee->fresh(['circuit', 'circuitEtapeActuelle']);
+        }
+
+        try {
+            return $this->avancer(
+                $arrivee->fresh(['circuitEtapeActuelle']),
+                $acteur,
+                $commentaire ?: 'Réponse expédiée — circuit terminé.'
+            );
+        } catch (InvalidArgumentException) {
+            return $arrivee->fresh(['circuit', 'circuitEtapeActuelle']);
+        }
     }
 
     /**
@@ -557,7 +899,10 @@ class CircuitCourrierMoteurService
             $courrier->circuit_etape_depuis = null;
             $courrier->save();
 
-            return $courrier->fresh(['circuit', 'circuitEtapeActuelle']);
+            $fresh = $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'sensCourrier', 'statutCourrier']);
+            $this->notifications->notifierExpediteurExterneValide($fresh);
+
+            return $fresh;
         });
     }
 
@@ -578,7 +923,7 @@ class CircuitCourrierMoteurService
             $etaitCreerDepart = $etape->mouvement === CircuitCourrierEtape::MOUVEMENT_CREER_DEPART;
 
             try {
-                $courrier = $this->avancer($courrier, $acteur, $commentaire ?: ('Courrier réponse créé — '.$etape->nom));
+                $courrier = $this->avancer($courrier, $acteur, $commentaire ?: ('Courrier réponse créé — '.$courrier->nomEtapeCircuitPourAffichage($etape)));
             } catch (InvalidArgumentException) {
                 break;
             }
@@ -604,13 +949,13 @@ class CircuitCourrierMoteurService
                 $etape,
                 $acteur,
                 'avancement',
-                $commentaire ?: ('Étape validée : '.$etape->nom)
+                $commentaire ?: ('Étape validée : '.$courrier->nomEtapeCircuitPourAffichage($etape))
             );
 
-            // L’agent confié est désigné à la sortie de l’étape d’instruction : on ne
-            // l’efface qu’après qu’il a traité « son » étape (pas au moment de l’instruction).
+            // Les destinataires confiés sont désignés à la sortie de l’étape d’instruction :
+            // on ne les efface qu’après qu’ils ont traité « leur » étape (pas au moment de l’instruction).
             if ($etape->action !== CircuitCourrierEtape::ACTION_INSTRUIRE) {
-                $courrier->agent_confie_id = null;
+                $this->viderAgentsConfies($courrier);
             }
 
             if ($etape->est_finale) {
@@ -629,7 +974,7 @@ class CircuitCourrierMoteurService
             $courrier->save();
 
             if ($suivante) {
-                $this->historiser($courrier, $suivante, $acteur, 'etape_suivante', 'Passage à : '.$suivante->nom);
+                $this->historiser($courrier, $suivante, $acteur, 'etape_suivante', 'Passage à : '.$courrier->nomEtapeCircuitPourAffichage($suivante));
             } else {
                 $this->historiser($courrier, $etape, $acteur, 'cloture_circuit', 'Circuit terminé (plus d’étape suivante)');
             }
@@ -647,19 +992,84 @@ class CircuitCourrierMoteurService
     }
 
     /**
-     * Enchaîne automatiquement les étapes de simple notification (aucune décision humaine
-     * requise) jusqu’à la prochaine étape qui exige une véritable action d’un acteur.
+     * Rattrapage : si le courrier est bloqué sur une étape désormais automatique
+     * (ex. « Traitement dossiers → AC »), l’avance et notifie l’acteur suivant.
+     */
+    public function assurerEtapesAutomatiques(Courrier $courrier, User $acteur): Courrier
+    {
+        if (! $courrier->circuit_etape_actuelle_id) {
+            return $courrier;
+        }
+
+        $courrier->loadMissing(['circuitEtapeActuelle', 'agentConfie']);
+        $avantId = $courrier->circuit_etape_actuelle_id;
+
+        if (! $courrier->circuitEtapeActuelle || ! $this->etapeEstAutomatique($courrier, $courrier->circuitEtapeActuelle)) {
+            return $courrier;
+        }
+
+        $courrier = $this->poursuivreEtapesAutomatiques($courrier, $acteur);
+
+        if ((int) $courrier->circuit_etape_actuelle_id !== (int) $avantId) {
+            $this->notifierEtapeCourante($courrier, $acteur);
+        }
+
+        return $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'agentConfie']);
+    }
+
+    /**
+     * Enchaîne automatiquement les étapes qui n’exigent aucune décision humaine
+     * jusqu’à la prochaine étape métier (instruction, traitement dédié, signature…).
      */
     protected function poursuivreEtapesAutomatiques(Courrier $courrier, User $acteur): Courrier
     {
         $etape = $courrier->circuitEtapeActuelle;
 
-        while ($etape && $etape->action === CircuitCourrierEtape::ACTION_NOTIFIER) {
-            $courrier = $this->avancerUneEtape($courrier->fresh(['circuitEtapeActuelle']), $acteur, 'Notification automatique : '.$etape->nom);
+        while ($etape && $this->etapeEstAutomatique($courrier, $etape)) {
+            $courrier = $this->avancerUneEtape(
+                $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
+                $acteur,
+                'Validation automatique : '.$courrier->nomEtapeCircuitPourAffichage($etape)
+            );
             $etape = $courrier->circuitEtapeActuelle;
         }
 
         return $courrier->fresh(['circuit', 'circuitEtapeActuelle', 'circuitHistoriques.etape', 'circuitHistoriques.user']);
+    }
+
+    /**
+     * Étapes sans action métier dédiée (pas de « Valider l’étape ») :
+     * - notification pure ;
+     * - relais facture : AC → caissiers, retour caisse.
+     */
+    public function etapeEstAutomatique(Courrier $courrier, CircuitCourrierEtape $etape): bool
+    {
+        if ($etape->action === CircuitCourrierEtape::ACTION_NOTIFIER) {
+            return true;
+        }
+
+        return in_array($etape->code, [
+            'ac_vers_caissiers',
+            'retour_caisse_depenses',
+        ], true);
+    }
+
+    /**
+     * Étapes à compter dans la barre de progression UI : uniquement celles
+     * qui exigent une action humaine (hors relais auto, enregistrement initial, clôture auto).
+     */
+    public function etapeCompteDansProgression(Courrier $courrier, CircuitCourrierEtape $etape): bool
+    {
+        if ($this->etapeEstAutomatique($courrier, $etape)) {
+            return false;
+        }
+
+        if ($etape->action === CircuitCourrierEtape::ACTION_ENREGISTRER
+            || $etape->code === 'enregistrement') {
+            return false;
+        }
+
+        return true;
     }
 
     public function notifierEtapeCourante(Courrier $courrier, User $acteur): void
@@ -669,20 +1079,33 @@ class CircuitCourrierMoteurService
             return;
         }
 
-        $detail = 'Étape en cours : '.$etape->nom.($etape->instructions_aide ? ' — '.$etape->instructions_aide : '');
+        $detail = 'Étape en cours : '.$courrier->nomEtapeCircuitPourAffichage($etape);
+        $instructionsAide = $courrier->instructionsAideEtapePourAffichage($etape);
+        if ($instructionsAide) {
+            $detail .= ' — '.$instructionsAide;
+        }
         if ($courrier->instructions_dg) {
             $detail .= ' | Instructions : '.$courrier->instructions_dg;
         }
+        if ($courrier->libelleDelaiExecution()) {
+            $detail .= ' | Délai d’exécution : '.$courrier->libelleDelaiExecution();
+        }
 
-        $courrier->loadMissing('agentConfie');
-        if ($courrier->agentConfie) {
-            $this->notifications->notifier(
-                $courrier->agentConfie,
-                $courrier,
-                $acteur,
-                CourrierNotificationService::DOSSIER_CONFIE,
-                $detail
-            );
+        $courrier->loadMissing(['agentConfie', 'agentsConfies']);
+        $agentsConfies = $courrier->agentsConfies->isNotEmpty()
+            ? $courrier->agentsConfies
+            : collect($courrier->agentConfie ? [$courrier->agentConfie] : []);
+
+        if ($agentsConfies->isNotEmpty()) {
+            foreach ($agentsConfies as $agent) {
+                $this->notifications->notifier(
+                    $agent,
+                    $courrier,
+                    $acteur,
+                    CourrierNotificationService::DOSSIER_CONFIE,
+                    $detail
+                );
+            }
 
             if (! $courrier->est_confidentiel) {
                 $this->notifications->notifierRoles(
@@ -729,7 +1152,7 @@ class CircuitCourrierMoteurService
             $roles = array_merge($roles, ['secretaire_direction', 'particulier_dg']);
         }
 
-        $type = $etape->code === 'creation_depart_particuliere'
+        $type = $etape->code === 'expedition_reponse'
             ? CourrierNotificationService::REPONSE_VALIDEE_A_CREER
             : CourrierNotificationService::ETAPE_CIRCUIT;
 
@@ -737,34 +1160,64 @@ class CircuitCourrierMoteurService
             $roles = array_merge($roles, ['particulier_dg', 'particulier_ac']);
         }
 
+        // Facture/MAD : le DG est déjà alerté par notifierFactureEnregistreeDg (cloche + SMS).
+        // Éviter le doublon « À traiter : Bon pour accord… » sur la même étape.
+        if ($this->etapeFactureInstructionsDgSansNotifCircuitDg($courrier, $etape)) {
+            $roles = array_values(array_filter($roles, fn (string $role): bool => $role !== 'dg'));
+        }
+
         $this->notifications->notifierRoles($roles, $courrier, $acteur, $type, $detail);
     }
 
+    /**
+     * Étape « Bon pour accord / instructions DG » du circuit facture prestataire.
+     */
+    protected function etapeFactureInstructionsDgSansNotifCircuitDg(Courrier $courrier, CircuitCourrierEtape $etape): bool
+    {
+        $courrier->loadMissing('circuit');
+
+        if ($courrier->circuit?->code !== 'facture_prestataire') {
+            return false;
+        }
+
+        return in_array($etape->code, ['instructions_dg', 'instruction_dg'], true);
+    }
+
+    /**
+     * Étapes pour la barre de progression : actions manuelles uniquement
+     * (les relais automatiques du système sont exclus du décompte).
+     *
+     * @return list<array{etape: CircuitCourrierEtape, statut: string}>
+     */
     public function etapesPourAffichage(Courrier $courrier): array
     {
         if (! $courrier->circuit_courrier_id) {
             return [];
         }
 
-        $courrier->loadMissing(['circuit.etapesActives', 'circuitEtapeActuelle']);
+        $courrier->loadMissing(['circuit.etapesActives', 'circuitEtapeActuelle', 'agentConfie']);
         $actuelleId = $courrier->circuit_etape_actuelle_id;
         $actuelleOrdre = $courrier->circuitEtapeActuelle?->ordre;
 
-        return $courrier->circuit->etapesActives->map(function (CircuitCourrierEtape $etape) use ($actuelleId, $actuelleOrdre) {
-            $statut = 'a_venir';
-            if ($actuelleId === null && $actuelleOrdre === null) {
-                $statut = 'terminee';
-            } elseif ((int) $etape->id === (int) $actuelleId) {
-                $statut = 'en_cours';
-            } elseif ($actuelleOrdre !== null && $etape->ordre < $actuelleOrdre) {
-                $statut = 'terminee';
-            }
+        return $courrier->circuit->etapesActives
+            ->filter(fn (CircuitCourrierEtape $etape) => $this->etapeCompteDansProgression($courrier, $etape))
+            ->values()
+            ->map(function (CircuitCourrierEtape $etape) use ($actuelleId, $actuelleOrdre) {
+                $statut = 'a_venir';
+                if ($actuelleId === null && $actuelleOrdre === null) {
+                    $statut = 'terminee';
+                } elseif ((int) $etape->id === (int) $actuelleId) {
+                    $statut = 'en_cours';
+                } elseif ($actuelleOrdre !== null && $etape->ordre < $actuelleOrdre) {
+                    $statut = 'terminee';
+                }
 
-            return [
-                'etape' => $etape,
-                'statut' => $statut,
-            ];
-        })->all();
+                return [
+                    'etape' => $etape,
+                    'statut' => $statut,
+                ];
+            })
+            ->all();
     }
 
     /**
@@ -779,6 +1232,7 @@ class CircuitCourrierMoteurService
             'avancement' => 'Validation d’étape',
             'etape_suivante' => 'Passage à l’étape suivante',
             'cloture_circuit' => 'Clôture du circuit',
+            'controle_depense' => 'Contrôle des pièces (suivi dépenses)',
             'rejet' => 'Rejet de la réponse',
             'relance' => 'Relance DG',
             'alerte_retard' => 'Alerte retard',
@@ -790,9 +1244,9 @@ class CircuitCourrierMoteurService
             ->map(fn (CircuitCourrierHistorique $h) => [
                 'evenement' => $h->evenement,
                 'libelle' => $labels[$h->evenement] ?? ucfirst(str_replace('_', ' ', $h->evenement)),
-                'commentaire' => $h->commentaire,
+                'commentaire' => $courrier->commentaireHistoriqueCircuitPourAffichage($h->commentaire),
                 'user' => $h->user?->name,
-                'etape' => $h->etape?->nom,
+                'etape' => $h->etape ? $courrier->nomEtapeCircuitPourAffichage($h->etape) : null,
                 'date' => $h->created_at,
             ])
             ->all();

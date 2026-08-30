@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\CosudSetting;
 use App\Models\Document;
 use App\Models\Dossier;
-use App\Models\GedSetting;
 use App\Models\StatutDocument;
 use App\Models\TypeDocument;
 use App\Models\User;
@@ -28,7 +28,7 @@ class ValidationDossierLecturePartageTest extends TestCase
             StatutDocumentSeeder::class,
             TypeDocumentSeeder::class,
         ]);
-        Cache::forget('ged_setting_bool:'.GedSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT);
+        Cache::forget('cosud_setting_bool:'.CosudSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT);
     }
 
     /**
@@ -67,7 +67,7 @@ class ValidationDossierLecturePartageTest extends TestCase
 
     public function test_ne_cree_pas_de_partage_si_parametre_desactive(): void
     {
-        GedSetting::setBool(GedSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, false);
+        CosudSetting::setBool(CosudSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, false);
         $owner = User::factory()->create();
         $other = User::factory()->create();
         [, $doc] = $this->creerDossierEtDocument($owner);
@@ -82,7 +82,7 @@ class ValidationDossierLecturePartageTest extends TestCase
 
     public function test_cree_partage_lecture_si_parametre_active(): void
     {
-        GedSetting::setBool(GedSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, true);
+        CosudSetting::setBool(CosudSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, true);
         $owner = User::factory()->create();
         $other = User::factory()->create();
         [, $doc] = $this->creerDossierEtDocument($owner);
@@ -99,7 +99,7 @@ class ValidationDossierLecturePartageTest extends TestCase
 
     public function test_revoquer_supprime_le_partage_auto(): void
     {
-        GedSetting::setBool(GedSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, true);
+        CosudSetting::setBool(CosudSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, true);
         $owner = User::factory()->create();
         $other = User::factory()->create();
         [, $doc] = $this->creerDossierEtDocument($owner);
@@ -116,7 +116,7 @@ class ValidationDossierLecturePartageTest extends TestCase
 
     public function test_sync_vers_nouvel_utilisateur_revoque_le_precedent(): void
     {
-        GedSetting::setBool(GedSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, true);
+        CosudSetting::setBool(CosudSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, true);
         $owner = User::factory()->create();
         $premier = User::factory()->create();
         $suivant = User::factory()->create();

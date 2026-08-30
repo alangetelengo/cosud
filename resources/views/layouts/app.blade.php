@@ -6,7 +6,7 @@
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <meta name="color-scheme" content="light dark">
 
-        <title>@yield('title', config('app.name', 'GED'))</title>
+        <title>@yield('title', config('app.name', 'COSUD'))</title>
 
         @include('partials.favicon')
         <link rel="preconnect" href="https://fonts.bunny.net">
@@ -22,7 +22,7 @@
         <div id="main-wrapper" style="display: flex; flex-direction: column; min-height: 100vh;">
         {{-- Preloader (comme Progcaisse) --}}
         @include('partials.preload')
-        {{-- Layout GED : logo (nav-header) + header (hamburger) + sidebar --}}
+        {{-- Layout COSUD : logo (nav-header) + header (hamburger) + sidebar --}}
         @include('partials.nav-header')
         @include('partials.header')
         @include('partials.sidebar')
@@ -239,7 +239,15 @@
                 document.getElementById('flashAlertModal').style.display = 'none';
                 flashAlertRestoreCustomSlot();
                 if (_cb) { _cb(); }
-                else if (_form) { _form.submit(); }
+                else if (_form) {
+                    var loadingBtn = _form.querySelector('button[data-loading-text]:not([disabled])')
+                        || _form.querySelector('button[type="submit"]:not([disabled]), input[type="submit"]:not([disabled])')
+                        || _form.querySelector('button[type="button"]:not([disabled])');
+                    if (typeof window.applyFormSubmitLoading === 'function' && loadingBtn) {
+                        window.applyFormSubmitLoading(loadingBtn, _form);
+                    }
+                    _form.submit();
+                }
                 _form = null; _cb = null; _inputOpt = null; _onConfirm = null;
             }
             document.addEventListener('DOMContentLoaded', function () {
@@ -257,6 +265,7 @@
         })();
         </script>
 
+        @include('partials.form-submit-loading')
         @stack('scripts')
     </body>
 </html>

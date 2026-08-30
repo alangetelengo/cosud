@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\UpdateGedAccesRequest;
-use App\Models\GedSetting;
+use App\Http\Requests\UpdateCosudAccesRequest;
+use App\Http\Requests\UpdateCosudNotificationsRequest;
+use App\Models\CosudSetting;
 use App\Models\JournalAudit;
 use App\Models\Structure;
 use Illuminate\Support\Facades\Log;
@@ -23,7 +24,7 @@ class ParametresController extends Controller
 
     public function index()
     {
-        Log::channel('eged')->debug('Consultation paramètres', ['user_id' => auth()->id()]);
+        Log::channel('cosud')->debug('Consultation paramètres', ['user_id' => auth()->id()]);
         $structures = Structure::where('actif', true)
             ->with('fonction')
             ->orderByRaw('CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END')
@@ -33,31 +34,59 @@ class ParametresController extends Controller
         return view('parametres.index', compact('structures'));
     }
 
-    public function gedAcces()
+    public function cosudAcces()
     {
-        Log::channel('eged')->debug('Consultation paramètres accès GED', ['user_id' => auth()->id()]);
-        $lectureDossierLorsPartageDocument = GedSetting::lectureDossierLorsPartageDocument();
+        Log::channel('cosud')->debug('Consultation paramètres accès COSUD', ['user_id' => auth()->id()]);
+        $lectureDossierLorsPartageDocument = CosudSetting::lectureDossierLorsPartageDocument();
 
-        return view('parametres.ged-acces', compact('lectureDossierLorsPartageDocument'));
+        return view('parametres.cosud-acces', compact('lectureDossierLorsPartageDocument'));
     }
 
-    public function updateGedAcces(UpdateGedAccesRequest $request)
+    public function updateCosudAcces(UpdateCosudAccesRequest $request)
     {
-        $avant = GedSetting::lectureDossierLorsPartageDocument();
+        $avant = CosudSetting::lectureDossierLorsPartageDocument();
         $apres = $request->boolean('lecture_dossier_lors_partage_document');
-        GedSetting::setBool(GedSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, $apres);
+        CosudSetting::setBool(CosudSetting::LECTURE_DOSSIER_LORS_PARTAGE_DOCUMENT, $apres);
 
-        JournalAudit::log('parametres.ged-acces.update', 'parametres', [
+        JournalAudit::log('parametres.cosud-acces.update', 'parametres', [
             'donnees_avant' => json_encode(['lecture_dossier_lors_partage_document' => $avant]),
             'donnees_apres' => json_encode(['lecture_dossier_lors_partage_document' => $apres]),
         ]);
-        Log::channel('eged')->info('Paramètres accès GED mis à jour', [
+        Log::channel('cosud')->info('Paramètres accès COSUD mis à jour', [
             'user_id' => auth()->id(),
             'lecture_dossier_lors_partage_document' => $apres,
         ]);
 
         return redirect()
-            ->route('parametres.ged-acces')
+            ->route('parametres.cosud-acces')
             ->with('success', 'Les paramètres d’accès ont été enregistrés.');
+    }
+
+    public function notifications()
+    {
+        Log::channel('cosud')->debug('Consultation paramètres notifications COSUD', ['user_id' => auth()->id()]);
+        $notifFactureEnregistreeDg = CosudSetting::notifFactureEnregistreeDg();
+
+        return view('parametres.notifications', compact('notifFactureEnregistreeDg'));
+    }
+
+    public function updateNotifications(UpdateCosudNotificationsRequest $request)
+    {
+        $avant = CosudSetting::notifFactureEnregistreeDg();
+        $apres = $request->boolean('notif_facture_enregistree_dg');
+        CosudSetting::setBool(CosudSetting::NOTIF_FACTURE_ENREGISTREE_DG, $apres);
+
+        JournalAudit::log('parametres.notifications.update', 'parametres', [
+            'donnees_avant' => json_encode(['notif_facture_enregistree_dg' => $avant]),
+            'donnees_apres' => json_encode(['notif_facture_enregistree_dg' => $apres]),
+        ]);
+        Log::channel('cosud')->info('Paramètres notifications COSUD mis à jour', [
+            'user_id' => auth()->id(),
+            'notif_facture_enregistree_dg' => $apres,
+        ]);
+
+        return redirect()
+            ->route('parametres.notifications')
+            ->with('success', 'Les paramètres de notification ont été enregistrés.');
     }
 }

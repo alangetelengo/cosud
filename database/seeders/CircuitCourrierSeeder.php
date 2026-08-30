@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\CircuitCourrier;
 use App\Models\CircuitCourrierEtape;
+use App\Models\Courrier;
 use App\Models\TypeCourrier;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
@@ -22,7 +23,7 @@ class CircuitCourrierSeeder extends Seeder
             ['code' => 'facture_prestataire'],
             [
                 'libelle' => 'Factures prestataires / fournisseurs',
-                'description' => 'Circuit A : facture → instructions DG → AC → signature DG → caissiers → retour caisse → preuve paiement → clôture',
+                'description' => 'Circuit A : BPA DG (chèque ou OV) → AC établit la pièce → DG signe (sans scan) → AC enregistre décharge ou accusé banque → contrôle Eleni / clôture. Taty suit en parallèle.',
                 'sens_initial' => CircuitCourrier::SENS_ARRIVEE,
                 'actif' => true,
             ]
@@ -43,27 +44,16 @@ class CircuitCourrierSeeder extends Seeder
             [
                 'ordre' => 2,
                 'code' => 'instructions_dg',
-                'nom' => 'Notification / instructions DG',
+                'nom' => 'Bon pour accord / instructions DG',
                 'acteur_type' => CircuitCourrierEtape::ACTEUR_DG,
                 'acteur_valeur' => null,
                 'action' => CircuitCourrierEtape::ACTION_INSTRUIRE,
                 'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
-                'notifie_roles' => ['particulier_dg', 'particulier_ac', 'responsable_dossiers_prestataires'],
-                'instructions_aide' => 'Le DG traite le dossier et donne ses instructions.',
+                'notifie_roles' => ['particulier_dg', 'particulier_ac', 'agent_comptable', 'responsable_dossiers_prestataires'],
+                'instructions_aide' => 'Le DG donne son Bon pour accord et choisit le mode de paiement (chèque ou ordre de virement). L’AC est notifié ; la responsable dossiers suit en parallèle.',
             ],
             [
                 'ordre' => 3,
-                'code' => 'traitement_dossiers_vers_ac',
-                'nom' => 'Traitement dossiers → envoi à l’AC',
-                'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
-                'acteur_valeur' => 'responsable_dossiers_prestataires',
-                'action' => CircuitCourrierEtape::ACTION_TRANSMETTRE,
-                'mouvement' => CircuitCourrierEtape::MOUVEMENT_CREER_DEPART,
-                'notifie_roles' => ['agent_comptable', 'particulier_dg', 'particulier_ac'],
-                'instructions_aide' => 'La responsable des dossiers traite puis envoie à l’Agent comptable.',
-            ],
-            [
-                'ordre' => 4,
                 'code' => 'ac_etablit_cheque',
                 'nom' => 'AC établit le chèque → envoi DG',
                 'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
@@ -71,71 +61,42 @@ class CircuitCourrierSeeder extends Seeder
                 'action' => CircuitCourrierEtape::ACTION_TRAITER,
                 'mouvement' => CircuitCourrierEtape::MOUVEMENT_ATTENDRE_ARRIVEE,
                 'notifie_roles' => ['agent_comptable', 'particulier_dg', 'particulier_ac'],
-                'instructions_aide' => 'L’AC établit le chèque et l’envoie au DG pour signature (message + scan optionnel).',
+                'instructions_aide' => 'L’AC établit le chèque et l’envoie au DG pour signature (sans scan dans COSUD).',
             ],
             [
-                'ordre' => 5,
+                'ordre' => 4,
                 'code' => 'dg_signe_cheque',
                 'nom' => 'DG signe le chèque → renvoi AC',
                 'acteur_type' => CircuitCourrierEtape::ACTEUR_DG,
                 'acteur_valeur' => null,
                 'action' => CircuitCourrierEtape::ACTION_SIGNER,
                 'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
-                'notifie_roles' => ['agent_comptable', 'particulier_dg', 'particulier_ac'],
-                'instructions_aide' => 'Le DG scanne le chèque signé, notifie le fournisseur pour recouvrement, puis renvoie le dossier à l’AC.',
+                'notifie_roles' => ['agent_comptable', 'particulier_dg', 'particulier_ac', 'responsable_dossiers_prestataires'],
+                'instructions_aide' => 'Le DG confirme que le chèque est signé (sans scan) et renvoie le dossier à l’AC pour la décharge bénéficiaire.',
             ],
             [
-                'ordre' => 6,
-                'code' => 'ac_vers_caissiers',
-                'nom' => 'AC → caissiers (approvisionnement)',
-                'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
-                'acteur_valeur' => 'agent_comptable',
-                'action' => CircuitCourrierEtape::ACTION_TRANSMETTRE,
-                'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
-                'notifie_roles' => ['caissier', 'particulier_dg', 'particulier_ac'],
-                'instructions_aide' => 'L’AC envoie aux caissiers pour l’approvisionnement.',
-            ],
-            [
-                'ordre' => 7,
-                'code' => 'retour_caisse_depenses',
-                'nom' => 'Retour de caisse → suivi des dépenses',
-                'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
-                'acteur_valeur' => 'agent_comptable',
-                'action' => CircuitCourrierEtape::ACTION_TRANSMETTRE,
-                'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
-                'notifie_roles' => ['responsable_suivi_depenses', 'particulier_dg', 'particulier_ac'],
-                'instructions_aide' => 'L’AC envoie le retour de caisse banque à la responsable du suivi des dépenses.',
-            ],
-            [
-                'ordre' => 8,
+                'ordre' => 5,
                 'code' => 'preuve_paiement',
-                'nom' => 'Preuve de paiement fournisseur',
+                'nom' => 'AC — enregistrement décharge / paiement (clôture)',
                 'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
-                'acteur_valeur' => 'responsable_suivi_depenses',
-                'action' => CircuitCourrierEtape::ACTION_TRAITER,
-                'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
-                'notifie_roles' => ['agent_comptable', 'particulier_dg', 'particulier_ac', 'dg'],
-                'instructions_aide' => 'Joindre la preuve de paiement du fournisseur / prestataire.',
-            ],
-            [
-                'ordre' => 9,
-                'code' => 'cloture_depenses',
-                'nom' => 'Clôture du dossier (suivi des dépenses)',
-                'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
-                'acteur_valeur' => 'responsable_suivi_depenses',
+                'acteur_valeur' => 'agent_comptable',
                 'action' => CircuitCourrierEtape::ACTION_CLOTURER,
                 'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
-                'notifie_roles' => ['secretaire_direction', 'dg', 'particulier_dg', 'particulier_ac'],
-                'instructions_aide' => 'La responsable du suivi des dépenses clôture le dossier.',
+                'notifie_roles' => ['responsable_suivi_depenses', 'particulier_dg', 'particulier_ac', 'dg', 'responsable_dossiers_prestataires'],
+                'instructions_aide' => 'À la décharge du bénéficiaire : saisir la date, joindre les pièces (chèque déchargé, identité…). Cette action clôture le circuit. Mme Eleni contrôlera ensuite les pièces hors circuit.',
                 'est_finale' => true,
             ],
         ]);
+
+        $this->reassignerCourriersEtapeObsoleteDossiersVersAc($facture);
+        $this->reassignerCourriersEtapesCaissiersVersDecharge($facture);
+        $this->cloturerCourriersBloquesSurControleEleni($facture);
 
         $general = CircuitCourrier::updateOrCreate(
             ['code' => 'courrier_general'],
             [
                 'libelle' => 'Courriers généraux / notes / instructions',
-                'description' => 'Circuit B : arrivée → notif DG+particulière → instruction → projet particulière → validation DG → création départ brouillon',
+                'description' => 'Circuit B : arrivée → instruction → préparation départ → signature DG → expédition',
                 'sens_initial' => CircuitCourrier::SENS_ARRIVEE,
                 'actif' => true,
             ]
@@ -178,35 +139,35 @@ class CircuitCourrierSeeder extends Seeder
             [
                 'ordre' => 4,
                 'code' => 'traitement_particuliere',
-                'nom' => 'Traitement par la particulière',
-                'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
-                'acteur_valeur' => 'particulier_dg',
-                'action' => CircuitCourrierEtape::ACTION_TRAITER,
-                'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
-                'notifie_roles' => [],
-                'instructions_aide' => 'La particulière du DG prépare un projet de réponse (document à joindre) et le soumet au DG pour validation.',
-            ],
-            [
-                'ordre' => 5,
-                'code' => 'validation_reponse_dg',
-                'nom' => 'Validation de la réponse par le DG',
-                'acteur_type' => CircuitCourrierEtape::ACTEUR_DIRECTEUR_DESTINATAIRE,
-                'acteur_valeur' => null,
-                'action' => CircuitCourrierEtape::ACTION_VALIDER,
-                'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
-                'notifie_roles' => ['particulier_dg'],
-                'instructions_aide' => 'Le DG valide le projet de réponse et le renvoie à la particulière pour création du courrier départ, ou le rejette avec un motif.',
-            ],
-            [
-                'ordre' => 6,
-                'code' => 'creation_depart_particuliere',
-                'nom' => 'Création du courrier départ (particulière)',
+                'nom' => 'Préparation de la réponse',
                 'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
                 'acteur_valeur' => 'particulier_dg',
                 'action' => CircuitCourrierEtape::ACTION_TRAITER,
                 'mouvement' => CircuitCourrierEtape::MOUVEMENT_CREER_DEPART,
                 'notifie_roles' => [],
-                'instructions_aide' => 'La particulière crée le courrier départ en brouillon (destinataire selon les indications du DG), puis le fait signer selon le circuit départ.',
+                'instructions_aide' => 'La particulière prépare le courrier de réponse (document) et le transmet au DG pour signature.',
+            ],
+            [
+                'ordre' => 5,
+                'code' => 'validation_reponse_dg',
+                'nom' => 'Signature de la réponse par le DG',
+                'acteur_type' => CircuitCourrierEtape::ACTEUR_DIRECTEUR_DESTINATAIRE,
+                'acteur_valeur' => null,
+                'action' => CircuitCourrierEtape::ACTION_VALIDER,
+                'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
+                'notifie_roles' => ['particulier_dg'],
+                'instructions_aide' => 'Le DG signe le courrier de réponse (ou le rejette avec un motif). La particulière pourra ensuite l’expédier.',
+            ],
+            [
+                'ordre' => 6,
+                'code' => 'expedition_reponse',
+                'nom' => 'Expédition de la réponse',
+                'acteur_type' => CircuitCourrierEtape::ACTEUR_ROLE,
+                'acteur_valeur' => 'particulier_dg',
+                'action' => CircuitCourrierEtape::ACTION_TRAITER,
+                'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
+                'notifie_roles' => [],
+                'instructions_aide' => 'La particulière expédie le courrier départ signé vers le secrétariat destinataire — le dossier arrivée sera clôturé.',
                 'est_finale' => true,
             ],
         ]);
@@ -214,6 +175,11 @@ class CircuitCourrierSeeder extends Seeder
         TypeCourrier::updateOrCreate(
             ['code' => 'facture'],
             ['libelle' => 'Facture prestataire / fournisseur', 'actif' => true, 'circuit_courrier_id' => $facture->id]
+        );
+
+        TypeCourrier::updateOrCreate(
+            ['code' => 'mad'],
+            ['libelle' => 'Mise à disposition (MAD)', 'actif' => true, 'circuit_courrier_id' => $facture->id]
         );
 
         TypeCourrier::whereIn('code', ['administratif', 'invitation', 'reponse', 'autre', 'demande'])
@@ -258,30 +224,141 @@ class CircuitCourrierSeeder extends Seeder
             ->update(['actif' => false]);
     }
 
+    /**
+     * Option A : la responsable dossiers ne transmet plus à l’AC.
+     * Les dossiers encore bloqués sur l’ancienne étape passent à « AC établit le chèque ».
+     */
+    protected function reassignerCourriersEtapeObsoleteDossiersVersAc(CircuitCourrier $facture): void
+    {
+        $obsolete = CircuitCourrierEtape::query()
+            ->where('circuit_courrier_id', $facture->id)
+            ->where('code', 'traitement_dossiers_vers_ac')
+            ->first();
+
+        $ac = CircuitCourrierEtape::query()
+            ->where('circuit_courrier_id', $facture->id)
+            ->where('code', 'ac_etablit_cheque')
+            ->where('actif', true)
+            ->first();
+
+        if (! $obsolete || ! $ac) {
+            return;
+        }
+
+        $updated = Courrier::query()
+            ->where('circuit_etape_actuelle_id', $obsolete->id)
+            ->update([
+                'circuit_etape_actuelle_id' => $ac->id,
+                'circuit_etape_depuis' => now(),
+            ]);
+
+        if ($updated > 0) {
+            $this->command?->info("{$updated} courrier(s) basculé(s) de « dossiers → AC » vers « AC établit le chèque ».");
+        }
+    }
+
+    /**
+     * Les étapes caissiers / retour caisse sont retirées : dossiers concernés → décharge AC.
+     */
+    protected function reassignerCourriersEtapesCaissiersVersDecharge(CircuitCourrier $facture): void
+    {
+        $cible = CircuitCourrierEtape::query()
+            ->where('circuit_courrier_id', $facture->id)
+            ->where('code', 'preuve_paiement')
+            ->where('actif', true)
+            ->first();
+
+        if (! $cible) {
+            return;
+        }
+
+        $obsoletes = CircuitCourrierEtape::query()
+            ->where('circuit_courrier_id', $facture->id)
+            ->whereIn('code', ['ac_vers_caissiers', 'retour_caisse_depenses'])
+            ->pluck('id');
+
+        if ($obsoletes->isEmpty()) {
+            return;
+        }
+
+        $updated = Courrier::query()
+            ->whereIn('circuit_etape_actuelle_id', $obsoletes->all())
+            ->update([
+                'circuit_etape_actuelle_id' => $cible->id,
+                'circuit_etape_depuis' => now(),
+            ]);
+
+        if ($updated > 0) {
+            $this->command?->info("{$updated} courrier(s) basculé(s) des étapes caissiers vers « enregistrement décharge AC ».");
+        }
+    }
+
+    /**
+     * Option A : le contrôle Eleni n’est plus une étape de circuit.
+     * Les dossiers encore sur « cloture_depenses » sont considérés clôturés côté circuit
+     * (la décharge AC a déjà été faite) — le contrôle reste possible hors circuit.
+     */
+    protected function cloturerCourriersBloquesSurControleEleni(CircuitCourrier $facture): void
+    {
+        $obsolete = CircuitCourrierEtape::query()
+            ->where('circuit_courrier_id', $facture->id)
+            ->where('code', 'cloture_depenses')
+            ->first();
+
+        if (! $obsolete) {
+            return;
+        }
+
+        $updated = Courrier::query()
+            ->where('circuit_etape_actuelle_id', $obsolete->id)
+            ->update([
+                'circuit_etape_actuelle_id' => null,
+                'circuit_etape_depuis' => null,
+            ]);
+
+        if ($updated > 0) {
+            $this->command?->info("{$updated} courrier(s) sorti(s) de l’étape « contrôle Eleni » (circuit clôturé — contrôle hors circuit).");
+        }
+    }
+
     protected function assurerRolesActeurs(): void
     {
         // Ne pas syncPermissions ici : cela écrasait documents.view / dossiers.view
         // déjà attribués par RoleAndPermissionSeeder.
-        $perms = Permission::whereIn('name', [
+        $permsBase = Permission::whereIn('name', [
             'documents.view', 'documents.create', 'documents.edit',
             'dossiers.view', 'dossiers.create', 'dossiers.edit',
-            'types-documents.view',
-            'courriers.view', 'courriers.create', 'courriers.edit', 'courriers.transmettre',
+            'courriers.view', 'courriers.create', 'courriers.edit', 'courriers.delete', 'courriers.transmettre',
             'courriers.archiver', 'courriers.recevoir',
         ])->pluck('name');
 
         foreach ([
-            'particulier_dg' => 'Particulière du DG',
-            'particulier_ac' => 'Particulière de l\'agent comptable',
-            'responsable_dossiers_prestataires' => 'Responsable dossiers prestataires / fournisseurs',
-            'responsable_suivi_depenses' => 'Responsable suivi des dépenses',
-            'agent_comptable' => 'Agent comptable',
-            'caissier' => 'Caissier',
-        ] as $name => $_label) {
+            'particulier_dg',
+            'particulier_ac',
+            'responsable_dossiers_prestataires',
+            'responsable_suivi_depenses',
+            'agent_comptable',
+            'caissier',
+        ] as $name) {
             $role = Role::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
-            if ($perms->isNotEmpty()) {
-                $role->givePermissionTo($perms);
+            if ($permsBase->isNotEmpty()) {
+                $role->givePermissionTo($permsBase);
             }
         }
+
+        // Menus métier : Suivi paiements = Eleni (+ DG via RoleAndPermissionSeeder) ;
+        // Bordereau = AC, Eleni, particulières circuit.
+        Role::findByName('responsable_suivi_depenses', 'web')
+            ?->givePermissionTo(['suivi-paiements.view', 'suivi-paiements.create', 'bordereau-transmission.view']);
+        Role::findByName('agent_comptable', 'web')
+            ?->givePermissionTo(['bordereau-transmission.view']);
+        Role::findByName('caissier', 'web')
+            ?->givePermissionTo(['bordereau-transmission.view']);
+        Role::findByName('particulier_ac', 'web')
+            ?->givePermissionTo(['bordereau-transmission.view']);
+        Role::findByName('particulier_dg', 'web')
+            ?->givePermissionTo(['suivi-paiements.view', 'suivi-factures.view', 'bordereau-transmission.view']);
+        Role::findByName('responsable_dossiers_prestataires', 'web')
+            ?->givePermissionTo(['suivi-factures.view']);
     }
 }

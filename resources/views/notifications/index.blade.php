@@ -51,7 +51,7 @@
                     $typeLabel = str_contains($n->type, 'DocumentDepose') ? 'Document déposé' : 'Notification';
                     $typeBadge = 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
                 @endphp
-                <tr class="{{ $n->read_at ? '' : 'bg-amber-50/50 dark:bg-amber-900/10' }} hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors">
+                <tr class="{{ $loop->odd ? 'bg-emerald-100 hover:bg-emerald-200/80 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/45' : 'bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-900/20 dark:hover:bg-amber-900/35' }} transition-colors">
                     <td class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{{ $loop->iteration + ($notifications->currentPage() - 1) * $notifications->perPage() }}</td>
                     <td class="px-6 py-4">
                         <div class="font-medium text-slate-800 dark:text-slate-200">{{ is_string($message) ? $message : json_encode($message) }}</div>
@@ -76,7 +76,7 @@
                             </a>
                             @endif
                             @if($url)
-                            <a href="{{ $url }}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-600 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-500 transition-colors" title="Voir">
+                            <a href="{{ $url }}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white/80 dark:bg-slate-600 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-600 hover:bg-white dark:hover:bg-slate-500 transition-colors" title="Voir">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                 Voir
                             </a>

@@ -1,14 +1,16 @@
 @extends('layouts.app')
 
+@use('App\Support\ReturnUrl')
+
 @section('page-title', 'Détail utilisateur')
 @section('page-title-info', $utilisateur->email)
 
 @section('btn-create')
     @can('utilisateurs.edit')
-    <a href="{{ route('utilisateurs.edit', $utilisateur) }}#structures" class="inline-flex items-center gap-2 px-6 py-3 rounded-lg border-2 border-[#00b464]/40 text-[#00a055] dark:text-emerald-400 font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all no-underline">
+    <a href="{{ route('utilisateurs.edit', ReturnUrl::propagate($utilisateur, ReturnUrl::validated(request()->query('return')))) }}#structures" class="inline-flex items-center gap-2 px-6 py-3 rounded-lg border-2 border-[#00b464]/40 text-[#00a055] dark:text-emerald-400 font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all no-underline">
         🏢 Structures & fonctions
     </a>
-    <a href="{{ route('utilisateurs.edit', $utilisateur) }}"
+    <a href="{{ route('utilisateurs.edit', ReturnUrl::propagate($utilisateur, ReturnUrl::validated(request()->query('return')))) }}"
        x-data="{ loading: false }"
        @click.prevent="if(!loading){ loading=true; window.location.href=$el.href }"
        class="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-[#00b464] text-white font-semibold hover:bg-[#00a055] transition-all no-underline"
@@ -30,9 +32,14 @@
                 @if($utilisateur->email_professionnel)
                 <p class="text-slate-600 dark:text-slate-400 text-sm mt-0.5">📧 Pro : {{ $utilisateur->email_professionnel }}</p>
                 @endif
-                @if($utilisateur->telephone)
-                <p class="text-slate-600 dark:text-slate-400 text-sm mt-0.5">📱 {{ $utilisateur->telephone }}</p>
-                @endif
+                <p class="text-slate-600 dark:text-slate-400 text-sm mt-0.5">
+                    Tél. SMS :
+                    @if($utilisateur->telephone)
+                        <span class="font-mono tabular-nums">+{{ $utilisateur->telephone }}</span>
+                    @else
+                        <span class="text-slate-400">non renseigné</span>
+                    @endif
+                </p>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
                     <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {{ $utilisateur->hasRole('admin') ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200' : 'bg-slate-100 dark:bg-slate-600 text-slate-700 dark:text-slate-300' }}">
                         {{ $utilisateur->roles->first()?->name ?? 'Aucun rôle' }}
@@ -92,7 +99,7 @@
             </form>
             @endif
             @endcan
-            <a href="{{ route('utilisateurs.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all no-underline">
+            <a href="{{ $retourUrl }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all no-underline">
                 ← Retour à la liste
             </a>
         </div>

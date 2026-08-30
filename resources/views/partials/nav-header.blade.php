@@ -31,6 +31,6 @@
 <div id="navHeader" class="nav-header">
     <a href="{{ url('/') }}" class="brand-logo">
         <img src="{{ asset('images/image-logo.jpg') }}" alt="Logo ACSI">
-        <span class="sidebar-label">GED</span>
+        <span class="sidebar-label">COSUD</span>
     </a>
 </div>

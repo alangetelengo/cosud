@@ -53,7 +53,7 @@ class TypeCourrierController extends Controller
         JournalAudit::log('type_courrier.creation', 'courriers', [
             'commentaire' => 'Type de courrier créé : '.$type->code,
         ]);
-        Log::channel('eged')->info('Type de courrier créé', ['type_id' => $type->id, 'code' => $type->code, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Type de courrier créé', ['type_id' => $type->id, 'code' => $type->code, 'user_id' => auth()->id()]);
 
         return redirect()->route('parametres.types-courriers.index')->with('success', 'Type de courrier créé.');
     }
@@ -76,7 +76,7 @@ class TypeCourrierController extends Controller
         JournalAudit::log('type_courrier.modification', 'courriers', [
             'commentaire' => 'Type de courrier mis à jour : '.$type_courrier->code,
         ]);
-        Log::channel('eged')->info('Type de courrier mis à jour', ['type_id' => $type_courrier->id, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Type de courrier mis à jour', ['type_id' => $type_courrier->id, 'user_id' => auth()->id()]);
 
         return redirect()->route('parametres.types-courriers.index')->with('success', 'Type de courrier mis à jour.');
     }
@@ -90,7 +90,7 @@ class TypeCourrierController extends Controller
         JournalAudit::log('type_courrier.suppression', 'courriers', [
             'commentaire' => 'Type de courrier supprimé : '.$type_courrier->code,
         ]);
-        Log::channel('eged')->info('Type de courrier supprimé', ['type_id' => $type_courrier->id, 'code' => $type_courrier->code, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Type de courrier supprimé', ['type_id' => $type_courrier->id, 'code' => $type_courrier->code, 'user_id' => auth()->id()]);
         $type_courrier->delete();
 
         return redirect()->route('parametres.types-courriers.index')->with('success', 'Type de courrier supprimé.');

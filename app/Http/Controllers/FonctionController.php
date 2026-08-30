@@ -46,7 +46,7 @@ class FonctionController extends Controller
         $validated['actif'] = $request->boolean('actif', true);
         $f = Fonction::create($validated);
         JournalAudit::log('fonction.creation', 'fonctions', ['commentaire' => $f->code]);
-        Log::channel('eged')->info('Fonction métier créée', ['fonction_id' => $f->id, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Fonction métier créée', ['fonction_id' => $f->id, 'user_id' => auth()->id()]);
 
         return redirect()->route('parametres.fonctions.index')->with('success', 'Fonction métier créée.');
     }
@@ -67,7 +67,7 @@ class FonctionController extends Controller
         $validated['actif'] = $request->boolean('actif', true);
         $fonction->update($validated);
         JournalAudit::log('fonction.modification', 'fonctions', ['commentaire' => $fonction->code]);
-        Log::channel('eged')->info('Fonction métier mise à jour', ['fonction_id' => $fonction->id, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Fonction métier mise à jour', ['fonction_id' => $fonction->id, 'user_id' => auth()->id()]);
 
         return redirect()->route('parametres.fonctions.index')->with('success', 'Fonction métier mise à jour.');
     }
@@ -83,7 +83,7 @@ class FonctionController extends Controller
         $code = $fonction->code;
         $fonction->delete();
         JournalAudit::log('fonction.suppression', 'fonctions', ['commentaire' => $code]);
-        Log::channel('eged')->info('Fonction métier supprimée', ['code' => $code, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Fonction métier supprimée', ['code' => $code, 'user_id' => auth()->id()]);
 
         return redirect()->route('parametres.fonctions.index')->with('success', 'Fonction métier supprimée.');
     }

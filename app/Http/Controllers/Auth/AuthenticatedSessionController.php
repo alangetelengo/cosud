@@ -38,7 +38,7 @@ class AuthenticatedSessionController extends Controller
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
-        Log::channel('eged')->info('Connexion', ['user_id' => Auth::id(), 'email' => $user->email]);
+        Log::channel('cosud')->info('Connexion', ['user_id' => Auth::id(), 'email' => $user->email]);
 
         return redirect()->intended(route('home', absolute: false));
     }
@@ -59,7 +59,7 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->forget(['2fa_verified']);
 
-        Log::channel('eged')->info('Déconnexion', ['user_id' => $userId, 'email' => $email]);
+        Log::channel('cosud')->info('Déconnexion', ['user_id' => $userId, 'email' => $email]);
 
         return redirect('/');
     }

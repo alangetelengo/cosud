@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Courrier;
 use App\Models\Structure;
 use App\Models\User;
 use Database\Seeders\ACSIFonctionsSeeder;
@@ -47,6 +48,26 @@ class CourrierActeursDgSeederTest extends TestCase
         $this->assertSame($secDir->id, (int) $respDossiers->structure_id);
         $this->assertTrue($respDossiers->can('documents.view'));
         $this->assertTrue($respDossiers->can('dossiers.view'));
+
+        $respDepenses = User::where('email', '003091k@acsi.cg')->firstOrFail();
+        $this->assertSame('ASTRIDE ELENI OSSEBI', $respDepenses->name);
+        $this->assertTrue($respDepenses->hasRole('responsable_suivi_depenses'));
+        $this->assertSame($secDir->id, (int) $respDepenses->structure_id);
+        $this->assertTrue($respDepenses->can('documents.view'));
+        $this->assertTrue($respDepenses->can('dossiers.view'));
+
+        $secretaireDg = User::where('email', '001970r@acsi.cg')->firstOrFail();
+        $this->assertSame('MIREILLE BLANCHE MANGO NEE BABENGA MOCKO BANGAU', $secretaireDg->name);
+        $this->assertTrue($secretaireDg->hasRole('secretaire_direction'));
+        $this->assertSame($secDir->id, (int) $secretaireDg->structure_id);
+        $this->assertTrue($secretaireDg->gereCourrierSecretariat());
+        $this->assertTrue($secretaireDg->can('courriers.create'));
+        $this->assertTrue($secretaireDg->can('create', Courrier::class));
+
+        $ancienSuivi = User::where('email', '003269d@acsi.cg')->first();
+        if ($ancienSuivi) {
+            $this->assertFalse($ancienSuivi->hasRole('responsable_suivi_depenses'));
+        }
     }
 
     public function test_seed_affecte_agent_comptable_dac_et_particuliere(): void
@@ -71,12 +92,68 @@ class CourrierActeursDgSeederTest extends TestCase
         $this->assertSame($dac->id, (int) $agent->structure_id);
         $this->assertSame($agent->id, $dac->titulaireValidationActuel()?->id);
 
+        $caissiereAc = User::where('email', '003065g@acsi.cg')->firstOrFail();
+        $this->assertSame('LYDIA EUPHRASIE KOUMOU ANDZALE', $caissiereAc->name);
+        $this->assertTrue($caissiereAc->hasRole('agent_comptable'));
+        $this->assertSame($dac->id, (int) $caissiereAc->structure_id);
+        $this->assertTrue($caissiereAc->can('courriers.view'));
+        $this->assertTrue($caissiereAc->can('courriers.voir-factures'));
+        $this->assertTrue($caissiereAc->can('bordereau-transmission.view'));
+
         $particuliere = User::where('email', '002871v@acsi.cg')->firstOrFail();
         $this->assertSame('NICOLE BIENVENUE OBA', $particuliere->name);
         $this->assertTrue($particuliere->hasRole('particulier_ac'));
         $this->assertSame($secDac->id, (int) $particuliere->structure_id);
         $this->assertTrue($particuliere->can('documents.view'));
         $this->assertTrue($particuliere->can('dossiers.view'));
+    }
+
+    public function test_seed_affecte_directeur_ddsait(): void
+    {
+        $this->seed([
+            RoleAndPermissionSeeder::class,
+            StructureSeeder::class,
+            ACSIFonctionsSeeder::class,
+            CourrierReferentielSeeder::class,
+            CircuitCourrierSeeder::class,
+            CourrierActeursDgSeeder::class,
+        ]);
+
+        $ddsait = Structure::where('code', 'DDSAIT')->firstOrFail();
+
+        $directeur = User::where('email', '003152b@acsi.cg')->firstOrFail();
+        $this->assertSame('BRICE GANGOUE', $directeur->name);
+        $this->assertTrue($directeur->hasRole('directeur'));
+        $this->assertSame($ddsait->id, (int) $directeur->structure_id);
+        $this->assertSame($directeur->id, $ddsait->titulaireValidationActuel()?->id);
+    }
+
+    public function test_seed_affecte_directeurs_ding_dinfra_dsupport_dcom(): void
+    {
+        $this->seed([
+            RoleAndPermissionSeeder::class,
+            StructureSeeder::class,
+            ACSIFonctionsSeeder::class,
+            CourrierReferentielSeeder::class,
+            CircuitCourrierSeeder::class,
+            CourrierActeursDgSeeder::class,
+        ]);
+
+        $attendus = [
+            '003012y@acsi.cg' => 'DING-SI',
+            '001966m@acsi.cg' => 'DINFRA',
+            '001957c@acsi.cg' => 'DSUPPORT',
+            '003330u@acsi.cg' => 'DCOM',
+        ];
+
+        foreach ($attendus as $email => $codeStructure) {
+            $structure = Structure::where('code', $codeStructure)->firstOrFail();
+            $directeur = User::where('email', $email)->firstOrFail();
+
+            $this->assertTrue($directeur->hasRole('directeur'), $email);
+            $this->assertSame($structure->id, (int) $directeur->structure_id, $email);
+            $this->assertSame($directeur->id, $structure->titulaireValidationActuel()?->id, $email);
+        }
     }
 
     public function test_circuit_seeder_ne_retire_pas_documents_et_dossiers(): void
@@ -95,5 +172,27 @@ class CourrierActeursDgSeederTest extends TestCase
         $this->assertTrue($particulierAc->hasPermissionTo('documents.view'));
         $this->assertTrue($particulierAc->hasPermissionTo('dossiers.view'));
         $this->assertTrue($particulierAc->hasPermissionTo('courriers.view'));
+    }
+
+    public function test_reseed_ne_reimpose_pas_changement_mot_de_passe(): void
+    {
+        $this->seed([
+            RoleAndPermissionSeeder::class,
+            StructureSeeder::class,
+            ACSIFonctionsSeeder::class,
+            CourrierReferentielSeeder::class,
+            CircuitCourrierSeeder::class,
+            CourrierActeursDgSeeder::class,
+        ]);
+
+        $directeur = User::where('email', '003057w@acsi.cg')->firstOrFail();
+        $directeur->update(['must_change_password' => false]);
+        $ancienHash = $directeur->password;
+
+        $this->seed(CourrierActeursDgSeeder::class);
+
+        $directeur->refresh();
+        $this->assertFalse($directeur->must_change_password);
+        $this->assertSame($ancienHash, $directeur->password);
     }
 }

@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
-use App\Services\CircuitCourrierMoteurService;
+use App\Services\CourrierVisibiliteService;
+use App\Services\FactureRegularisationService;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Courrier extends Model
 {
@@ -33,19 +36,32 @@ class Courrier extends Model
         'date_courrier',
         'numero_fulgurant',
         'expediteur_libelle',
+        'fournisseur_prestataire_id',
         'expediteur_email',
         'expediteur_telephone',
         'destinataire_libelle',
         'est_expediteur_externe',
         'structure_expediteur_id',
         'structure_destinataire_id',
+        'service_demandeur_structure_id',
         'objet',
+        'montant_facture',
+        'est_regularisation',
+        'regularisation_paiement',
+        'regularisation_mode_paiement',
+        'regularisation_date_programmation',
+        'regularisation_numero_piece',
+        'regularisation_banque',
+        'regularisation_montant_mensuel',
+        'regularisation_nb_mois_impayes',
         'est_confidentiel',
         'orientation_mode',
         'nombre_pieces',
         'numero_archives',
         'observations',
         'instructions_dg',
+        'mode_paiement_circuit',
+        'delai_execution_jours',
         'agent_confie_id',
         'message_ac',
         'date_orientation',
@@ -68,6 +84,16 @@ class Courrier extends Model
         'reponse_objet',
     ];
 
+    public const MODE_PAIEMENT_CHEQUE = 'cheque';
+
+    public const MODE_PAIEMENT_OV = 'ov';
+
+    /** @var list<string> */
+    public const MODES_PAIEMENT_CIRCUIT = [
+        self::MODE_PAIEMENT_CHEQUE,
+        self::MODE_PAIEMENT_OV,
+    ];
+
     protected function casts(): array
     {
         return [
@@ -80,6 +106,12 @@ class Courrier extends Model
             'est_confidentiel' => 'boolean',
             'reponse_confidentielle' => 'boolean',
             'nombre_pieces' => 'integer',
+            'montant_facture' => 'decimal:2',
+            'est_regularisation' => 'boolean',
+            'regularisation_montant_mensuel' => 'decimal:2',
+            'regularisation_nb_mois_impayes' => 'integer',
+            'regularisation_date_programmation' => 'date',
+            'delai_execution_jours' => 'integer',
             'circuit_etape_depuis' => 'datetime',
             'dernier_alerte_retard_at' => 'datetime',
         ];
@@ -88,6 +120,111 @@ class Courrier extends Model
     public function typeCourrier(): BelongsTo
     {
         return $this->belongsTo(TypeCourrier::class);
+    }
+
+    public function estTypeFacture(): bool
+    {
+        if ($this->relationLoaded('typeCourrier')) {
+            return $this->typeCourrier?->code === 'facture';
+        }
+
+        return $this->typeCourrier()->where('code', 'facture')->exists();
+    }
+
+    public function necessiteChoixModePaiementCircuit(): bool
+    {
+        $this->loadMissing(['circuit', 'typeCourrier']);
+
+        return $this->circuit?->code === 'facture_prestataire'
+            || $this->typeCourrier?->code === 'facture';
+    }
+
+    public function estModePaiementOv(): bool
+    {
+        return $this->mode_paiement_circuit === self::MODE_PAIEMENT_OV;
+    }
+
+    public function estModePaiementCheque(): bool
+    {
+        return $this->mode_paiement_circuit === self::MODE_PAIEMENT_CHEQUE
+            || ($this->mode_paiement_circuit === null && $this->necessiteChoixModePaiementCircuit());
+    }
+
+    public function libelleModePaiementCircuit(): string
+    {
+        return match ($this->mode_paiement_circuit) {
+            self::MODE_PAIEMENT_OV => 'Ordre de virement',
+            self::MODE_PAIEMENT_CHEQUE => 'Chèque',
+            default => '—',
+        };
+    }
+
+    public function nomEtapeCircuitPourAffichage(?CircuitCourrierEtape $etape): string
+    {
+        if ($etape === null) {
+            return '—';
+        }
+
+        if (! $this->necessiteChoixModePaiementCircuit()) {
+            return $etape->nom;
+        }
+
+        return match ($etape->code) {
+            'ac_etablit_cheque' => $this->estModePaiementOv()
+                ? 'AC établit l’ordre de virement → envoi DG'
+                : $etape->nom,
+            'dg_signe_cheque' => $this->estModePaiementOv()
+                ? 'DG signe l’ordre de virement → renvoi AC'
+                : $etape->nom,
+            'preuve_paiement' => $this->estModePaiementOv()
+                ? 'AC — enregistrement accusé banque / paiement (clôture)'
+                : $etape->nom,
+            default => $etape->nom,
+        };
+    }
+
+    public function instructionsAideEtapePourAffichage(?CircuitCourrierEtape $etape): ?string
+    {
+        if ($etape === null) {
+            return null;
+        }
+
+        if (! $this->necessiteChoixModePaiementCircuit()) {
+            return $etape->instructions_aide;
+        }
+
+        return match ($etape->code) {
+            'instructions_dg' => $this->estModePaiementOv()
+                ? 'Le DG donne son Bon pour accord (ordre de virement). L’AC est notifié pour établir l’OV ; la responsable dossiers suit en parallèle.'
+                : $etape->instructions_aide,
+            'ac_etablit_cheque' => $this->estModePaiementOv()
+                ? 'L’AC établit l’ordre de virement et l’envoie au DG pour signature (sans scan dans COSUD).'
+                : $etape->instructions_aide,
+            'dg_signe_cheque' => $this->estModePaiementOv()
+                ? 'Le DG confirme que l’ordre de virement est signé (sans scan) et renvoie le dossier à l’AC pour l’accusé de réception banque.'
+                : $etape->instructions_aide,
+            'preuve_paiement' => $this->estModePaiementOv()
+                ? 'À réception de la banque : saisir la date, joindre l’accusé de réception. Cette action clôture le circuit. Mme Eleni contrôlera ensuite les pièces hors circuit.'
+                : $etape->instructions_aide,
+            default => $etape->instructions_aide,
+        };
+    }
+
+    public function commentaireHistoriqueCircuitPourAffichage(?string $commentaire): ?string
+    {
+        if ($commentaire === null || ! $this->estModePaiementOv()) {
+            return $commentaire;
+        }
+
+        $remplacements = [
+            'AC établit le chèque → envoi DG' => 'AC établit l’ordre de virement → envoi DG',
+            'DG signe le chèque → renvoi AC' => 'DG signe l’ordre de virement → renvoi AC',
+            'AC — enregistrement décharge / paiement (clôture)' => 'AC — enregistrement accusé banque / paiement (clôture)',
+            'Le DG confirme que le chèque est signé (sans scan) et renvoie le dossier à l’AC pour la décharge bénéficiaire.' => 'Le DG confirme que l’ordre de virement est signé (sans scan) et renvoie le dossier à l’AC pour l’accusé de réception banque.',
+            'L’AC établit le chèque et l’envoie au DG pour signature (sans scan dans COSUD).' => 'L’AC établit l’ordre de virement et l’envoie au DG pour signature (sans scan dans COSUD).',
+        ];
+
+        return str_replace(array_keys($remplacements), array_values($remplacements), $commentaire);
     }
 
     public function circuit(): BelongsTo
@@ -130,6 +267,11 @@ class Courrier extends Model
         return $this->belongsTo(User::class, 'createur_id');
     }
 
+    public function fournisseurPrestataire(): BelongsTo
+    {
+        return $this->belongsTo(FournisseurPrestataire::class, 'fournisseur_prestataire_id');
+    }
+
     public function signataire(): BelongsTo
     {
         return $this->belongsTo(User::class, 'signataire_id');
@@ -160,6 +302,14 @@ class Courrier extends Model
         return $this->belongsTo(Structure::class, 'structure_destinataire_id');
     }
 
+    /**
+     * Direction / service demandeur (factures et MAD) — référentiel structures type direction.
+     */
+    public function serviceDemandeurStructure(): BelongsTo
+    {
+        return $this->belongsTo(Structure::class, 'service_demandeur_structure_id');
+    }
+
     public function dossier(): BelongsTo
     {
         return $this->belongsTo(Dossier::class);
@@ -186,11 +336,72 @@ class Courrier extends Model
     }
 
     /**
-     * Agent à qui le DG a confié le dossier lors de l’instruction (option A du circuit).
+     * Agent principal à qui le DG a confié le dossier lors de l’instruction (compat. mono).
      */
     public function agentConfie(): BelongsTo
     {
         return $this->belongsTo(User::class, 'agent_confie_id');
+    }
+
+    /**
+     * Destinataires auxquels le DG a confié / envoyé le dossier (multi-select).
+     */
+    public function agentsConfies(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'courrier_agents_confies')
+            ->withTimestamps();
+    }
+
+    /**
+     * Lectures par utilisateur (logique type Gmail : gras tant que non ouvert).
+     */
+    public function lectures(): HasMany
+    {
+        return $this->hasMany(CourrierLecture::class);
+    }
+
+    public function aEteLuPar(?User $user): bool
+    {
+        if (! $user) {
+            return true;
+        }
+
+        if ($this->relationLoaded('lectures')) {
+            return $this->lectures->contains(fn (CourrierLecture $l) => (int) $l->user_id === (int) $user->id);
+        }
+
+        return $this->lectures()->where('user_id', $user->id)->exists();
+    }
+
+    public function marquerLuPar(User $user): void
+    {
+        CourrierLecture::query()->updateOrCreate(
+            [
+                'courrier_id' => $this->id,
+                'user_id' => $user->id,
+            ],
+            [
+                'lu_at' => now(),
+            ]
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function libellesAgentsConfies(): array
+    {
+        $this->loadMissing(['agentsConfies.structure', 'agentConfie.structure']);
+
+        $agents = $this->agentsConfies->isNotEmpty()
+            ? $this->agentsConfies
+            : collect($this->agentConfie ? [$this->agentConfie] : []);
+
+        return $agents
+            ->map(fn (User $u) => $u->libelleDestinataireCourrier())
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function courrierParent(): BelongsTo
@@ -213,11 +424,43 @@ class Courrier extends Model
         return $this->hasMany(Courrier::class, 'courrier_parent_id');
     }
 
+    public function reponseDepartEnAttenteSignature(): ?self
+    {
+        return $this->reponsesDepart()
+            ->whereHas('statutCourrier', fn ($q) => $q->where('code', 'transmis_directeur'))
+            ->latest('id')
+            ->first();
+    }
+
+    public function reponseDepartSigneeEnAttenteExpedition(): ?self
+    {
+        return $this->reponsesDepart()
+            ->whereHas('statutCourrier', fn ($q) => $q->where('code', 'signe'))
+            ->latest('id')
+            ->first();
+    }
+
     public function documents(): BelongsToMany
     {
         return $this->belongsToMany(Document::class, 'courrier_document')
             ->withPivot('est_principal')
             ->withTimestamps();
+    }
+
+    /**
+     * Dernier paiement enregistré (compatibilité circuit / affichage courant).
+     */
+    public function suiviPaiement(): HasOne
+    {
+        return $this->hasOne(SuiviPaiement::class)->latestOfMany();
+    }
+
+    /**
+     * Tous les paiements liés à la facture (chèque initial + reliquats).
+     */
+    public function suiviPaiements(): HasMany
+    {
+        return $this->hasMany(SuiviPaiement::class)->orderBy('id');
     }
 
     public function orientations(): HasMany
@@ -261,9 +504,85 @@ class Courrier extends Model
         return $this->origine === self::ORIGINE_EXTERNE;
     }
 
+    public function estRegularisation(): bool
+    {
+        return (bool) $this->est_regularisation;
+    }
+
+    public function estRegularisationPayee(): bool
+    {
+        return $this->estRegularisation()
+            && $this->regularisation_paiement === FactureRegularisationService::PAIEMENT_PAYEE;
+    }
+
+    public function estRegularisationProgrammee(): bool
+    {
+        return $this->estRegularisation()
+            && $this->regularisation_paiement === FactureRegularisationService::PAIEMENT_PROGRAMMEE;
+    }
+
+    public function estRegularisationImpayee(): bool
+    {
+        return $this->estRegularisation()
+            && $this->regularisation_paiement === FactureRegularisationService::PAIEMENT_IMPAYEE;
+    }
+
+    public function estRegularisationContratMensuel(): bool
+    {
+        return $this->estRegularisation()
+            && $this->regularisation_paiement === FactureRegularisationService::PAIEMENT_CONTRAT_MENSUEL;
+    }
+
+    /**
+     * Régularisation encore modifiable / supprimable par Taty (pas encore payée).
+     */
+    public function regularisationModifiable(): bool
+    {
+        if (! $this->estRegularisation() || $this->estRegularisationPayee()) {
+            return false;
+        }
+
+        if ($this->relationLoaded('suiviPaiement')) {
+            return $this->suiviPaiement === null;
+        }
+
+        return ! $this->suiviPaiement()->exists();
+    }
+
+    /**
+     * Numéro métier affiché (saisi par le secrétariat), ex. « 192/2026/DAF/SAGP » ou « 45/2026 ».
+     * Repli : référence départ auto, puis compteur technique interne.
+     */
     public function numeroRegistreComplet(): string
     {
-        return sprintf('%d/%d', $this->numero_registre, $this->numero_registre_annee);
+        $saisi = trim((string) ($this->numero_fulgurant ?? ''));
+        if ($saisi !== '') {
+            return $saisi;
+        }
+
+        if ($this->estDepart()) {
+            $reference = trim((string) ($this->reference ?? ''));
+            if ($reference !== '') {
+                return $reference;
+            }
+        }
+
+        if ($this->numero_registre !== null && $this->numero_registre_annee !== null) {
+            return sprintf('%d/%d', $this->numero_registre, $this->numero_registre_annee);
+        }
+
+        return '—';
+    }
+
+    /**
+     * Objet du courrier départ créé en réponse à cette arrivée (registre).
+     * Toujours dérivé de l’objet d’arrivée — pas de saisie libre à la création.
+     */
+    public function objetReponseDepartParDefaut(): string
+    {
+        $objet = trim((string) $this->objet);
+
+        return $objet !== '' ? 'Réponse — '.$objet : 'Réponse';
     }
 
     /**
@@ -301,100 +620,12 @@ class Courrier extends Model
 
     public function visiblePar(User $user): bool
     {
-        if ($user->aAccesTotal()) {
-            return true;
-        }
-
-        if ($user->hasRole('responsable_dossiers_prestataires')
-            || $user->hasRole('responsable_suivi_depenses')
-            || $user->hasRole('agent_comptable')
-            || $user->hasRole('caissier')) {
-            return true;
-        }
-
-        if (($user->gereCourrierSecretariat() || $user->hasRole('particulier_dg'))
-            && $this->appartientAuPerimetreSecretariat($user)) {
-            return true;
-        }
-
-        if ($user->peutSignerCourrierDepart()
-            && $this->estDepart()
-            && (int) $this->directeur_en_attente_id === (int) $user->id) {
-            return true;
-        }
-
-        // Réponse confidentielle adressée directement à un agent (pas à une structure) :
-        // l'agent destinataire doit pouvoir consulter son courrier départ.
-        if ($this->estDepart()
-            && $this->destinataire_agent_id
-            && (int) $this->destinataire_agent_id === (int) $user->id) {
-            return true;
-        }
-
-        if ($this->ventilationDestinataires()->where('user_id', $user->id)->exists()) {
-            return true;
-        }
-
-        if ((int) $this->createur_id === (int) $user->id) {
-            return true;
-        }
-
-        if ($this->enAttenteReceptionInterne()
-            && (int) $this->structure_destinataire_id === (int) $user->structure_id) {
-            return $user->gereCourrierSecretariat();
-        }
-
-        // Acteur courant du circuit métier (ex. directeur de la structure destinataire
-        // sur l’étape d’instruction) : doit pouvoir consulter le courrier pour y agir,
-        // même sans lien de secrétariat/ventilation direct.
-        if ($this->circuit_etape_actuelle_id
-            && app(CircuitCourrierMoteurService::class)->peutAgir($this, $user)) {
-            return true;
-        }
-
-        return false;
+        return app(CourrierVisibiliteService::class)->estVisible($this, $user);
     }
 
     public function scopeVisibleBy(Builder $query, User $user): Builder
     {
-        if ($user->aAccesTotal()) {
-            return $query;
-        }
-
-        if ($user->hasRole('responsable_dossiers_prestataires')
-            || $user->hasRole('responsable_suivi_depenses')
-            || $user->hasRole('agent_comptable')
-            || $user->hasRole('caissier')) {
-            return $query;
-        }
-
-        if ($user->gereCourrierSecretariat() || $user->hasRole('particulier_dg')) {
-            $structureId = (int) $user->structure_id;
-
-            return $query->where(function (Builder $q) use ($user, $structureId) {
-                $q->where('structure_id', $structureId)
-                    ->orWhere('createur_id', $user->id)
-                    ->orWhere(function (Builder $sub) use ($structureId) {
-                        $sub->whereNotNull('structure_destinataire_id')
-                            ->where('structure_destinataire_id', $structureId)
-                            ->whereNull('courrier_arrivee_lie_id')
-                            ->whereHas('statutCourrier', fn ($sq) => $sq->where('code', 'expedie'));
-                    });
-            });
-        }
-
-        return $query->where(function ($q) use ($user) {
-            $q->where('createur_id', $user->id)
-                ->orWhere('directeur_en_attente_id', $user->id)
-                ->orWhere('destinataire_agent_id', $user->id)
-                ->orWhereHas('ventilationDestinataires', fn ($vq) => $vq->where('user_id', $user->id))
-                ->orWhere(function ($sub) use ($user) {
-                    $sub->whereNotNull('structure_destinataire_id')
-                        ->where('structure_destinataire_id', $user->structure_id)
-                        ->whereNull('courrier_arrivee_lie_id')
-                        ->whereHas('statutCourrier', fn ($sq) => $sq->where('code', 'expedie'));
-                });
-        });
+        return app(CourrierVisibiliteService::class)->appliquerFiltreListe($query, $user);
     }
 
     /**
@@ -450,19 +681,172 @@ class Courrier extends Model
             || $user->hasRole('responsable_dossiers_prestataires');
     }
 
+    public function estEngageDansCircuit(): bool
+    {
+        if ($this->circuit_courrier_id === null) {
+            return false;
+        }
+
+        if ($this->circuit_etape_actuelle_id !== null) {
+            return true;
+        }
+
+        return $this->circuitHistoriques()->exists();
+    }
+
+    public function estAnnulationBloqueeParCircuit(): bool
+    {
+        if ($this->circuit_courrier_id === null) {
+            return false;
+        }
+
+        $this->loadMissing('circuitEtapeActuelle');
+
+        if (filled($this->instructions_dg)) {
+            return true;
+        }
+
+        $code = $this->circuitEtapeActuelle?->code;
+
+        if ($code === null) {
+            return true;
+        }
+
+        return ! in_array($code, ['enregistrement', 'instructions_dg'], true);
+    }
+
+    public function peutAnnulerEnregistrement(User $user): bool
+    {
+        if (in_array($this->statutCourrier?->code, ['cloture', 'archive', 'annule'], true)) {
+            return false;
+        }
+
+        if ($this->estArrivee()) {
+            if ($this->estAnnulationBloqueeParCircuit()) {
+                return false;
+            }
+
+            if (! $this->peutTransitionnerVers('annule')) {
+                return false;
+            }
+
+            if (! $user->can('courriers.edit')) {
+                return false;
+            }
+
+            return $user->aAccesTotal()
+                || $user->hasRole('particulier_dg');
+        }
+
+        if ($this->estDepart()) {
+            $code = $this->statutCourrier?->code ?? '';
+
+            if ($code === 'transmis_directeur') {
+                return $user->can('courriers.rejeter')
+                    && (int) $this->directeur_en_attente_id === (int) $user->id;
+            }
+
+            if (in_array($code, ['brouillon', 'rejete_directeur'], true)) {
+                return $user->can('courriers.edit')
+                    && $user->gereCourrierSecretariat()
+                    && (int) $this->structure_id === (int) $user->structure_id;
+            }
+        }
+
+        return false;
+    }
+
+    public function peutSupprimerEnregistrement(): bool
+    {
+        if ($this->estEngageDansCircuit()) {
+            return false;
+        }
+
+        if ($this->est_regularisation) {
+            return false;
+        }
+
+        if ($this->courrier_parent_id !== null) {
+            return false;
+        }
+
+        if ($this->reponsesDepart()->exists()) {
+            return false;
+        }
+
+        if ($this->suiviPaiements()->exists()) {
+            return false;
+        }
+
+        if (self::query()->where('courrier_arrivee_lie_id', $this->id)->exists()) {
+            return false;
+        }
+
+        if ($this->estArrivee()) {
+            return in_array($this->statutCourrier?->code, ['recu', 'annule'], true);
+        }
+
+        if ($this->estDepart()) {
+            return in_array($this->statutCourrier?->code, ['brouillon', 'rejete_directeur', 'annule'], true);
+        }
+
+        return false;
+    }
+
+    public function peutSupprimerEnregistrementPar(User $user): bool
+    {
+        if (! $this->peutSupprimerEnregistrement()) {
+            return false;
+        }
+
+        if ($this->estArrivee()) {
+            return $user->aAccesTotal()
+                || $user->hasRole('particulier_dg');
+        }
+
+        if ($this->estDepart()) {
+            return $user->aAccesTotal()
+                || $user->gereCourrierSecretariat()
+                || $user->hasRole('particulier_dg');
+        }
+
+        return false;
+    }
+
+    public function motifAnnulationRequis(): bool
+    {
+        if ($this->estDepart() && $this->statutCourrier?->code === 'transmis_directeur') {
+            return true;
+        }
+
+        return $this->estArrivee()
+            && in_array($this->statutCourrier?->code, ['oriente', 'ventile'], true);
+    }
+
+    public function cleFormulaireAnnulation(): ?string
+    {
+        if ($this->estArrivee()) {
+            return 'annuler-arrivee';
+        }
+
+        if ($this->estDepart()) {
+            return match ($this->statutCourrier?->code) {
+                'transmis_directeur' => 'annuler-directeur',
+                'brouillon', 'rejete_directeur' => 'annuler-brouillon',
+                default => null,
+            };
+        }
+
+        return null;
+    }
+
     public function peutEnregistrerTransmission(): bool
     {
         $code = $this->statutCourrier?->code ?? '';
 
+        // Départ : l’expédition clôt les actions ; plus de « Transmission / trace d’envoi ».
         if ($this->estDepart()) {
-            if ($code !== 'expedie') {
-                return false;
-            }
-
-            // Une seule trace d’envoi avec accusé : pas de nouveau formulaire après AR.
-            return ! $this->transmissions()
-                ->where('accuse_reception', true)
-                ->exists();
+            return false;
         }
 
         return in_array($code, ['oriente', 'ventile'], true);
@@ -479,8 +863,9 @@ class Courrier extends Model
     {
         $code = $this->statutCourrier?->code ?? '';
 
+        // Départ : infos registre saisies à l’expédition — plus d’action « Archiver » après envoi.
         if ($this->estDepart()) {
-            return in_array($code, ['expedie', 'reception_refusee'], true);
+            return $code === 'reception_refusee';
         }
 
         return $code === 'ventile';
@@ -490,11 +875,12 @@ class Courrier extends Model
     {
         $transitions = $this->estArrivee()
             ? [
-                'recu' => ['en_parapheur'],
-                'en_parapheur' => ['oriente', 'attente_reponse_particuliere'],
-                'attente_reponse_particuliere' => ['oriente', 'cloture'],
-                'oriente' => ['ventile', 'cloture'],
-                'ventile' => ['cloture'],
+                'recu' => ['en_parapheur', 'annule'],
+                'en_parapheur' => ['oriente', 'attente_reponse_particuliere', 'annule'],
+                'attente_reponse_particuliere' => ['oriente', 'cloture', 'annule'],
+                'oriente' => ['ventile', 'cloture', 'annule'],
+                'ventile' => ['cloture', 'annule'],
+                'annule' => [],
             ]
             : [
                 'brouillon' => ['transmis_directeur', 'annule'],
@@ -509,5 +895,34 @@ class Courrier extends Model
         $actuel = $this->statutCourrier?->code ?? '';
 
         return in_array($codeStatut, $transitions[$actuel] ?? [], true);
+    }
+
+    /**
+     * Échéance de traitement calculée depuis la date d’orientation + délai en jours (facultatif).
+     */
+    public function dateEcheanceExecution(): ?CarbonInterface
+    {
+        if ($this->delai_execution_jours === null || $this->date_orientation === null) {
+            return null;
+        }
+
+        return $this->date_orientation->copy()->startOfDay()->addDays((int) $this->delai_execution_jours);
+    }
+
+    public function libelleDelaiExecution(): ?string
+    {
+        if ($this->delai_execution_jours === null) {
+            return null;
+        }
+
+        $jours = (int) $this->delai_execution_jours;
+        $libelle = $jours.' jour'.($jours > 1 ? 's' : '');
+        $echeance = $this->dateEcheanceExecution();
+
+        if ($echeance) {
+            $libelle .= ' (échéance '.$echeance->format('d/m/Y').')';
+        }
+
+        return $libelle;
     }
 }

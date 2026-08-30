@@ -21,7 +21,7 @@ class VerifyEmailController extends Controller
 
         if ($request->user()->markEmailAsVerified()) {
             event(new Verified($request->user()));
-            Log::channel('eged')->info('Email vérifié', ['user_id' => $request->user()->id]);
+            Log::channel('cosud')->info('Email vérifié', ['user_id' => $request->user()->id]);
         }
 
         return redirect()->intended(route('dashboard', absolute: false).'?verified=1');

@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Document;
 use App\Models\Dossier;
-use App\Models\TypeDocument;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -12,12 +11,14 @@ class RechercheController extends Controller
 {
     public function index(Request $request)
     {
+        $this->authorize('recherche.view');
+
         $q = $request->get('q', '');
         $documents = collect();
         $dossiers = collect();
 
         if (strlen($q) >= 2) {
-            Log::channel('eged')->debug('Recherche', ['q' => $q, 'user_id' => auth()->id()]);
+            Log::channel('cosud')->debug('Recherche', ['q' => $q, 'user_id' => auth()->id()]);
             $documents = Document::horsCorbeille()
                 ->visibleBy(auth()->user())
                 ->with(['typeDocument', 'user', 'dossier' => fn ($d) => $d->with(['parent' => fn ($p) => $p->with('parent')])])

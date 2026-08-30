@@ -88,6 +88,8 @@ class CourrierSecretariatService
         return DB::transaction(function () use ($depart, $recepteur, $sensArrivee, $statutRecu) {
             $nums = app(CourrierNumeroRegistreService::class)->prochainNumero((int) $sensArrivee->id);
 
+            $numeroMetier = trim((string) ($depart->numero_fulgurant ?: $depart->reference ?: ''));
+
             $arrivee = Courrier::create([
                 'sens_courrier_id' => $sensArrivee->id,
                 'type_courrier_id' => $depart->type_courrier_id,
@@ -95,6 +97,8 @@ class CourrierSecretariatService
                 'priorite_courrier_id' => $depart->priorite_courrier_id,
                 'numero_registre' => $nums['numero_registre'],
                 'numero_registre_annee' => $nums['numero_registre_annee'],
+                'numero_fulgurant' => $numeroMetier !== '' ? $numeroMetier : null,
+                'reference' => $depart->reference,
                 'origine' => 'interne',
                 'date_reception' => now()->toDateString(),
                 'date_courrier' => $depart->date_courrier,

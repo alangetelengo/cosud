@@ -27,7 +27,7 @@ class CourrierArchivageRegistreTest extends TestCase
         ]);
     }
 
-    public function test_archivage_depart_enregistre_infos_registre(): void
+    public function test_depart_expedie_n_autorise_plus_l_archivage_manuel(): void
     {
         $secretaire = $this->creerSecretaire();
         $secDaf = Structure::where('code', 'SEC-DAF')->firstOrFail();
@@ -40,6 +40,8 @@ class CourrierArchivageRegistreTest extends TestCase
             'objet' => 'Lettre au Prefet',
             'structure_destinataire_id' => $secDaf->id,
             'destinataire_libelle' => $secDaf->nom,
+            'numero_archives' => 'DG/DEP/2026/001',
+            'observations' => 'Saisi à l’expédition',
             'createur_id' => $secretaire->id,
             'structure_id' => $secretaire->structure_id,
             'date_expedition' => now(),
@@ -48,32 +50,29 @@ class CourrierArchivageRegistreTest extends TestCase
         $this->actingAs($secretaire)
             ->get(route('courriers.show', $depart, absolute: false))
             ->assertOk()
-            ->assertSee('>Archiver<', false)
-            ->assertSee('name="numero_archives"', false)
-            ->assertSee('name="observations"', false);
+            ->assertDontSee('>Archiver<', false)
+            ->assertSee('Courrier expédié — aucune action supplémentaire', false);
 
         $this->actingAs($secretaire)
             ->post(route('courriers.archiver', $depart, absolute: false), [
                 'nombre_pieces' => 2,
                 'numero_archives' => 'DG/DEP/2026/001',
-                'observations' => 'Archivé après AR destinataire',
+                'observations' => 'Tentative archivage',
             ])
-            ->assertRedirect();
+            ->assertForbidden();
 
         $depart->refresh();
-        $this->assertSame('archive', $depart->statutCourrier->code);
-        $this->assertSame(2, $depart->nombre_pieces);
-        $this->assertSame('DG/DEP/2026/001', $depart->numero_archives);
-        $this->assertSame('Archivé après AR destinataire', $depart->observations);
+        $this->assertSame('expedie', $depart->statutCourrier->code);
 
+        // Les infos registre saisies à l’expédition restent visibles au registre départ.
         $this->actingAs($secretaire)
             ->get(route('courriers.registres.depart', ['annee' => $depart->numero_registre_annee], absolute: false))
             ->assertOk()
             ->assertSee('DG/DEP/2026/001', false)
-            ->assertSee('Archivé après AR destinataire', false);
+            ->assertSee('Saisi à l’expédition', false);
     }
 
-    public function test_archivage_depart_preserve_infos_deja_saisies_a_lexpedition(): void
+    public function test_infos_registre_saisies_a_lexpedition_restent_conservees(): void
     {
         $secretaire = $this->creerSecretaire();
         $secDaf = Structure::where('code', 'SEC-DAF')->firstOrFail();
@@ -94,17 +93,10 @@ class CourrierArchivageRegistreTest extends TestCase
             'date_expedition' => now(),
         ]);
 
-        $this->actingAs($secretaire)
-            ->post(route('courriers.archiver', $depart, absolute: false), [
-                'nombre_pieces' => 1,
-                'numero_archives' => 'DG/DEP/2026/002',
-                'observations' => 'Saisi à l’expédition',
-            ])
-            ->assertRedirect();
-
         $depart->refresh();
         $this->assertSame('DG/DEP/2026/002', $depart->numero_archives);
         $this->assertSame('Saisi à l’expédition', $depart->observations);
+        $this->assertFalse($depart->peutEtreArchive());
     }
 
     private function creerSecretaire(): User

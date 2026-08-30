@@ -32,13 +32,13 @@ class DocumentValidationResultNotification extends Notification
             : 'Votre document a été rejeté.';
 
         $mail = (new MailMessage)
-            ->subject($this->approuve ? 'GED : Document validé' : 'GED : Document rejeté')
-            ->greeting('Bonjour ' . $notifiable->name . ',')
+            ->subject($this->approuve ? 'COSUD : Document validé' : 'COSUD : Document rejeté')
+            ->greeting('Bonjour '.$notifiable->name.',')
             ->line($msg)
-            ->line('**Document :** ' . $titre)
-            ->line('**Par :** ' . $this->validateur->name);
+            ->line('**Document :** '.$titre)
+            ->line('**Par :** '.$this->validateur->name);
         if ($this->commentaire) {
-            $mail->line('**Commentaire :** ' . $this->commentaire);
+            $mail->line('**Commentaire :** '.$this->commentaire);
         }
         $mail->action('Voir les documents', route('documents.index'));
 

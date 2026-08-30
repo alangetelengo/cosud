@@ -1,4 +1,5 @@
 @php
+    use App\Support\ReturnUrl;
     $filService = app(\App\Services\CourrierFilService::class);
 @endphp
 <div class="space-y-4">
@@ -49,7 +50,7 @@
                                 $filService->estDocumentEntrant($fc) ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700',
                             ])>{{ $filService->sensDocumentLabel($fc) }}</span>
                             @can('view', $doc)
-                            <a href="{{ route('documents.fiche', $doc) }}" class="text-emerald-600 no-underline truncate max-w-[180px]">{{ $doc->nom_original }}</a>
+                            <a href="{{ route('documents.fiche', ReturnUrl::forRoute($doc)) }}" class="text-emerald-600 no-underline truncate max-w-[180px]">{{ $doc->nom_original }}</a>
                             @else
                             <span class="text-slate-400 truncate max-w-[180px]">{{ $doc->nom_original }}</span>
                             @endcan
@@ -64,7 +65,7 @@
                     </td>
                     <td class="py-3 text-right">
                         @if($fc->id !== $courrier->id)
-                        <a href="{{ route('courriers.show', $fc) }}" class="text-emerald-600 text-xs font-semibold no-underline">Ouvrir</a>
+                        <x-table-action :href="route('courriers.show', $fc)">Ouvrir</x-table-action>
                         @else
                         <span class="text-xs text-emerald-600 font-semibold">Courant</span>
                         @endif
@@ -104,7 +105,7 @@
                 @foreach($evt['documents'] as $doc)
                 <div class="text-xs mt-1">
                     @can('view', $doc)
-                    <a href="{{ route('documents.fiche', $doc) }}" class="text-emerald-600 no-underline">{{ $doc->nom_original }}</a>
+                    <a href="{{ route('documents.fiche', ReturnUrl::forRoute($doc)) }}" class="text-emerald-600 no-underline">{{ $doc->nom_original }}</a>
                     @else
                     <span class="text-slate-400">{{ $doc->nom_original }}</span>
                     @endcan

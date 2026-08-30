@@ -45,7 +45,7 @@
                 @endif
             </div>
             <span class="flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-400">{{ $docCount }} doc.</span>
-            <form action="{{ route('dossiers.favori', $dossier) }}" method="POST" class="inline-block flex-shrink-0" onclick="event.stopPropagation()">
+            <form action="{{ route('dossiers.favori', $dossier) }}" method="POST" class="inline-block flex-shrink-0" data-skip-submit-loading="1" onclick="event.stopPropagation()">
                 @csrf
                 <input type="hidden" name="redirect" value="{{ request()->fullUrl() }}">
                 <button type="submit" class="p-1.5 rounded-lg {{ $isFavori ? 'text-amber-500' : 'text-slate-400 hover:text-amber-500' }} hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors" title="{{ $isFavori ? 'Retirer des favoris' : 'Ajouter aux favoris' }}">{{ $isFavori ? '⭐' : '☆' }}</button>

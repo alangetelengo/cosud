@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@use('App\Support\ReturnUrl')
 @section('content-container-class', 'w-full max-w-none px-4 sm:px-6 lg:px-8')
 @section('page-title', 'Courriers internes à réceptionner')
 @section('page-title-info', 'Courriers départ expédiés par un autre secrétariat ACSI, en attente de votre réception.')
@@ -13,24 +14,7 @@
 
 @section('content')
 <div class="space-y-5">
-    @if(session('success'))
-    <div x-data="{ show: true }" x-show="show" x-transition class="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 flex items-center gap-3">
-        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-800/40 shrink-0">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-        </span>
-        <span class="flex-1 text-sm font-medium">{{ session('success') }}</span>
-        <button type="button" @click="show = false" class="w-8 h-8 rounded-lg hover:bg-emerald-200/50 dark:hover:bg-emerald-800/30 text-lg font-bold" title="Fermer">×</button>
-    </div>
-    @endif
-    @if(session('error'))
-    <div x-data="{ show: true }" x-show="show" x-transition class="p-4 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 flex items-center gap-3">
-        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-800/40 shrink-0">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        </span>
-        <span class="flex-1 text-sm font-medium">{{ session('error') }}</span>
-        <button type="button" @click="show = false" class="w-8 h-8 rounded-lg hover:bg-rose-200/50 dark:hover:bg-rose-800/30 text-lg font-bold" title="Fermer">×</button>
-    </div>
-    @endif
+    @include('partials.flash-session')
 
     <div class="rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden shadow-sm">
         <div class="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-sky-50/90 to-white dark:from-sky-950/30 dark:to-slate-800">
@@ -79,7 +63,7 @@
                         </td>
                         <td class="px-5 py-3.5">
                             <div class="flex items-center justify-end gap-1.5">
-                                <a href="{{ route('courriers.show', $c) }}"
+                                <a href="{{ route('courriers.show', ReturnUrl::forRoute($c)) }}"
                                    class="inline-flex items-center justify-center min-w-[2.35rem] min-h-[2.35rem] p-2 rounded-xl text-sky-600 dark:text-sky-400 bg-sky-50/80 dark:bg-sky-900/20 hover:bg-sky-100 dark:hover:bg-sky-900/40 border border-sky-100/80 dark:border-sky-800/40 shadow-sm transition"
                                    title="Consulter">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

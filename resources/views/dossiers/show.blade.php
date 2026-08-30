@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@use('App\Support\ReturnUrl')
+
 @section('content-container-class', 'w-full max-w-none px-4 sm:px-6 lg:px-8')
 @section('page-title', $dossier->nom)
 @section('page-title-info')
@@ -186,7 +188,7 @@
                             <td class="px-6 py-4 text-right">
                                 <div class="flex items-center justify-end gap-1">
                                     @can('documents.view')
-                                    <a href="{{ route('documents.fiche', $doc) }}" class="inline-flex items-center justify-center w-9 h-9 rounded-lg text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition" title="Voir les détails">
+                                    <a href="{{ route('documents.fiche', ReturnUrl::forRoute($doc)) }}" class="inline-flex items-center justify-center w-9 h-9 rounded-lg text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition" title="Voir les détails">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                     </a>
                                     <a href="{{ route('documents.download', $doc) }}" class="inline-flex items-center justify-center w-9 h-9 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition" title="Télécharger">

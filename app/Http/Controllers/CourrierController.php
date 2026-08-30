@@ -2,14 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\AnnulerCourrierDepartRequest;
+use App\Http\Requests\AnnulerCourrierRequest;
 use App\Http\Requests\ArchiverCourrierRequest;
+use App\Http\Requests\ClasserCourrierDossierRequest;
 use App\Http\Requests\CreerReponseCourrierRequest;
 use App\Http\Requests\ExpedierCourrierDepartRequest;
 use App\Http\Requests\OrienterCourrierRequest;
 use App\Http\Requests\RefuserReceptionInterneRequest;
 use App\Http\Requests\RejeterDepartCourrierRequest;
 use App\Http\Requests\StoreCourrierRequest;
+use App\Http\Requests\SupprimerCourrierRequest;
 use App\Http\Requests\TransmettreCourrierRequest;
 use App\Http\Requests\UpdateCourrierArriveeRequest;
 use App\Http\Requests\UpdateCourrierDepartRequest;
@@ -18,6 +20,7 @@ use App\Models\Courrier;
 use App\Models\CourrierTransmission;
 use App\Models\CourrierVentilationDestinataire;
 use App\Models\Document;
+use App\Models\FournisseurPrestataire;
 use App\Models\JournalAudit;
 use App\Models\Parapheur;
 use App\Models\PrioriteCourrier;
@@ -29,6 +32,8 @@ use App\Models\TypeCourrier;
 use App\Models\TypeDocument;
 use App\Models\User;
 use App\Services\CircuitCourrierMoteurService;
+use App\Services\CourrierClassementDossierService;
+use App\Services\CourrierEnregistrementService;
 use App\Services\CourrierFilService;
 use App\Services\CourrierNotificationService;
 use App\Services\CourrierNumeroRegistreService;
@@ -36,6 +41,7 @@ use App\Services\CourrierOrientationService;
 use App\Services\CourrierSecretariatService;
 use App\Services\CourrierWorkflowService;
 use App\Services\ParapheurDepartService;
+use App\Support\ReturnUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 
@@ -50,19 +56,25 @@ class CourrierController extends Controller
         private readonly CourrierFilService $filService,
         private readonly CircuitCourrierMoteurService $circuitMoteur,
         private readonly CourrierOrientationService $orientationService,
+        private readonly CourrierClassementDossierService $classementDossierService,
+        private readonly CourrierEnregistrementService $enregistrementService,
     ) {}
 
     public function index(Request $request)
     {
         $this->authorize('viewAny', Courrier::class);
 
+        $user = auth()->user();
         $sensCode = $request->get('sens', 'arrivee');
         $sens = SensCourrier::where('code', $sensCode)->firstOrFail();
 
         $query = Courrier::query()
-            ->visibleBy(auth()->user())
+            ->visibleBy($user)
             ->where('sens_courrier_id', $sens->id)
             ->with(['statutCourrier', 'typeCourrier', 'prioriteCourrier', 'createur', 'structureDestinataire'])
+            ->withExists([
+                'lectures as est_lu' => fn ($q) => $q->where('user_id', $user->id),
+            ])
             ->latest();
 
         if ($request->filled('q')) {
@@ -78,7 +90,35 @@ class CourrierController extends Controller
 
         $courriers = $query->paginate(20)->withQueryString();
 
-        return view('courriers.index', compact('courriers', 'sens', 'sensCode'));
+        $compteursNonLus = $this->compteursCourriersNonLus($user);
+
+        return view('courriers.index', compact('courriers', 'sens', 'sensCode', 'compteursNonLus'));
+    }
+
+    /**
+     * @return array{arrivee: int, depart: int}
+     */
+    protected function compteursCourriersNonLus($user): array
+    {
+        $arriveeId = SensCourrier::query()->where('code', SensCourrier::ARRIVEE)->value('id');
+        $departId = SensCourrier::query()->where('code', SensCourrier::DEPART)->value('id');
+
+        $compter = function (?int $sensId) use ($user): int {
+            if (! $sensId) {
+                return 0;
+            }
+
+            return Courrier::query()
+                ->visibleBy($user)
+                ->where('sens_courrier_id', $sensId)
+                ->whereDoesntHave('lectures', fn ($q) => $q->where('user_id', $user->id))
+                ->count();
+        };
+
+        return [
+            'arrivee' => $compter($arriveeId ? (int) $arriveeId : null),
+            'depart' => $compter($departId ? (int) $departId : null),
+        ];
     }
 
     public function aRecevoir(Request $request)
@@ -109,6 +149,7 @@ class CourrierController extends Controller
         $types = TypeCourrier::where('actif', true)->with('circuit')->orderBy('libelle')->get();
         $priorites = PrioriteCourrier::where('actif', true)->orderBy('ordre')->get();
         $secretariats = Structure::secretariatsDirections()->get();
+        $directions = Structure::servicesDemandeurs()->get();
         $documentsParapheur = $sensCode === 'depart'
             ? $this->parapheurDepartService->queryEligiblePour(auth()->user())->limit(100)->get()
             : collect();
@@ -116,9 +157,18 @@ class CourrierController extends Controller
             ? $this->parapheurDepartService->typesDocumentPourDepot()
             : collect();
 
+        $retourUrl = ReturnUrl::resolve(
+            $request->query('return'),
+            route('courriers.index', ['sens' => $sensCode])
+        );
+
+        $fournisseursPrestataires = $sensCode === 'arrivee'
+            ? FournisseurPrestataire::query()->actifs()->orderBy('nom')->get(['id', 'nom', 'email', 'telephone'])
+            : collect();
+
         return view('courriers.create', compact(
-            'sens', 'sensCode', 'types', 'priorites', 'secretariats',
-            'documentsParapheur', 'typesDocumentParapheur',
+            'sens', 'sensCode', 'types', 'priorites', 'secretariats', 'directions',
+            'documentsParapheur', 'typesDocumentParapheur', 'retourUrl', 'fournisseursPrestataires',
         ));
     }
 
@@ -145,7 +195,9 @@ class CourrierController extends Controller
             'origine' => $sens->code === SensCourrier::ARRIVEE ? Courrier::ORIGINE_EXTERNE : Courrier::ORIGINE_INTERNE,
             'date_reception' => $request->date_reception ?? ($sens->code === SensCourrier::ARRIVEE ? now()->toDateString() : null),
             'date_courrier' => $request->date_courrier,
-            'numero_fulgurant' => $request->numero_fulgurant,
+            'numero_fulgurant' => $sens->code === SensCourrier::ARRIVEE
+                ? trim((string) $request->numero_fulgurant)
+                : null,
             'expediteur_libelle' => $request->expediteur_libelle,
             'expediteur_email' => $request->expediteur_email,
             'expediteur_telephone' => $request->expediteur_telephone,
@@ -153,13 +205,23 @@ class CourrierController extends Controller
             'est_expediteur_externe' => $request->boolean('est_expediteur_externe', $sens->code === SensCourrier::ARRIVEE),
             'structure_expediteur_id' => $request->structure_expediteur_id,
             'structure_destinataire_id' => $request->structure_destinataire_id,
+            'service_demandeur_structure_id' => $request->service_demandeur_structure_id,
+            'fournisseur_prestataire_id' => $request->filled('fournisseur_prestataire_id')
+                ? (int) $request->fournisseur_prestataire_id
+                : null,
             'objet' => $request->objet,
+            'montant_facture' => $request->filled('montant_facture')
+                ? $request->montant_facture
+                : null,
             'createur_id' => auth()->id(),
             'structure_id' => auth()->user()->structure_id,
         ]);
 
-        if ($sens->code === SensCourrier::ARRIVEE && $request->hasFile('fichier')) {
-            $this->attacherDocument($courrier, $request->file('fichier'), $sens->code, true);
+        if ($sens->code === SensCourrier::ARRIVEE) {
+            $scans = $this->collecterFichiersUpload($request, 'fichiers', 'fichier');
+            foreach ($scans as $index => $scan) {
+                $this->attacherDocument($courrier, $scan, $sens->code, $index === 0);
+            }
         }
 
         if ($sens->code === SensCourrier::DEPART) {
@@ -177,9 +239,21 @@ class CourrierController extends Controller
             ->with('success', 'Courrier enregistré — n° '.$courrier->numeroRegistreComplet());
     }
 
-    public function show(Courrier $courrier)
+    public function show(Request $request, Courrier $courrier)
     {
         $this->authorize('view', $courrier);
+
+        if ($courrier->circuit_etape_actuelle_id && auth()->user()) {
+            $courrier = $this->circuitMoteur->assurerEtapesAutomatiques($courrier, auth()->user());
+        }
+
+        if (auth()->user()) {
+            $courrier->marquerLuPar(auth()->user());
+            auth()->user()->unreadNotifications
+                ->filter(fn ($n) => (int) data_get($n->data, 'courrier_id') === (int) $courrier->id)
+                ->each->markAsRead();
+        }
+
         $courrier->load([
             'sensCourrier', 'statutCourrier', 'typeCourrier', 'prioriteCourrier', 'parapheur',
             'createur', 'signataire', 'directeurEnAttente', 'rejetePar',
@@ -187,17 +261,13 @@ class CourrierController extends Controller
             'orientationNotifies',
             'transmissions.deUser', 'transmissions.versUser', 'transmissions.versStructure',
             'ventilationDestinataires.user', 'ventilationDestinataires.document',
-            'dossier', 'structure', 'structureDestinataire', 'structureExpediteur',
-            'courrierParent', 'courrierDepartSource', 'courrierArriveeLie', 'reponsesDepart',
+            'dossier', 'structure', 'structureDestinataire', 'structureExpediteur', 'serviceDemandeurStructure',
+            'courrierParent', 'courrierDepartSource', 'courrierArriveeLie', 'reponsesDepart.documents', 'reponsesDepart.statutCourrier',
             'circuit', 'circuitEtapeActuelle', 'circuitHistoriques.etape', 'circuitHistoriques.user',
-            'documentReponse', 'reponseStructureDestinataire', 'destinataireAgent', 'agentConfie',
+            'documentReponse', 'reponseStructureDestinataire', 'destinataireAgent', 'agentConfie', 'agentsConfies.structure', 'suiviPaiement', 'suiviPaiements',
         ]);
         $structures = Structure::where('actif', true)->orderBy('nom')->get();
-        $directions = Structure::query()
-            ->where('actif', true)
-            ->where('type', 'direction')
-            ->orderBy('nom')
-            ->get();
+        $directions = Structure::directionsOrientation()->get();
         $secretariats = Structure::secretariatsDirections()->get();
         $structureEmettriceId = (int) ($courrier->structure_id
             ?? auth()->user()->structurePourValidationHierarchique()?->id
@@ -211,14 +281,16 @@ class CourrierController extends Controller
         }
         $utilisateursVentilation = User::query()
             ->where('actif', true)
+            ->with(['structure', 'roles'])
             ->orderBy('name')
             ->limit(200)
-            ->get(['id', 'name']);
+            ->get();
         $agentsOrientation = User::query()
             ->where('actif', true)
+            ->with(['structure', 'roles'])
             ->orderBy('name')
             ->limit(300)
-            ->get(['id', 'name', 'email']);
+            ->get();
 
         $directeurValidation = null;
         $directionEmettrice = null;
@@ -232,10 +304,35 @@ class CourrierController extends Controller
         $filCourriers = $this->filService->courriersDuFil($courrier);
         $filHistorique = $this->filService->construireHistorique($courrier);
 
+        $dossiersClassement = collect();
+        $dossierSuggere = null;
+        $estClassementFacture = $courrier->typeCourrier?->code === 'facture';
+        $factureClasseeCanoniquement = false;
+        if (auth()->user()?->can('classerDossier', $courrier)) {
+            if ($estClassementFacture) {
+                $factureClasseeCanoniquement = $this->classementDossierService
+                    ->estFactureClasseeCanoniquement($courrier);
+                $dossierSuggere = $this->classementDossierService
+                    ->dossierCibleAffichageFacture($courrier, auth()->user());
+            } else {
+                $dossierSuggere = $this->classementDossierService->suggererDossier(auth()->user(), $courrier);
+                $dossiersClassement = $this->classementDossierService->dossiersCiblesPour(
+                    auth()->user(),
+                    $courrier->expediteur_libelle
+                );
+            }
+        }
+
+        $retourUrl = ReturnUrl::resolve(
+            $request->query('return'),
+            route('courriers.index', ['sens' => $courrier->sensCourrier->code])
+        );
+
         return view('courriers.show', compact(
             'courrier', 'structures', 'directions', 'secretariats', 'utilisateursVentilation', 'agentsOrientation',
             'directeurValidation', 'directionEmettrice',
             'filRacine', 'filCourriers', 'filHistorique',
+            'dossiersClassement', 'dossierSuggere', 'estClassementFacture', 'factureClasseeCanoniquement', 'retourUrl',
         ));
     }
 
@@ -245,8 +342,20 @@ class CourrierController extends Controller
 
         $types = TypeCourrier::where('actif', true)->orderBy('libelle')->get();
         $priorites = PrioriteCourrier::where('actif', true)->orderBy('ordre')->get();
+        $directions = $courrier->estArrivee()
+            ? Structure::servicesDemandeurs()->get()
+            : collect();
+        $fournisseursPrestataires = $courrier->estArrivee()
+            ? FournisseurPrestataire::query()->actifs()->orderBy('nom')->get(['id', 'nom', 'email', 'telephone'])
+            : collect();
 
-        return view('courriers.edit', compact('courrier', 'types', 'priorites'));
+        return view('courriers.edit', compact(
+            'courrier',
+            'types',
+            'priorites',
+            'directions',
+            'fournisseursPrestataires',
+        ));
     }
 
     public function update(Courrier $courrier)
@@ -262,8 +371,16 @@ class CourrierController extends Controller
 
     public function updateArrivee(UpdateCourrierArriveeRequest $request, Courrier $courrier)
     {
+        $estFacture = TypeCourrier::query()
+            ->whereKey($request->type_courrier_id ?? $courrier->type_courrier_id)
+            ->where('code', 'facture')
+            ->exists();
+
         $courrier->update([
             'objet' => $request->objet,
+            'montant_facture' => $request->filled('montant_facture')
+                ? $request->montant_facture
+                : null,
             'type_courrier_id' => $request->type_courrier_id,
             'priorite_courrier_id' => $request->priorite_courrier_id,
             'date_reception' => $request->date_reception,
@@ -271,11 +388,15 @@ class CourrierController extends Controller
             'expediteur_libelle' => $request->expediteur_libelle,
             'expediteur_email' => $request->expediteur_email,
             'expediteur_telephone' => $request->expediteur_telephone,
-            'numero_fulgurant' => $request->numero_fulgurant,
+            'fournisseur_prestataire_id' => $estFacture && $request->filled('fournisseur_prestataire_id')
+                ? (int) $request->fournisseur_prestataire_id
+                : null,
+            'numero_fulgurant' => trim((string) $request->numero_fulgurant),
             'reference' => $request->reference,
             'nombre_pieces' => $request->nombre_pieces,
             'numero_archives' => $request->numero_archives,
             'observations' => $request->observations,
+            'service_demandeur_structure_id' => $request->service_demandeur_structure_id,
         ]);
 
         $this->auditerCourrier('courrier.update', $courrier->fresh(), [
@@ -379,6 +500,18 @@ class CourrierController extends Controller
     public function cloturer(Courrier $courrier)
     {
         $this->authorize('update', $courrier);
+
+        if (! $courrier->estArrivee()) {
+            return back()->with('error', 'Seuls les courriers arrivée peuvent être clôturés manuellement.');
+        }
+
+        // Clôture manuelle réservée aux dossiers déjà traités côté statut
+        // (ex. classé sans suite après orientation/ventilation). Les réponses
+        // avec départ sont clôturées automatiquement à l’expédition.
+        if (! $courrier->peutTransitionnerVers('cloture')) {
+            return back()->with('error', 'Ce dossier ne peut pas encore être clôturé manuellement. Expédiez d’abord le courrier réponse, ou orientez/ventilez le dossier.');
+        }
+
         $this->workflowService->transitionner($courrier, 'cloture');
 
         return back()->with('success', 'Courrier arrivée clôturé.');
@@ -422,15 +555,30 @@ class CourrierController extends Controller
 
         $this->workflowService->transitionner($courrier, 'signe', [
             'signataire_id' => auth()->id(),
+            'directeur_en_attente_id' => null,
         ]);
 
+        $courrier = $courrier->fresh(['courrierParent.circuitEtapeActuelle', 'statutCourrier']);
+        if ($courrier->courrierParent
+            && $courrier->courrierParent->circuitEtapeActuelle?->code === 'validation_reponse_dg') {
+            try {
+                $this->circuitMoteur->signerReponseDepart(
+                    $courrier->courrierParent,
+                    $courrier,
+                    auth()->user()
+                );
+            } catch (\InvalidArgumentException) {
+                // Signature du départ OK ; le circuit arrivée sera rattrapé si besoin.
+            }
+        }
+
         $this->courrierNotifications->notifierCreateur(
-            $courrier->fresh(),
+            $courrier,
             auth()->user(),
             CourrierNotificationService::VALIDE_POUR_ENVOI
         );
 
-        return back()->with('success', 'Courrier validé — le secrétariat peut l\'expédier vers le destinataire.');
+        return back()->with('success', 'Courrier signé — le secrétariat / la particulière peut l\'expédier.');
     }
 
     public function rejeterDepart(RejeterDepartCourrierRequest $request, Courrier $courrier)
@@ -451,31 +599,47 @@ class CourrierController extends Controller
         return back()->with('success', 'Courrier renvoyé au secrétariat pour correction.');
     }
 
-    public function annulerDepart(AnnulerCourrierDepartRequest $request, Courrier $courrier)
+    public function annuler(AnnulerCourrierRequest $request, Courrier $courrier)
     {
         $acteur = auth()->user();
         $etaitChezDirecteur = $courrier->statutCourrier?->code === 'transmis_directeur';
 
-        $this->workflowService->transitionner($courrier, 'annule', [
-            'motif_rejet' => $request->motif_annulation,
-            'rejete_par_id' => $acteur->id,
-            'date_rejet' => now(),
-        ]);
+        try {
+            $this->enregistrementService->annuler($courrier, $acteur, $request->input('motif_annulation'));
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         if ($etaitChezDirecteur) {
             $this->courrierNotifications->notifierCreateur(
                 $courrier->fresh(),
                 $acteur,
                 CourrierNotificationService::ANNULATION,
-                $request->motif_annulation
+                $request->input('motif_annulation')
             );
         }
 
-        $this->auditerCourrier('courrier.annule', $courrier);
+        $sens = $courrier->estDepart() ? 'depart' : 'arrivee';
 
         return redirect()
-            ->route('courriers.index', ['sens' => 'depart'])
+            ->route('courriers.index', ['sens' => $sens])
             ->with('success', 'Courrier annulé.');
+    }
+
+    public function destroy(SupprimerCourrierRequest $request, Courrier $courrier)
+    {
+        $numero = $courrier->numeroRegistreComplet();
+        $sens = $courrier->sensCourrier?->code ?? 'arrivee';
+
+        try {
+            $this->enregistrementService->supprimer($courrier, $request->user());
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('courriers.index', ['sens' => $sens])
+            ->with('success', 'Courrier '.$numero.' supprimé. Vous pouvez le resaisir si besoin.');
     }
 
     public function expedierVersSecretariat(ExpedierCourrierDepartRequest $request, Courrier $courrier)
@@ -492,7 +656,17 @@ class CourrierController extends Controller
                 'date_expedition' => now(),
             ]);
 
-            $courrier = $courrier->fresh(['destinataireAgent']);
+            $courrier = $courrier->fresh(['destinataireAgent', 'courrierParent.statutCourrier', 'courrierParent.sensCourrier', 'courrierParent.circuitEtapeActuelle']);
+            $this->workflowService->cloturerArriveeLieeApresExpedition($courrier);
+
+            if ($courrier->courrier_parent_id && $courrier->courrierParent) {
+                $this->circuitMoteur->completerApresExpeditionReponse(
+                    $courrier->courrierParent,
+                    $request->user(),
+                    'Réponse n° '.$courrier->numeroRegistreComplet().' expédiée.'
+                );
+            }
+
             if ($courrier->destinataireAgent) {
                 $this->courrierNotifications->notifier(
                     $courrier->destinataireAgent,
@@ -502,7 +676,7 @@ class CourrierController extends Controller
                 );
             }
 
-            return back()->with('success', 'Courrier expédié — le destinataire (agent) en est informé.');
+            return back()->with('success', 'Courrier expédié — le collaborateur destinataire en est informé.');
         }
 
         $destinataire = Structure::findOrFail($request->structure_destinataire_id);
@@ -518,7 +692,17 @@ class CourrierController extends Controller
             'date_expedition' => now(),
         ]);
 
-        $courrier = $courrier->fresh(['structureDestinataire']);
+        $courrier = $courrier->fresh(['structureDestinataire', 'courrierParent.statutCourrier', 'courrierParent.sensCourrier', 'courrierParent.circuitEtapeActuelle']);
+        $this->workflowService->cloturerArriveeLieeApresExpedition($courrier);
+
+        if ($courrier->courrier_parent_id && $courrier->courrierParent) {
+            $this->circuitMoteur->completerApresExpeditionReponse(
+                $courrier->courrierParent,
+                $request->user(),
+                'Réponse n° '.$courrier->numeroRegistreComplet().' expédiée.'
+            );
+        }
+
         $libelle = $courrier->structureDestinataire?->nom ?? 'destinataire';
 
         $this->courrierNotifications->notifierSecretariatStructure(
@@ -566,9 +750,9 @@ class CourrierController extends Controller
 
     /**
      * Création du courrier départ réponse.
-     * - Étape « creation_depart_particuliere » : brouillon (à faire signer ensuite).
      * - Override DG (`signer_immediatement`) : créé directement au statut « Signé ».
      * - Sans circuit : chemin historique.
+     * - Chemin A : via soumettre-reponse (création départ) + valider-reponse (signature).
      */
     public function creerReponse(CreerReponseCourrierRequest $request, Courrier $courrier)
     {
@@ -580,10 +764,11 @@ class CourrierController extends Controller
         $signerImmediatement = $request->boolean('signer_immediatement')
             && ($request->user()->aAccesTotal() || $request->user()->hasRole('admin'));
 
-        $statut = $signerImmediatement
-            ? StatutCourrier::where('sens_courrier_id', $sensDepart->id)->where('code', 'signe')->firstOrFail()
-            : $this->workflowService->statutInitialPourSens((int) $sensDepart->id);
+        if (! $signerImmediatement) {
+            return back()->with('error', 'Utilisez « Transmettre pour signature » pour préparer la réponse.');
+        }
 
+        $statut = StatutCourrier::where('sens_courrier_id', $sensDepart->id)->where('code', 'signe')->firstOrFail();
         $nums = $this->numeroService->prochainNumero((int) $sensDepart->id);
 
         $confidentielle = $request->boolean('reponse_confidentielle', (bool) $courrier->reponse_confidentielle);
@@ -614,25 +799,23 @@ class CourrierController extends Controller
             'origine' => $courrier->estOrigineInterne() ? Courrier::ORIGINE_INTERNE : Courrier::ORIGINE_EXTERNE,
             'courrier_parent_id' => $courrier->id,
             'date_courrier' => now()->toDateString(),
-            'objet' => $request->input('objet') ?: ($courrier->reponse_objet ?: ('Réponse — '.$courrier->objet)),
+            'objet' => $courrier->objetReponseDepartParDefaut(),
             'structure_destinataire_id' => $structureDestinataireId,
             'destinataire_agent_id' => $agentDestinataireId,
             'destinataire_libelle' => $destinataireLibelle,
             'createur_id' => auth()->id(),
-            'signataire_id' => $signerImmediatement ? auth()->id() : null,
+            'signataire_id' => $request->user()->id,
             'structure_id' => auth()->user()->structure_id,
             'dossier_id' => $courrier->dossier_id,
         ]);
 
         if ($request->hasFile('document_reponse')) {
             $this->attacherDocument($reponse, $request->file('document_reponse'), SensCourrier::DEPART, true);
-        } elseif ($courrier->document_reponse_id) {
-            $reponse->documents()->attach($courrier->document_reponse_id, ['est_principal' => true]);
         }
 
         $this->auditerCourrier('courrier.creer_reponse', $reponse, [
             'courrier_parent_id' => $courrier->id,
-            'mode' => $signerImmediatement ? 'signe' : 'brouillon',
+            'mode' => 'signe',
         ]);
 
         $courrier->forceFill([
@@ -643,30 +826,15 @@ class CourrierController extends Controller
             'reponse_objet' => null,
         ])->save();
 
-        $commentaireCircuit = ($signerImmediatement ? 'Courrier réponse créé et signé — n° ' : 'Courrier réponse créé en brouillon — n° ').$reponse->numeroRegistreComplet();
-
-        if ($signerImmediatement) {
-            // Le DG court-circuite le reste du circuit (facture ou général).
-            $this->circuitMoteur->terminerApresReponseDirecte(
-                $courrier->fresh(['circuitEtapeActuelle']),
-                $request->user(),
-                $commentaireCircuit
-            );
-        } else {
-            $this->circuitMoteur->completerApresCreationDepart(
-                $courrier->fresh(['circuitEtapeActuelle']),
-                $request->user(),
-                $commentaireCircuit
-            );
-        }
-
-        $message = $signerImmediatement
-            ? 'Courrier départ réponse créé et signé — lié au fil du courrier n° '.$courrier->numeroRegistreComplet().'.'
-            : 'Courrier départ réponse créé en brouillon — à transmettre pour signature. Lié au fil du courrier n° '.$courrier->numeroRegistreComplet().'.';
+        $this->circuitMoteur->terminerApresReponseDirecte(
+            $courrier->fresh(['circuitEtapeActuelle']),
+            $request->user(),
+            'Courrier réponse créé et signé — n° '.$reponse->numeroRegistreComplet()
+        );
 
         return redirect()
             ->route('courriers.show', $reponse)
-            ->with('success', $message);
+            ->with('success', 'Courrier départ réponse créé et signé — prêt à être expédié. Lié au fil du courrier n° '.$courrier->numeroRegistreComplet().'.');
     }
 
     /**
@@ -696,7 +864,7 @@ class CourrierController extends Controller
             'origine' => $courrier->estOrigineInterne() ? Courrier::ORIGINE_INTERNE : Courrier::ORIGINE_EXTERNE,
             'courrier_parent_id' => $courrier->id,
             'date_courrier' => now()->toDateString(),
-            'objet' => $request->objet ?? ('Réponse — '.$courrier->objet),
+            'objet' => $courrier->objetReponseDepartParDefaut(),
             'structure_destinataire_id' => $destinataire->id,
             'destinataire_libelle' => $destinataire->nom,
             'createur_id' => auth()->id(),
@@ -741,6 +909,32 @@ class CourrierController extends Controller
         }
 
         return back()->with('success', 'Courrier archivé. Les informations du registre ont été mises à jour.');
+    }
+
+    public function classerDossier(ClasserCourrierDossierRequest $request, Courrier $courrier)
+    {
+        if ($courrier->typeCourrier?->code === 'facture') {
+            $dossier = $this->classementDossierService->classerFactureFournisseur(
+                $courrier,
+                $request->user()
+            );
+
+            return back()->with(
+                'success',
+                'Facture classée dans le dossier fournisseur « '.$dossier->chemin_complet.' ».'
+            );
+        }
+
+        $dossier = $this->classementDossierService->classer(
+            $courrier,
+            $request->user(),
+            $request->validated()
+        );
+
+        return back()->with(
+            'success',
+            'Courrier classé dans le dossier « '.$dossier->chemin_complet.' » (partagé secrétariat DG).'
+        );
     }
 
     public function transmettre(TransmettreCourrierRequest $request, Courrier $courrier)
@@ -805,6 +999,28 @@ class CourrierController extends Controller
                 $courrier->documents()->attach($document->id, ['est_principal' => false]);
             }
         }
+    }
+
+    /**
+     * @return list<UploadedFile>
+     */
+    private function collecterFichiersUpload(Request $request, string $cleMultiple, string $cleUnique): array
+    {
+        $fichiers = [];
+
+        if ($request->hasFile($cleMultiple)) {
+            foreach ((array) $request->file($cleMultiple) as $fichier) {
+                if ($fichier) {
+                    $fichiers[] = $fichier;
+                }
+            }
+        }
+
+        if ($request->hasFile($cleUnique)) {
+            $fichiers[] = $request->file($cleUnique);
+        }
+
+        return $fichiers;
     }
 
     private function attacherDocument(Courrier $courrier, UploadedFile $file, string $sensCode, bool $principal = false): void

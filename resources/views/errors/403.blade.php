@@ -1,6 +1,6 @@
 @extends('layouts.error')
 
-@section('title', 'Accès refusé — '.config('app.name', 'GED'))
+@section('title', 'Accès refusé — '.config('app.name', 'COSUD'))
 
 @section('content')
     <div class="min-h-screen flex flex-col items-center justify-center p-6 sm:p-8">
@@ -39,7 +39,7 @@
                 </div>
             </div>
             <p class="mt-6 text-center text-xs text-slate-500 dark:text-slate-400">
-                {{ config('app.name', 'GED') }} — Gestion électronique des documents
+                {{ config('app.name', 'COSUD') }} — Courrier et Suivi des Dépenses
             </p>
         </div>
     </div>

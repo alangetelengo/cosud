@@ -213,7 +213,7 @@ class DossierController extends Controller
                 $typeString,
                 $confidentiel
             );
-            Log::channel('eged')->info('Racine personnelle créée par l’utilisateur', ['dossier_id' => $dossier->id, 'user_id' => $user->id]);
+            Log::channel('cosud')->info('Racine personnelle créée par l’utilisateur', ['dossier_id' => $dossier->id, 'user_id' => $user->id]);
 
             return redirect()
                 ->route('dossiers.show', $dossier)
@@ -354,7 +354,7 @@ class DossierController extends Controller
         }
         $this->appliquerPartagesHereditesDepuisAncetres($dossier, $user->id);
 
-        Log::channel('eged')->info('Dossier créé par utilisateur', ['dossier_id' => $dossier->id, 'user_id' => $user->id]);
+        Log::channel('cosud')->info('Dossier créé par utilisateur', ['dossier_id' => $dossier->id, 'user_id' => $user->id]);
 
         if ($isProjectType && $user->can('share', $dossier)) {
             return redirect()
@@ -624,7 +624,7 @@ class DossierController extends Controller
                 'date_expiration' => ['nullable', 'date', 'after:today'],
             ]);
         } catch (ValidationException $e) {
-            Log::channel('eged')->warning('dossier.partage.store validation échouée', [
+            Log::channel('cosud')->warning('dossier.partage.store validation échouée', [
                 'dossier_id' => (int) $dossier->id,
                 'user_id' => auth()->id(),
                 'errors' => $e->errors(),
@@ -662,7 +662,7 @@ class DossierController extends Controller
         $ecriture = $request->boolean('droits_ecriture', false);
         $suppression = $request->boolean('droits_suppression', false);
         if (! $lecture && ! $ecriture && ! $suppression) {
-            Log::channel('eged')->notice('dossier.partage.store refusé : aucun droit', [
+            Log::channel('cosud')->notice('dossier.partage.store refusé : aucun droit', [
                 'dossier_id' => (int) $dossier->id,
                 'user_id' => auth()->id(),
                 'selection' => $selectedUserIds,
@@ -686,7 +686,7 @@ class DossierController extends Controller
         }
 
         if ($toCreatePairs === []) {
-            Log::channel('eged')->notice('dossier.partage.store refusé : tous déjà partagés', [
+            Log::channel('cosud')->notice('dossier.partage.store refusé : tous déjà partagés', [
                 'dossier_id' => (int) $dossier->id,
                 'user_id' => auth()->id(),
                 'selection' => $selectedUserIds,
@@ -712,7 +712,7 @@ class DossierController extends Controller
                 $createdByUser[$uid] = ($createdByUser[$uid] ?? 0) + 1;
             }
         } catch (\Throwable $e) {
-            Log::channel('eged')->error('dossier.partage.store échec création', [
+            Log::channel('cosud')->error('dossier.partage.store échec création', [
                 'dossier_id' => (int) $dossier->id,
                 'user_id' => auth()->id(),
                 'cibles' => $toCreatePairs,
@@ -742,7 +742,7 @@ class DossierController extends Controller
                         $dateExpiration?->format('Y-m-d')
                     ));
                 } catch (\Throwable $e) {
-                    Log::channel('eged')->warning('dossier.partage.store notification non envoyée', [
+                    Log::channel('cosud')->warning('dossier.partage.store notification non envoyée', [
                         'dossier_id' => (int) $dossier->id,
                         'destinataire_user_id' => (int) $destinataire->id,
                         'exception' => $e->getMessage(),
@@ -751,7 +751,7 @@ class DossierController extends Controller
             }
         }
 
-        Log::channel('eged')->info('dossier.partage.store partages créés', [
+        Log::channel('cosud')->info('dossier.partage.store partages créés', [
             'dossier_id' => (int) $dossier->id,
             'partage_par_id' => auth()->id(),
             'nb' => count($toCreatePairs),
@@ -771,7 +771,7 @@ class DossierController extends Controller
     {
         $this->authorize('share', $dossier);
         if ((int) $partage->dossier_id !== (int) $dossier->id) {
-            Log::channel('eged')->warning('dossier.partage.update partage hors dossier', [
+            Log::channel('cosud')->warning('dossier.partage.update partage hors dossier', [
                 'dossier_id' => (int) $dossier->id,
                 'partage_id' => (int) $partage->id,
                 'partage_dossier_id' => (int) $partage->dossier_id,
@@ -788,7 +788,7 @@ class DossierController extends Controller
                 'date_expiration' => ['nullable', 'date', 'after:today'],
             ]);
         } catch (ValidationException $e) {
-            Log::channel('eged')->warning('dossier.partage.update validation échouée', [
+            Log::channel('cosud')->warning('dossier.partage.update validation échouée', [
                 'dossier_id' => (int) $dossier->id,
                 'partage_id' => (int) $partage->id,
                 'user_id' => auth()->id(),
@@ -800,7 +800,7 @@ class DossierController extends Controller
         $ecriture = $request->boolean('droits_ecriture');
         $suppression = $request->boolean('droits_suppression');
         if (! $lecture && ! $ecriture && ! $suppression) {
-            Log::channel('eged')->notice('dossier.partage.update refusé : aucun droit', [
+            Log::channel('cosud')->notice('dossier.partage.update refusé : aucun droit', [
                 'dossier_id' => (int) $dossier->id,
                 'partage_id' => (int) $partage->id,
                 'user_id' => auth()->id(),
@@ -820,7 +820,7 @@ class DossierController extends Controller
                 'date_expiration' => $request->filled('date_expiration') ? $request->date('date_expiration') : null,
             ]);
         } catch (\Throwable $e) {
-            Log::channel('eged')->error('dossier.partage.update échec mise à jour', [
+            Log::channel('cosud')->error('dossier.partage.update échec mise à jour', [
                 'dossier_id' => (int) $dossier->id,
                 'partage_id' => (int) $partage->id,
                 'user_id' => auth()->id(),
@@ -847,7 +847,7 @@ class DossierController extends Controller
                     $partage->date_expiration?->format('Y-m-d')
                 ));
             } catch (\Throwable $e) {
-                Log::channel('eged')->warning('dossier.partage.update notification non envoyée', [
+                Log::channel('cosud')->warning('dossier.partage.update notification non envoyée', [
                     'dossier_id' => (int) $dossier->id,
                     'partage_id' => (int) $partage->id,
                     'destinataire_user_id' => (int) $partage->user_id,
@@ -856,7 +856,7 @@ class DossierController extends Controller
             }
         }
 
-        Log::channel('eged')->info('dossier.partage.update partage modifié', [
+        Log::channel('cosud')->info('dossier.partage.update partage modifié', [
             'dossier_id' => (int) $dossier->id,
             'partage_id' => (int) $partage->id,
             'destinataire_user_id' => (int) $partage->user_id,
@@ -876,7 +876,7 @@ class DossierController extends Controller
             ->where('actif', true)
             ->whereKey((int) $p->user_id)
             ->first(['id', 'name', 'email']);
-        Log::channel('eged')->info('dossier.partage.destroy partage supprimé', [
+        Log::channel('cosud')->info('dossier.partage.destroy partage supprimé', [
             'dossier_id' => (int) $dossier->id,
             'partage_id' => (int) $p->id,
             'destinataire_user_id' => (int) $p->user_id,
@@ -891,7 +891,7 @@ class DossierController extends Controller
                     auth()->user()
                 ));
             } catch (\Throwable $e) {
-                Log::channel('eged')->warning('dossier.partage.destroy notification non envoyée', [
+                Log::channel('cosud')->warning('dossier.partage.destroy notification non envoyée', [
                     'dossier_id' => (int) $dossier->id,
                     'partage_id' => (int) $partage,
                     'destinataire_user_id' => (int) $destinataire->id,
@@ -1023,7 +1023,7 @@ class DossierController extends Controller
     public function show(Dossier $dossier)
     {
         $this->authorize('view', $dossier);
-        Log::channel('eged')->debug('Consultation dossier', ['dossier_id' => $dossier->id, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->debug('Consultation dossier', ['dossier_id' => $dossier->id, 'user_id' => auth()->id()]);
         $dossier->load(['children', 'documents' => fn ($q) => $q->with(['typeDocument', 'user', 'createur', 'dossier.partages'])]);
         $user = auth()->user();
         $dossier->documents = $dossier->documents
@@ -1214,7 +1214,7 @@ class DossierController extends Controller
             ]);
         });
 
-        Log::channel('eged')->info('Dossier modifié', [
+        Log::channel('cosud')->info('Dossier modifié', [
             'dossier_id' => $dossier->id,
             'user_id' => auth()->id(),
             'parent_id' => $wantedParent,
@@ -1246,7 +1246,7 @@ class DossierController extends Controller
         $parentId = $dossier->parent_id;
         $nom = $dossier->nom;
         $dossier->delete();
-        Log::channel('eged')->info('Dossier supprimé', ['ancien_parent_id' => $parentId, 'nom' => $nom, 'user_id' => auth()->id()]);
+        Log::channel('cosud')->info('Dossier supprimé', ['ancien_parent_id' => $parentId, 'nom' => $nom, 'user_id' => auth()->id()]);
 
         if ($parentId) {
             return redirect()

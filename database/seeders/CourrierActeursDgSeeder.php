@@ -16,12 +16,19 @@ class CourrierActeursDgSeeder extends Seeder
 {
     public function run(): void
     {
+        $structureCodes = [
+            'DG', 'SEC-DIR', 'SEC-DDSAIT', 'SEC-DAF', 'SEC-DAC',
+            'DAF', 'DDSAIT', 'DAC',
+            'DING-SI', 'DINFRA', 'DSUPPORT', 'DCOM',
+            'ANT',
+        ];
+
         $structures = Structure::query()
-            ->whereIn('code', ['DG', 'SEC-DIR', 'SEC-DDSAIT', 'SEC-DAF', 'SEC-DAC', 'DAF', 'DDSAIT', 'DAC'])
+            ->whereIn('code', $structureCodes)
             ->get()
             ->keyBy('code');
 
-        foreach (['DG', 'SEC-DIR', 'SEC-DDSAIT', 'SEC-DAF', 'SEC-DAC', 'DAF', 'DAC'] as $code) {
+        foreach ($structureCodes as $code) {
             if (! $structures->has($code)) {
                 $this->command?->warn("CourrierActeursDgSeeder : structure {$code} introuvable.");
 
@@ -34,6 +41,7 @@ class CourrierActeursDgSeeder extends Seeder
             'particulier_dg',
             'particulier_ac',
             'responsable_dossiers_prestataires',
+            'responsable_suivi_depenses',
             'secretaire_direction',
             'directeur',
             'agent_comptable',
@@ -72,6 +80,23 @@ class CourrierActeursDgSeeder extends Seeder
                 'fonction_id' => null,
             ],
             [
+                // Responsable suivi des dépenses — secrétariat / DG.
+                'email' => '003091k@acsi.cg',
+                'name' => 'ASTRIDE ELENI OSSEBI',
+                'role' => 'responsable_suivi_depenses',
+                'structure' => $structures['SEC-DIR'],
+                'pivot_role' => 'Responsable suivi des dépenses',
+                'fonction_id' => null,
+            ],
+            [
+                'email' => '001970r@acsi.cg',
+                'name' => 'MIREILLE BLANCHE MANGO NEE BABENGA MOCKO BANGAU',
+                'role' => 'secretaire_direction',
+                'structure' => $structures['SEC-DIR'],
+                'pivot_role' => 'Secrétaire de la Direction Générale',
+                'fonction_id' => null,
+            ],
+            [
                 'email' => '003064f@acsi.cg',
                 'name' => 'BRIGITTE ESSONGA',
                 'role' => 'secretaire_direction',
@@ -96,11 +121,71 @@ class CourrierActeursDgSeeder extends Seeder
                 'fonction_id' => $fonctionDirecteurDirection,
             ],
             [
+                'email' => '003152b@acsi.cg',
+                'name' => 'BRICE GANGOUE',
+                'role' => 'directeur',
+                'structure' => $structures['DDSAIT'],
+                'pivot_role' => 'Directeur DDSAIT',
+                'fonction_id' => $fonctionDirecteurDirection,
+            ],
+            [
+                'email' => '003012y@acsi.cg',
+                'name' => 'DIRECTEUR INGENIERIE SI',
+                'role' => 'directeur',
+                'structure' => $structures['DING-SI'],
+                'pivot_role' => 'Directeur DING-SI',
+                'fonction_id' => $fonctionDirecteurDirection,
+                'preserve_existing_name' => true,
+            ],
+            [
+                'email' => '001966m@acsi.cg',
+                'name' => 'DIRECTEUR INFRASTRUCTURES SI',
+                'role' => 'directeur',
+                'structure' => $structures['DINFRA'],
+                'pivot_role' => 'Directeur DINFRA',
+                'fonction_id' => $fonctionDirecteurDirection,
+                'preserve_existing_name' => true,
+            ],
+            [
+                'email' => '001957c@acsi.cg',
+                'name' => 'DIRECTEUR SUPPORT ET FORMATION',
+                'role' => 'directeur',
+                'structure' => $structures['DSUPPORT'],
+                'pivot_role' => 'Directeur DSUPPORT',
+                'fonction_id' => $fonctionDirecteurDirection,
+                'preserve_existing_name' => true,
+            ],
+            [
+                'email' => '003330u@acsi.cg',
+                'name' => 'DIRECTEUR COMMUNICATION',
+                'role' => 'directeur',
+                'structure' => $structures['DCOM'],
+                'pivot_role' => 'Directeur DCOM',
+                'fonction_id' => $fonctionDirecteurDirection,
+                'preserve_existing_name' => true,
+            ],
+            [
+                'email' => '003020h@acsi.cg',
+                'name' => 'MARTISC MONDZILA',
+                'role' => 'directeur',
+                'structure' => $structures['ANT'],
+                'pivot_role' => 'Directeur départemental de Pointe-Noire',
+                'fonction_id' => $fonctionDirecteurDirection,
+            ],
+            [
                 'email' => '003232b@acsi.cg',
                 'name' => 'RAÏSSA LEBANITOU',
                 'role' => 'agent_comptable',
                 'structure' => $structures['DAC'],
                 'pivot_role' => 'Agent Comptable',
+                'fonction_id' => $fonctionAgentComptable,
+            ],
+            [
+                'email' => '003065g@acsi.cg',
+                'name' => 'LYDIA EUPHRASIE KOUMOU ANDZALE',
+                'role' => 'agent_comptable',
+                'structure' => $structures['DAC'],
+                'pivot_role' => 'Agent Comptable (caissière DAC)',
                 'fonction_id' => $fonctionAgentComptable,
             ],
             [
@@ -114,14 +199,32 @@ class CourrierActeursDgSeeder extends Seeder
         ];
 
         foreach ($acteurs as $acteur) {
+            $existing = User::query()->where('email', $acteur['email'])->first();
+            $name = $acteur['name'];
+            if (
+                ($acteur['preserve_existing_name'] ?? false)
+                && $existing
+                && filled($existing->name)
+                && $existing->name !== $acteur['email']
+                && ! str_starts_with($existing->name, 'DIRECTEUR ')
+            ) {
+                $name = $existing->name;
+            }
+
+            $attributs = [
+                'name' => $name,
+                'structure_id' => $acteur['structure']->id,
+                'actif' => true,
+            ];
+
+            if (! $existing) {
+                $attributs['password'] = $password;
+                $attributs['must_change_password'] = true;
+            }
+
             $user = User::updateOrCreate(
                 ['email' => $acteur['email']],
-                [
-                    'name' => $acteur['name'],
-                    'password' => $password,
-                    'structure_id' => $acteur['structure']->id,
-                    'actif' => true,
-                ]
+                $attributs
             );
 
             $user->syncRoles([$acteur['role']]);
@@ -136,6 +239,12 @@ class CourrierActeursDgSeeder extends Seeder
             ]);
         }
 
-        $this->command?->info('Acteurs courriers affectés : DG, secrétariats, DAF, DAC (agent comptable + particulière).');
+        // Ancien titulaire du rôle (re-seed) : retirer responsable_suivi_depenses.
+        $ancienSuivi = User::where('email', '003269d@acsi.cg')->first();
+        if ($ancienSuivi && $ancienSuivi->hasRole('responsable_suivi_depenses')) {
+            $ancienSuivi->removeRole('responsable_suivi_depenses');
+        }
+
+        $this->command?->info('Acteurs courriers affectés : DG, secrétariats, DAF, DDSAIT, DING-SI, DINFRA, DSUPPORT, DCOM, DAC.');
     }
 }

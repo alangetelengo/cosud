@@ -29,14 +29,14 @@ class DocumentValidationDemandeNotification extends Notification
         $titre = $this->document->titre ?: $this->document->nom_original;
 
         return (new MailMessage)
-            ->subject('GED : Document en attente de validation')
-            ->greeting('Bonjour ' . $notifiable->name . ',')
+            ->subject('COSUD : Document en attente de validation')
+            ->greeting('Bonjour '.$notifiable->name.',')
             ->line('Un document attend votre validation.')
-            ->line('**Document :** ' . $titre)
-            ->line('**Demandé par :** ' . $this->demandeur->name)
-            ->line('**Étape :** ' . $this->etape->nom)
+            ->line('**Document :** '.$titre)
+            ->line('**Demandé par :** '.$this->demandeur->name)
+            ->line('**Étape :** '.$this->etape->nom)
             ->action('Voir les documents', route('documents.index'))
-            ->line('Merci d\'utiliser GED.');
+            ->line('Merci d\'utiliser COSUD.');
     }
 
     public function toArray(object $notifiable): array

@@ -6,12 +6,57 @@
 @section('page-header-class', 'bg-white dark:bg-slate-800 shadow py-0 registre-page-header-compact')
 
 @section('btn-create')
+    @php
+        $moisLabels = [
+            1 => 'Janvier', 2 => 'Février', 3 => 'Mars', 4 => 'Avril',
+            5 => 'Mai', 6 => 'Juin', 7 => 'Juillet', 8 => 'Août',
+            9 => 'Septembre', 10 => 'Octobre', 11 => 'Novembre', 12 => 'Décembre',
+        ];
+        $filtreQuery = array_filter([
+            'annee' => $annee,
+            'mois' => $mois ?: null,
+            'trimestre' => $trimestre ?: null,
+        ], fn ($v) => $v !== null && $v !== '');
+    @endphp
     <div class="flex flex-wrap items-center gap-1.5">
+        <form method="get" action="{{ $sensCode === 'depart' ? route('courriers.registres.depart') : route('courriers.registres.arrivee') }}"
+              class="inline-flex flex-wrap items-center gap-1.5 mr-1">
+            <label class="sr-only" for="registre-annee">Année</label>
+            <select id="registre-annee" name="annee" class="rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                @foreach($annees as $a)
+                    <option value="{{ $a }}" @selected((int) $a === (int) $annee)>{{ $a }}</option>
+                @endforeach
+            </select>
+            <label class="sr-only" for="registre-mois">Mois</label>
+            <select id="registre-mois" name="mois" class="rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                <option value="">Mois — tous</option>
+                @foreach($moisLabels as $num => $label)
+                    <option value="{{ $num }}" @selected((int) $mois === $num)>{{ $label }}</option>
+                @endforeach
+            </select>
+            <label class="sr-only" for="registre-trimestre">Trimestre</label>
+            <select id="registre-trimestre" name="trimestre" class="rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                <option value="">Trimestre — tous</option>
+                <option value="1" @selected((int) $trimestre === 1)>T1 (jan–mar)</option>
+                <option value="2" @selected((int) $trimestre === 2)>T2 (avr–juin)</option>
+                <option value="3" @selected((int) $trimestre === 3)>T3 (juil–sep)</option>
+                <option value="4" @selected((int) $trimestre === 4)>T4 (oct–déc)</option>
+            </select>
+            <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-800 text-white hover:bg-slate-900">
+                Appliquer
+            </button>
+            @if($mois || $trimestre)
+            <a href="{{ $sensCode === 'depart' ? route('courriers.registres.depart', ['annee' => $annee]) : route('courriers.registres.arrivee', ['annee' => $annee]) }}"
+               class="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold no-underline text-slate-600 border border-slate-200 hover:bg-slate-50">
+                Réinit.
+            </a>
+            @endif
+        </form>
         <a href="{{ route('courriers.index', ['sens' => $sensCode]) }}"
            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold no-underline bg-emerald-50 text-emerald-800 border border-emerald-200">
             Liste courriers
         </a>
-        <a href="{{ $sensCode === 'depart' ? route('courriers.registres.print-depart', ['annee' => $annee, 'q' => request('q')]) : route('courriers.registres.print-arrivee', ['annee' => $annee, 'q' => request('q')]) }}"
+        <a href="{{ $sensCode === 'depart' ? route('courriers.registres.print-depart', $filtreQuery) : route('courriers.registres.print-arrivee', $filtreQuery) }}"
            target="_blank"
            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-slate-800 text-white text-xs font-semibold hover:bg-slate-900 shadow-sm no-underline">
             Imprimer / PDF
@@ -21,7 +66,7 @@
 
 @push('styles')
 <link rel="stylesheet" href="{{ asset('vendor/bookblock/css/bookblock.css') }}">
-<link rel="stylesheet" href="{{ asset('css/ged-registre-livret.css') }}?v=13">
+<link rel="stylesheet" href="{{ asset('css/cosud-registre-livret.css') }}?v=14">
 <script src="{{ asset('vendor/bookblock/js/modernizr.custom.js') }}"></script>
 <style>
     /* Bandeau titre compact → plus de hauteur pour le livret */
@@ -45,7 +90,7 @@
     $hasLogo = is_file($logoPath);
 @endphp
 
-<div class="ged-registre-livret is-fullscreen is-closed {{ $isDepart ? 'is-depart' : '' }}">
+<div class="cosud-registre-livret is-fullscreen is-closed {{ $isDepart ? 'is-depart' : '' }}">
     <div class="registre-livret-shell">
         <div class="bb-custom-wrapper registre-livret-book-area">
             <div class="registre-livret-panel">
@@ -72,11 +117,16 @@
                             <div class="registre-single-face registre-feuille-face">
                                 <div class="registre-feuille-head">
                                     <div>
-                                        <p class="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-semibold mb-1">Secrétariat DG — ACSI</p>
+                                        <p class="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-semibold mb-1">{{ $libelleStructureRegistre }}</p>
                                         <h3>{{ $libSensUpper }}</h3>
                                     </div>
                                     <div class="text-right text-xs text-slate-600">
                                         <div>Année {{ $annee }}</div>
+                                        @if($mois)
+                                            <div class="font-medium">{{ [1=>'Janvier',2=>'Février',3=>'Mars',4=>'Avril',5=>'Mai',6=>'Juin',7=>'Juillet',8=>'Août',9=>'Septembre',10=>'Octobre',11=>'Novembre',12=>'Décembre'][$mois] ?? '' }}</div>
+                                        @elseif($trimestre)
+                                            <div class="font-medium">Trimestre {{ $trimestre }}</div>
+                                        @endif
                                         <div class="font-semibold">Feuillet {{ $index + 1 }} / {{ $nbFeuillets }}</div>
                                     </div>
                                 </div>
@@ -116,7 +166,7 @@
                             <div class="registre-single-face registre-cloture-face">
                                 <p class="registre-cover-kicker">Clôture du registre</p>
                                 <h2>
-                                    Nous, Secrétariat de la Direction Générale de l’ACSI,
+                                    Nous, {{ $libelleStructureRegistre }},
                                     arrêtons et clôturons le présent registre de courrier
                                     <strong>{{ $libSens }}</strong> pour l’année <strong>{{ $annee }}</strong>,
                                     comprenant <strong>{{ $courriers->count() }}</strong> entrée(s)
@@ -131,7 +181,7 @@
                                     @if($hasLogo)
                                         <img src="{{ asset('images/image-logo.jpg') }}" alt="ACSI" class="registre-cover-seal">
                                     @endif
-                                    <div class="mt-2 text-sm font-semibold">Le Secrétariat DG</div>
+                                    <div class="mt-2 text-sm font-semibold">{{ $libelleStructureRegistre }}</div>
                                 </div>
                                 <p class="registre-cover-label">Fin du livret</p>
                             </div>
@@ -166,7 +216,7 @@
 <script>
 (function ($) {
     var $book = $('#bb-bookblock');
-    var $livret = $('.ged-registre-livret');
+    var $livret = $('.cosud-registre-livret');
     if (!$book.length || typeof $.fn.bookblock !== 'function') {
         console.error('BookBlock non initialisé (jQuery plugin manquant).');
         return;

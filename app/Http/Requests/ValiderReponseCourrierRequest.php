@@ -6,8 +6,7 @@ use App\Services\CircuitCourrierMoteurService;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * Le DG (ou le directeur destinataire) valide le projet de réponse soumis par la
- * particulière et le renvoie pour création du courrier départ en brouillon.
+ * Le DG signe le courrier de réponse (déjà créé) soumis par la particulière.
  */
 class ValiderReponseCourrierRequest extends FormRequest
 {

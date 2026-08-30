@@ -50,7 +50,7 @@ class UserAffectationController extends Controller
             'user_id' => $user->id,
             'structure_id' => $validated['structure_id'],
         ]);
-        Log::channel('eged')->info('Affectation structure utilisateur', ['user_id' => $user->id, 'structure_id' => $validated['structure_id'], 'by' => auth()->id()]);
+        Log::channel('cosud')->info('Affectation structure utilisateur', ['user_id' => $user->id, 'structure_id' => $validated['structure_id'], 'by' => auth()->id()]);
 
         return redirect()
             ->route('utilisateurs.edit', $user)
@@ -88,7 +88,7 @@ class UserAffectationController extends Controller
             'user_id' => $user->id,
             'structure_id' => $structure->id,
         ]);
-        Log::channel('eged')->info('Affectation structure mise à jour', ['user_id' => $user->id, 'structure_id' => $structure->id, 'by' => auth()->id()]);
+        Log::channel('cosud')->info('Affectation structure mise à jour', ['user_id' => $user->id, 'structure_id' => $structure->id, 'by' => auth()->id()]);
 
         return redirect()
             ->route('utilisateurs.edit', $user)
@@ -114,7 +114,7 @@ class UserAffectationController extends Controller
             'user_id' => $user->id,
             'structure_id' => $structure->id,
         ]);
-        Log::channel('eged')->info('Affectation structure retirée', ['user_id' => $user->id, 'structure_id' => $structure->id, 'by' => auth()->id()]);
+        Log::channel('cosud')->info('Affectation structure retirée', ['user_id' => $user->id, 'structure_id' => $structure->id, 'by' => auth()->id()]);
 
         return redirect()
             ->route('utilisateurs.edit', $user)

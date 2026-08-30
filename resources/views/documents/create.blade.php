@@ -76,7 +76,7 @@
 
 @section('content')
 <div class="w-full" x-data="documentDepot()">
-    <form id="form-document-create" action="{{ route('documents.store') }}" method="POST" enctype="multipart/form-data">
+    <form id="form-document-create" action="{{ route('documents.store') }}" method="POST" enctype="multipart/form-data" data-loading-text="Enregistrement...">
         @csrf
         {{-- Deux blocs côte à côte dès md (≥768px) : gauche = métadonnées + actions | droite = dépôt + aperçu --}}
         <div id="doc-create-grid" class="flex flex-col gap-6 md:flex-row md:gap-8 md:items-start">
@@ -149,7 +149,7 @@
 
                 {{-- Boutons d'action — largeur suffisante pour le texte --}}
                 <div class="flex flex-wrap items-center gap-4 mt-6">
-                    <button type="submit" id="btn-document-create-submit"
+                    <button type="submit" id="btn-document-create-submit" data-loading-text="Enregistrement..."
                             class="inline-flex items-center justify-center gap-2 min-w-[280px] px-10 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md hover:shadow-lg focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all disabled:opacity-70 whitespace-nowrap">
                         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l4-4m-4 4V8" /></svg>
                         <span>Déposer le document</span>

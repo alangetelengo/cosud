@@ -177,6 +177,31 @@ class Dossier extends Model
     }
 
     /**
+     * Sous-dossiers de l’arbre « Mes dossiers » (hors racine) : dossiers fournisseurs / prestataires.
+     *
+     * @return list<int>
+     */
+    public static function idsDossiersFournisseursPrestatairesPour(int $userId): array
+    {
+        unset(self::$cacheIdsArbrePersonnel[$userId]);
+
+        $idsArbre = self::idsPourArbrePersonnel($userId);
+        if ($idsArbre === []) {
+            return [];
+        }
+
+        return self::query()
+            ->whereIn('id', $idsArbre)
+            ->whereNull('racine_utilisateur_id')
+            ->where('actif', true)
+            ->orderBy('nom')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
      * IDs des dossiers situés dans l’arbre personnel d’un autre utilisateur (à exclure du voir « par structure »).
      *
      * @return list<int>
@@ -384,7 +409,7 @@ class Dossier extends Model
             if ($idsPerso !== []) {
                 $q->orWhereIn('id', $idsPerso);
             }
-            if ($élargi && $idsStructure !== []) {
+            if ($élargi && $idsStructure !== [] && ! $user->hasRole('responsable_suivi_depenses')) {
                 $exclus = array_merge($idsAutresPerso);
                 $q->orWhere(function ($sub) use ($idsStructure, $exclus) {
                     $sub->whereIn('structure_id', $idsStructure);
@@ -425,6 +450,12 @@ class Dossier extends Model
         if (in_array((int) $this->id, static::idsPourArbrePersonnel($user->id), true)) {
             return true;
         }
+
+        // Eleni (suivi dépenses) : uniquement ses dossiers / arbre perso — pas le plan org. prestataires.
+        if ($user->hasRole('responsable_suivi_depenses')) {
+            return false;
+        }
+
         if ($user->aVisibiliteElargiePlanOrganisation()) {
             $sid = $this->structure_id ?? $this->structure_id_depot;
             if ($sid && in_array((int) $sid, $user->structureIdsPérimètrePlanClassement(), true)) {

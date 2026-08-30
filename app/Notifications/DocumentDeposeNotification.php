@@ -8,6 +8,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\VonageMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Str;
 
 /**
  * Envoi synchrone (comme Progcaisse) : pas de queue worker requis.
@@ -48,14 +49,14 @@ class DocumentDeposeNotification extends Notification
         $dossier = $this->document->dossier?->chemin_complet ?? 'Sans dossier';
 
         return (new MailMessage)
-            ->subject('GED : Nouveau document déposé')
-            ->greeting('Bonjour ' . $notifiable->name . ',')
-            ->line('Un nouveau document a été déposé dans GED.')
-            ->line('**Document :** ' . $titre)
-            ->line('**Déposé par :** ' . $this->depositor->name)
-            ->line('**Dossier :** ' . $dossier)
+            ->subject('COSUD : Nouveau document déposé')
+            ->greeting('Bonjour '.$notifiable->name.',')
+            ->line('Un nouveau document a été déposé dans COSUD.')
+            ->line('**Document :** '.$titre)
+            ->line('**Déposé par :** '.$this->depositor->name)
+            ->line('**Dossier :** '.$dossier)
             ->action('Voir les documents', route('documents.index'))
-            ->line('Merci d\'utiliser GED.');
+            ->line('Merci d\'utiliser COSUD.');
     }
 
     /**
@@ -79,9 +80,9 @@ class DocumentDeposeNotification extends Notification
 
     public function toVonage(object $notifiable): VonageMessage
     {
-        $titre = \Illuminate\Support\Str::limit($this->document->titre ?: $this->document->nom_original, 25);
+        $titre = Str::limit($this->document->titre ?: $this->document->nom_original, 25);
 
         return (new VonageMessage)
-            ->content("GED: Doc « {$titre} » déposé par {$this->depositor->name}. Dossier important.");
+            ->content("COSUD: Doc « {$titre} » déposé par {$this->depositor->name}. Dossier important.");
     }
 }

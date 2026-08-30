@@ -25,13 +25,13 @@ class DossierPartageRemovedNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('GED : Un partage de dossier a ete retire')
+            ->subject('COSUD : Un partage de dossier a ete retire')
             ->greeting('Bonjour '.$notifiable->name.',')
             ->line('Votre acces a un dossier partage a ete retire.')
             ->line('**Dossier :** '.$this->dossier->nom)
             ->line('**Retire par :** '.$this->retirePar->name)
             ->action('Voir mes dossiers', route('dossiers.index'))
-            ->line('Merci d\'utiliser GED.');
+            ->line('Merci d\'utiliser COSUD.');
     }
 
     public function toArray(object $notifiable): array

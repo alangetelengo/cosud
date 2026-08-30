@@ -1,0 +1,130 @@
+Scénario de démonstration — Module Gestion des courriers
+Application GED — Démo Direction Générale (15 minutes)
+Objectif : présenter le pilotage DG sur trois flux métier — enregistrement d’une facture fournisseur, fiche de suivi des paiements MAD, courrier général — avec traçabilité, notifications et registres numériques.
+Version document : août 2026 — alignée sur Circuit A (factures / MAD), Circuit B (courriers généraux) et module FSP (suivi des paiements).
+1. Message à retenir (ouverture — 30 s)
+Le GED n’est pas seulement un dépôt de PDF : il orchestre le traitement jusqu’à la clôture.
+Besoin DG | Ce que montre la démo
+Contrôler les paiements fournisseurs | Circuit facture → chèque → signature DG → preuve
+Suivre les MAD | Registre FSP MAD alimenté automatiquement
+Traiter le courrier institutionnel | Instruction → projet de réponse → validation → départ
+2. Préparation (avant la séance — 10 min)
+Mot de passe identique pour tous les comptes : password
+Important : l’enregistrement Arrivée au secrétariat DG (SEC-DIR) est réalisé par Lucienne (particulière du DG) ou Anne Lethicia (responsable dossiers prestataires). Préparer hors séance 1 facture avancée, 1 MAD déjà entrée en FSP, 1 courrier administratif à l’étape Instruction DG, et des PDF de test (facture, MAD, projet de réponse, scan chèque, preuve paiement).
+Rôle | Email | Nom | Structure
+Particulière du DG | 003144s@acsi.cg | LUCIENNE NGOUMBI | SEC-DIR
+Responsable dossiers prestataires | 001958d@acsi.cg | ANNE LETHICIA TATY-TCHICAYA | SEC-DIR
+Directeur Général (DG) | 003057w@acsi.cg | LORD MARHYNO GANDOU | DG
+Agent comptable (AC) | 003232b@acsi.cg | RAÏSSA LEBANITOU | DAC
+Responsable suivi des dépenses | 003091k@acsi.cg | ASTRIDE ELENI OSSEBI | SEC-DIR
+2.1 Données types à saisir
+Facture fournisseur
+Champ | Valeur | Sens
+Type de courrier | Facture | Arrivée
+Expéditeur | ETS KOMBO & Fils (prestataire) | Arrivée
+Email expéditeur | alangetelengo87@gmail.com (notif fournisseur) | Arrivée
+Objet | Facture N°2026-0087 — fourniture de matériel informatique | Arrivée
+Référence / N° fulgurant | 00230 | Arrivée
+Date du courrier | Date du jour | Arrivée
+Pièce jointe | PDF ou image de facture de test | Arrivée
+Mise à disposition (MAD)
+Champ | Valeur | Sens
+Type de courrier | Mise à disposition (MAD) | Arrivée
+Expéditeur | Prestataire ou demandeur selon le cas | Arrivée
+Objet | MAD — mise à disposition de fonds / avance | Arrivée
+Date du courrier | Date du jour | Arrivée
+Pièce jointe | PDF MAD de test | Arrivée
+Courrier général
+Champ | Valeur | Sens
+Type de courrier | Administratif | Arrivée
+Expéditeur | Ministère de la Fonction Publique | Arrivée
+Objet | Demande de mise à jour de l'organigramme de la Direction | Arrivée
+Référence expéditeur | MFP/CAB/2026/00412 | Arrivée
+Date du courrier | Date du jour | Arrivée
+Pièce jointe | PDF de test | Arrivée
+3. Timing minute par minute (15 min)
+Min | Bloc | Acteur à l’écran | Ce qu’on montre
+0–1 | Accroche | — | 3 flux = 1 module, pilotage + traçabilité
+1–6 | A. Facture fournisseur | Anne → DG → Raïssa → DG | Enregistrement → instruction → chèque → signature
+6–10 | B. Fiche suivi paiements MAD | Astride (+ rappel DG) | Menu Suivi des paiements, onglet FSP MAD, export
+10–14 | C. Courrier général | Lucienne → DG → Lucienne → DG | Instruction → projet → validation → départ
+14–15 | Synthèse / Q&R | — | Gains DG + prochaines étapes
+4. Déroulé détaillé
+4.1 A — Facture fournisseur (≈ 5 min)
+Intention DG : « Je vois la facture, j’instruis, je signe le chèque, tout est tracé. »
+Se connecter avec Anne (001958d@acsi.cg) → Courriers → Nouveau courrier arrivée → type Facture → saisir les données §2.1 → Enregistrer.
+Attendu : Numéro de registre attribué ; circuit A démarré ; étape en cours = Instructions DG.
+Se connecter avec le DG (003057w@acsi.cg) → cloche de notifications → ouvrir le courrier → panneau Circuit métier.
+Formulaire A — Instruire : « Établir le chèque pour le paiement de cette facture. » → Confier à : RAÏSSA LEBANITOU → Enregistrer les instructions.
+Attendu : Saut vers l’étape AC ; affichage du collaborateur confié ; séparation claire A (instruire) / B (répondre moi-même).
+Se connecter avec Raïssa (003232b@acsi.cg) → Actions : Envoyer le chèque au DG → montant (ex. 1 949 700 FCFA) + message obligatoire → Envoyer.
+Attendu : Étape = DG signe le chèque ; ligne FSP FACTURE créée ; notification « Entrée chèque — suivi des dépenses » pour Astride.
+Se connecter avec le DG → Signer le chèque : scan du chèque signé obligatoire, case « Notifier le fournisseur » cochée → Enregistrer.
+Attendu : Relais caissiers / retour caisse automatiques ; étape Preuve de paiement ; notif fournisseur si email renseigné.
+Note : si le temps manque, partir d’une facture déjà à l’étape « Signer le chèque », puis enchaîner sur le FSP (bloc B).
+Variante à citer sans la jouer : à l’instruction, le DG peut « Répondre moi-même et signer » → clôture immédiate sans circuit paiement / FSP.
+4.2 B — Fiche de suivi des paiements MAD (≈ 4 min)
+Intention DG : « Les MAD et factures sont dans un registre unique, pas dans Excel. »
+Important : Facture et MAD partagent le même circuit paiement (Circuit A), mais alimentent des onglets FSP distincts — FSP FACTURE et FSP MAD. La ligne FSP naît à l’envoi du chèque par l’AC, pas à l’enregistrement du courrier.
+Se connecter avec Astride (003091k@acsi.cg) → menu Suivi des paiements.
+Onglet FSP MAD : N°, date, intitulé, montant, demandeur, responsable chargé du dossier, instruction DG.
+Filtrer par année ; rechercher par intitulé / fournisseur ; vérifier le total en bas de page.
+Bouton Exporter Excel (CSV) → téléchargement compatible Excel.
+Option rapide (30 s) : ouvrir une MAD déjà passée par l’envoi chèque pour montrer quand la ligne apparaît.
+Phrase clé à dire : « La fiche de suivi n’est pas saisie à part : elle naît du circuit de paiement, au moment où l’AC envoie le chèque au DG. »
+4.3 C — Courrier général (≈ 4 min)
+Intention DG : « Instruction claire, projet contrôlé, réponse traçable. »
+Se connecter avec Lucienne (003144s@acsi.cg) → Nouveau courrier Administratif (§2.1) → Enregistrer.
+Attendu : Circuit B démarré ; étape = Instruction DG (enregistrement + notification auto).
+Se connecter avec le DG → Instruire : « Préparer une réponse indiquant que l’organigramme mis à jour sera transmis sous 15 jours. » (collaborateur confié vide) → Enregistrer.
+Attendu : Étape = Traitement par la particulière.
+Avec Lucienne → joindre le projet de réponse → Soumettre le projet au DG.
+Attendu : Étape = Validation de la réponse.
+Avec le DG → Valider et envoyer à Lucienne pour créer le courrier de réponse.
+Attendu : Étape = Création du départ (particulière).
+Avec Lucienne → Créer le courrier départ (brouillon) : objet + destinataire → Créer.
+Attendu : Courrier départ créé en brouillon ; historique circuit visible sur la fiche.
+Raccourci si manque de temps : à l’instruction, « Répondre moi-même et signer » → départ signé et circuit clôturé sans projet particulière.
+Variante à citer : rejet du projet avec motif → retour à Traitement particulière pour reformulation.
+5. Synthèse pour la Direction (1 min)
+Avant | Avec le GED
+Factures / MAD suivies hors système | Circuit + FSP automatiques
+Signature chèque peu liée au dossier | Signature DG sur la même fiche courrier
+Courrier institutionnel dispersé | Instruction → validation → départ lié
+Relances informelles | Notifications + historique d’étapes
+Trois preuves à laisser à l’écran en fin de démo :
+- Fiche facture avec historique (instruction → chèque → signature).
+- Écran Suivi des paiements — onglet FSP MAD.
+- Fiche courrier général avec projet validé / départ créé.
+6. Plan B (incidents)
+Problème | Contournement
+Reconnexion trop longue | Onglets pré-ouverts / 1 flux live + 2 flux déjà avancés
+Pas d’email fournisseur | Expliquer la case sans envoyer
+Manque de temps | Couper le projet Lucienne ; montrer « Répondre moi-même »
+FSP vide | Utiliser la MAD / facture pré-préparée (envoi chèque déjà fait)
+7. Menus et écrans utiles
+- Courriers — liste / création / fiche (/courriers)
+- Suivi des paiements — onglets FSP FACTURE | FSP MAD (/suivi-paiements)
+- Registres arrivée / départ — aperçu 10 s si question
+- Cloche Notifications — point d’entrée naturel du DG
+8. Vue d’ensemble des circuits (référence)
+8.1 Circuit A — Factures prestataires / MAD
+Enregistrement (auto) → Instructions DG (± collaborateur confié) → [Traitement dossiers → AC] (auto ou saut si confié à l’AC) → AC établit le chèque → création FSP + notif Astride → DG signe le chèque (+ notif fournisseur) → AC → caissiers (auto) → Retour caisse (auto) → Preuve de paiement → Clôture.
+Types : Facture → FSP FACTURE ; Mise à disposition (MAD) → FSP MAD (colonnes Demandeur / Responsable dossier).
+8.2 Circuit B — Courriers généraux
+Enregistrement (auto) → Notification (auto) → Instruction DG → Traitement particulière (projet) → Validation DG → Création / expédition du départ.
+Variantes : DG répond lui-même ; rejet du projet ; instruction par le directeur destinataire.
+9. Aide-mémoire présentateur (1 page)
+Min | Action | Compte
+0–1 | Accroche : 3 flux, pilotage DG | —
+1–3 | Créer facture + montrer registre / circuit | Anne
+3–4 | Instruire + confier à Raïssa | DG
+4–5 | Envoyer chèque (montant) → FSP créée | Raïssa
+5–6 | Signer chèque + notif fournisseur | DG
+6–10 | Suivi des paiements → onglet FSP MAD + export | Astride
+10–11 | Créer courrier administratif | Lucienne
+11–12 | Instruire la réponse | DG
+12–13 | Soumettre projet | Lucienne
+13–14 | Valider + créer départ (ou raccourci DG) | DG / Lucienne
+14–15 | Synthèse : 3 écrans preuves + Q&R | —
+Note : ce document remplace le plan de tests QA pour une présentation directionnelle. Pour la validation technique détaillée (cas A1–A4, B1–B6), se référer à Scenario-test-circuits-courriers.docx.

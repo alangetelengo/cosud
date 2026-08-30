@@ -9,7 +9,7 @@
         </div>
     </button>
     <div class="flex-1 flex justify-between items-center px-6">
-        <span class="text-sm text-slate-300 font-semibold system-label">GED – Gestion électronique des documents | ACSI</span>
+        <span class="text-sm text-slate-300 font-semibold system-label">COSUD – Courrier et Suivi des Dépenses | ACSI</span>
         <ul class="header-right flex items-center gap-1">
             {{-- 1. Theme Toggle (comme Progcaisse) --}}
             <li class="mr-3">
@@ -74,7 +74,7 @@
                              :style="menuStyle"
                              class="header-dropdown fixed w-48 bg-white rounded-lg shadow-xl py-1 border border-slate-200 z-[9999] min-w-[12rem]">
                             <a href="{{ route('profile.edit') }}" class="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">👤 Profil</a>
-                            <form method="POST" action="{{ route('logout') }}">
+                            <form method="POST" action="{{ route('logout') }}" data-skip-submit-loading="1">
                                 @csrf
                                 <button type="submit" class="flex items-center gap-2 w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 font-medium">🔑 Déconnexion</button>
                             </form>

@@ -20,7 +20,7 @@ class EmailVerificationNotificationController extends Controller
 
         $request->user()->sendEmailVerificationNotification();
 
-        Log::channel('eged')->info('Lien de vérification email envoyé', ['user_id' => $request->user()->id]);
+        Log::channel('cosud')->info('Lien de vérification email envoyé', ['user_id' => $request->user()->id]);
 
         return back()->with('status', 'verification-link-sent');
     }

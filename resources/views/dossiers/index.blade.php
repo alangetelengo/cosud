@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('page-title', 'Plan de classement')
-@section('page-title-info', 'Arborescence des dossiers du GED')
+@section('page-title-info', 'Arborescence des dossiers de COSUD')
 @section('btn-create')
     @can('create', App\Models\Dossier::class)
     <a href="{{ route('dossiers.create') }}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 shadow-sm transition-all no-underline text-sm">
@@ -88,7 +88,7 @@
                             <span class="block text-xs text-slate-500 dark:text-slate-400 truncate">{{ $d->chemin_complet }}</span>
                         </div>
                         <span class="text-sm text-slate-500 dark:text-slate-400">{{ $d->documents_count ?? $d->documents()->count() }} doc.</span>
-                        <form action="{{ route('dossiers.favori', $d) }}" method="POST" class="inline-block" onclick="event.preventDefault(); this.submit();">
+                        <form action="{{ route('dossiers.favori', $d) }}" method="POST" class="inline-block" data-skip-submit-loading="1" onclick="event.preventDefault(); this.submit();">
                             @csrf
                             <input type="hidden" name="redirect" value="{{ request()->fullUrl() }}">
                             <button type="submit" class="p-2 rounded-lg text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20" title="Retirer des favoris">⭐</button>
@@ -112,13 +112,13 @@
                         </div>
                         <span class="text-sm text-slate-500 dark:text-slate-400">{{ $d->documents_count ?? $d->documents()->count() }} doc.</span>
                         @if(in_array($d->id, $favoriIds ?? []))
-                        <form action="{{ route('dossiers.favori', $d) }}" method="POST" class="inline-block" onclick="event.preventDefault(); this.submit();">
+                        <form action="{{ route('dossiers.favori', $d) }}" method="POST" class="inline-block" data-skip-submit-loading="1" onclick="event.preventDefault(); this.submit();">
                             @csrf
                             <input type="hidden" name="redirect" value="{{ request()->fullUrl() }}">
                             <button type="submit" class="p-2 rounded-lg text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20" title="Retirer des favoris">⭐</button>
                         </form>
                         @else
-                        <form action="{{ route('dossiers.favori', $d) }}" method="POST" class="inline-block" onclick="event.preventDefault(); this.submit();">
+                        <form action="{{ route('dossiers.favori', $d) }}" method="POST" class="inline-block" data-skip-submit-loading="1" onclick="event.preventDefault(); this.submit();">
                             @csrf
                             <input type="hidden" name="redirect" value="{{ request()->fullUrl() }}">
                             <button type="submit" class="p-2 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20" title="Ajouter aux favoris">☆</button>

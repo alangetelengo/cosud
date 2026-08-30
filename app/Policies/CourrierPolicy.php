@@ -30,7 +30,12 @@ class CourrierPolicy
             return false;
         }
 
-        return $courrier->visiblePar($user);
+        if ($courrier->visiblePar($user)) {
+            return true;
+        }
+
+        // Consultation depuis le détail dette (Taty / Eleni / DG) : factures + régularisations.
+        return $user->can('moratoires.view') && $courrier->estTypeFacture();
     }
 
     public function create(User $user): bool
@@ -44,13 +49,17 @@ class CourrierPolicy
             return false;
         }
 
-        if ($user->hasRole('particulier_dg')
+        if (! $courrier->visiblePar($user)) {
+            return false;
+        }
+
+        if ($user->aAccesTotal()
+            || $user->hasRole('particulier_dg')
             || $user->hasRole('particulier_ac')
             || $user->hasRole('responsable_dossiers_prestataires')
             || $user->hasRole('responsable_suivi_depenses')
             || $user->hasRole('agent_comptable')
-            || $user->hasRole('caissier')
-            || $user->aAccesTotal()) {
+            || $user->hasRole('caissier')) {
             return true;
         }
 
@@ -181,25 +190,37 @@ class CourrierPolicy
             && $courrier->peutEtreArchive();
     }
 
-    public function annuler(User $user, Courrier $courrier): bool
+    /**
+     * Classement d’un courrier dans un dossier COSUD.
+     * — Facture : secrétariat DG / particulière DG / responsable prestataires (1 fiche = 1 dossier, classement auto).
+     * — Divers / non-factures : mêmes rôles, choix dossier existant ou nouveau.
+     */
+    public function classerDossier(User $user, Courrier $courrier): bool
     {
-        if (! $courrier->estDepart()) {
+        if (! $user->can('courriers.view') || ! $courrier->visiblePar($user)) {
             return false;
         }
 
-        $code = $courrier->statutCourrier?->code ?? '';
-
-        if ($code === 'transmis_directeur') {
-            return $user->can('courriers.rejeter')
-                && (int) $courrier->directeur_en_attente_id === (int) $user->id;
+        if ($user->hasRole('admin')) {
+            return true;
         }
 
-        if (in_array($code, ['brouillon', 'rejete_directeur'], true)) {
-            return $user->can('courriers.edit')
-                && $user->gereCourrierSecretariat()
-                && (int) $courrier->structure_id === (int) $user->structure_id;
+        return $user->hasRole('secretaire_direction')
+            || $user->hasRole('particulier_dg')
+            || $user->hasRole('responsable_dossiers_prestataires');
+    }
+
+    public function annuler(User $user, Courrier $courrier): bool
+    {
+        return $courrier->peutAnnulerEnregistrement($user);
+    }
+
+    public function delete(User $user, Courrier $courrier): bool
+    {
+        if (! $user->can('courriers.delete')) {
+            return false;
         }
 
-        return false;
+        return $courrier->peutSupprimerEnregistrementPar($user);
     }
 }

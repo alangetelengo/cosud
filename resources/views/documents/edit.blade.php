@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@use('App\Support\ReturnUrl')
+
 @section('content-container-class', 'w-full px-4 sm:px-6 lg:px-8')
 @section('page-title', 'Modifier le document')
 @section('page-title-info', $document->nom_original)
@@ -85,7 +87,7 @@
     <div id="doc-edit-grid" class="flex flex-col gap-6 md:flex-row md:gap-8 md:items-start">
         {{-- BLOC GAUCHE : Formulaire — 5/12 --}}
         <div id="doc-edit-form" class="w-full min-w-0 md:w-5/12 md:shrink-0 flex flex-col">
-            <form id="form-document-edit" action="{{ route('documents.update', $document) }}" method="POST" class="flex flex-col">
+            <form id="form-document-edit" action="{{ route('documents.update', $document) }}" method="POST" data-loading-text="Enregistrement..." class="flex flex-col">
                 @csrf
                 @method('PUT')
             <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
@@ -158,16 +160,16 @@
 
                 {{-- Boutons — sous la carte, comme sur la page Déposer --}}
                 <div class="flex flex-wrap items-center gap-4 mt-6">
-                    <button type="submit" id="btn-document-edit-submit"
+                    <button type="submit" id="btn-document-edit-submit" data-loading-text="Enregistrement..."
                             class="inline-flex items-center justify-center gap-2 min-w-[280px] px-10 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md hover:shadow-lg focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all disabled:opacity-70 whitespace-nowrap">
                         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                         <span>Enregistrer les modifications</span>
                     </button>
-                    <a href="{{ url()->previous() }}"
+                    <a href="{{ route('documents.fiche', ReturnUrl::propagate($document, ReturnUrl::validated(request()->query('return')))) }}"
                        class="inline-flex items-center justify-center gap-2 min-w-[120px] px-6 py-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap">
                         Annuler
                     </a>
-                    <a href="{{ route('documents.index') }}"
+                    <a href="{{ $retourUrl }}"
                        class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap">
                         Retour à la liste
                     </a>

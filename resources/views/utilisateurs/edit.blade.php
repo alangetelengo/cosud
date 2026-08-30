@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@use('App\Support\ReturnUrl')
+
 @section('page-title', 'Modifier l\'utilisateur')
 @section('page-title-info', $utilisateur->email)
 
@@ -77,9 +79,10 @@
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Téléphone (pour SMS)</label>
-                        <input type="text" name="telephone" value="{{ old('telephone', $utilisateur->telephone) }}" placeholder="+242 XX XXX XXXX"
+                        <input type="text" name="telephone" value="{{ old('telephone', $utilisateur->telephone ? '+'.$utilisateur->telephone : '') }}" placeholder="+242 06 XXX XX XX"
                             class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white @error('telephone') border-red-500 @enderror">
                         @error('telephone')<p class="mt-1 text-sm text-red-500">{{ $message }}</p>@enderror
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Numéro mobile Congo utilisé pour les SMS métier (optionnel). Vide = pas de SMS à cet utilisateur.</p>
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Nouveau mot de passe (laisser vide pour ne pas changer)</label>
@@ -133,8 +136,8 @@
                 </div>
                 <div class="mt-8 flex flex-wrap gap-4">
                     <button type="submit" id="btn-utilisateur-edit-submit" class="px-6 py-2.5 rounded-lg bg-[#00b464] text-white font-semibold hover:bg-[#00a055] btn-submit-loading">Enregistrer le compte</button>
-                    <a href="{{ route('utilisateurs.index') }}" class="px-6 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700">Retour à la liste</a>
-                    <a href="{{ route('utilisateurs.show', $utilisateur) }}" class="px-6 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700">Fiche utilisateur</a>
+                    <a href="{{ $retourUrl }}" class="px-6 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700">Retour à la liste</a>
+                    <a href="{{ route('utilisateurs.show', ReturnUrl::propagate($utilisateur, ReturnUrl::validated(request()->query('return')))) }}" class="px-6 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700">Fiche utilisateur</a>
                 </div>
             </form>
         </div>

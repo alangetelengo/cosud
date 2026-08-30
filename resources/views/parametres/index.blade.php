@@ -2,7 +2,7 @@
 
 @section('content-container-class', 'w-full max-w-none px-4 sm:px-6 lg:px-8')
 @section('page-title', 'Paramètres')
-@section('page-title-info', "Centre d'administration et de configuration GED")
+@section('page-title-info', "Centre d'administration et de configuration COSUD")
 
 @push('styles')
 <style>
@@ -26,12 +26,20 @@
             <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">Configuration du système</h2>
             <p class="text-slate-600 dark:text-slate-400 mt-1 text-sm">Gérez l'organisation, les documents et les accès</p>
         </div>
-        <div class="p-4 border-t border-slate-100 dark:border-slate-700">
-            <a href="{{ route('parametres.ged-acces') }}" class="group flex items-center gap-3 p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all no-underline">
+        <div class="p-4 border-t border-slate-100 dark:border-slate-700 space-y-3">
+            <a href="{{ route('parametres.cosud-acces') }}" class="group flex items-center gap-3 p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all no-underline">
                 <span class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-lg flex-shrink-0">🔑</span>
                 <div class="min-w-0 flex-1">
                     <span class="font-semibold text-slate-800 dark:text-slate-100 text-sm block group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Politique d’accès documents</span>
                     <span class="text-xs text-slate-500 dark:text-slate-400">Lecture du dossier lors d’un partage / envoi (désactivé par défaut)</span>
+                </div>
+                <svg class="w-4 h-4 text-slate-300 group-hover:text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </a>
+            <a href="{{ route('parametres.notifications') }}" class="group flex items-center gap-3 p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all no-underline">
+                <span class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-lg flex-shrink-0">🔔</span>
+                <div class="min-w-0 flex-1">
+                    <span class="font-semibold text-slate-800 dark:text-slate-100 text-sm block group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Notifications courriers</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">SMS + cloche DG à l’enregistrement facture / prestataire</span>
                 </div>
                 <svg class="w-4 h-4 text-slate-300 group-hover:text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             </a>
@@ -106,6 +114,14 @@
                 <div class="min-w-0 flex-1">
                     <span class="font-semibold text-slate-800 dark:text-slate-100 text-sm block group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Types de dossiers</span>
                     <span class="text-xs text-slate-500 dark:text-slate-400">Catégories et couleurs</span>
+                </div>
+                <svg class="w-4 h-4 text-slate-300 group-hover:text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </a>
+            <a href="{{ route('parametres.categories-depense.index') }}" class="group flex items-center gap-3 p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all no-underline">
+                <span class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-lg flex-shrink-0">🏷️</span>
+                <div class="min-w-0 flex-1">
+                    <span class="font-semibold text-slate-800 dark:text-slate-100 text-sm block group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Catégories de dépense</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">Référentiel Suivi de dépense</span>
                 </div>
                 <svg class="w-4 h-4 text-slate-300 group-hover:text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             </a>

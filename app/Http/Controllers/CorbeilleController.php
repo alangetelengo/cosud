@@ -11,7 +11,7 @@ class CorbeilleController extends Controller
 {
     public function index(Request $request)
     {
-        $this->authorize('viewAny', Document::class);
+        $this->authorize('corbeille.view');
         $query = Document::where('en_corbeille', true)
             ->visibleBy(auth()->user())
             ->with(['typeDocument', 'user', 'dossier'])
@@ -25,11 +25,13 @@ class CorbeilleController extends Controller
             });
         }
         $documents = $query->paginate(15)->withQueryString();
+
         return view('corbeille.index', compact('documents'));
     }
 
     public function restore(Document $document)
     {
+        $this->authorize('corbeille.view');
         $this->authorize('restore', $document);
         if (! $document->en_corbeille) {
             return redirect()->route('corbeille.index')->with('error', 'Ce document n\'est pas en corbeille.');
@@ -40,6 +42,7 @@ class CorbeilleController extends Controller
         ]);
         HistoriqueDocument::enregistrer($document, 'restauration', null, 'Document restauré depuis la corbeille');
         JournalAudit::log('document.restauration', 'corbeille', ['document_id' => $document->id]);
+
         return redirect()->route('corbeille.index')->with('success', 'Document restauré.');
     }
 }

@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\DeposerPreuvePaiementRequest;
+use App\Http\Requests\ConfirmerControleDepenseRequest;
+use App\Http\Requests\EnregistrerDechargeAcRequest;
 use App\Http\Requests\EnvoyerChequeAcRequest;
 use App\Http\Requests\InstruireCircuitCourrierRequest;
+use App\Http\Requests\PayerReliquatFactureRequest;
 use App\Http\Requests\RejeterReponseCourrierRequest;
 use App\Http\Requests\SignerChequeDgRequest;
 use App\Http\Requests\SoumettreReponseCourrierRequest;
@@ -14,14 +16,23 @@ use App\Models\CircuitCourrierEtape;
 use App\Models\Courrier;
 use App\Models\Document;
 use App\Models\JournalAudit;
+use App\Models\SensCourrier;
+use App\Models\StatutCourrier;
 use App\Models\StatutDocument;
+use App\Models\TypeCourrier;
 use App\Models\TypeDocument;
 use App\Services\CircuitCourrierMoteurService;
+use App\Services\CourrierNotificationService;
+use App\Services\CourrierNumeroRegistreService;
 use App\Services\CourrierRetardService;
+use App\Services\CourrierSecretariatService;
+use App\Services\CourrierWorkflowService;
 use App\Services\ParapheurDepartService;
+use App\Services\SuiviPaiementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Spatie\Permission\Models\Role;
@@ -30,6 +41,10 @@ class CircuitCourrierController extends Controller
 {
     public function __construct(
         private readonly CircuitCourrierMoteurService $moteur,
+        private readonly CourrierNumeroRegistreService $numeroService,
+        private readonly CourrierWorkflowService $workflowService,
+        private readonly CourrierSecretariatService $secretariatService,
+        private readonly CourrierNotificationService $courrierNotifications,
     ) {
         $this->middleware(function ($request, $next) {
             if ($request->routeIs(
@@ -41,7 +56,9 @@ class CircuitCourrierController extends Controller
                 'courriers.circuit.rejeter-reponse',
                 'courriers.circuit.envoyer-cheque',
                 'courriers.circuit.signer-cheque',
-                'courriers.circuit.deposer-preuve-paiement'
+                'courriers.circuit.deposer-preuve-paiement',
+                'courriers.circuit.payer-reliquat',
+                'courriers.circuit.confirmer-controle-depense'
             )) {
                 return $next($request);
             }
@@ -173,6 +190,11 @@ class CircuitCourrierController extends Controller
                 $request->validated('agent_confie_id') !== null
                     ? (int) $request->validated('agent_confie_id')
                     : null,
+                $request->validated('agent_confie_ids') ?? [],
+                $request->validated('delai_execution_jours') !== null
+                    ? (int) $request->validated('delai_execution_jours')
+                    : null,
+                $request->validated('mode_paiement_circuit'),
             );
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());
@@ -183,32 +205,36 @@ class CircuitCourrierController extends Controller
 
     public function envoyerCheque(EnvoyerChequeAcRequest $request, Courrier $courrier): RedirectResponse
     {
-        if ($request->hasFile('scan_cheque')) {
-            $this->attacherScanCheque($courrier, $request->file('scan_cheque'));
+        foreach ($this->collecterFichiersUpload($request, 'scans_cheque', 'scan_cheque') as $scan) {
+            $this->attacherScanCheque($courrier, $scan);
         }
 
         try {
             $this->moteur->envoyerChequeAuDg(
                 $courrier->fresh(),
                 $request->user(),
-                $request->validated('message')
+                $request->validated('message'),
+                (float) $request->validated('montant'),
+                [
+                    'numero_piece' => $request->validated('numero_piece'),
+                    'banque' => $request->validated('banque'),
+                    'beneficiaire_libelle' => $request->beneficiaireChequeForce(),
+                    'programmation' => $request->validated('programmation'),
+                ],
             );
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Chèque transmis au DG pour signature.');
+        $libelleSucces = $courrier->fresh()->estModePaiementOv()
+            ? 'Ordre de virement transmis au DG pour signature.'
+            : 'Chèque transmis au DG pour signature.';
+
+        return back()->with('success', $libelleSucces);
     }
 
     public function signerCheque(SignerChequeDgRequest $request, Courrier $courrier): RedirectResponse
     {
-        $this->attacherPieceCourrier(
-            $courrier,
-            $request->file('scan_cheque_signe'),
-            'Scan chèque signé',
-            'Chèque signé par le DG'
-        );
-
         try {
             $this->moteur->signerChequeDg(
                 $courrier->fresh(),
@@ -220,20 +246,110 @@ class CircuitCourrierController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Chèque signé enregistré. Le fournisseur a été notifié pour le recouvrement si demandé.');
+        $libelleSucces = $courrier->fresh()->estModePaiementOv()
+            ? 'Signature de l’ordre de virement confirmée. L’AC peut joindre l’accusé de réception de la banque.'
+            : 'Signature du chèque confirmée. L’AC peut enregistrer la décharge du bénéficiaire.';
+
+        return back()->with('success', $libelleSucces);
     }
 
-    public function deposerPreuvePaiement(DeposerPreuvePaiementRequest $request, Courrier $courrier): RedirectResponse
+    public function deposerPreuvePaiement(EnregistrerDechargeAcRequest $request, Courrier $courrier): RedirectResponse
     {
-        $this->attacherPieceCourrier(
-            $courrier,
-            $request->file('preuve_paiement'),
-            'Preuve de paiement',
-            'Preuve de paiement fournisseur / prestataire'
-        );
+        $estOv = $courrier->estModePaiementOv();
+        $titrePiece = $estOv
+            ? 'Accusé de réception banque / justificatif OV'
+            : 'Pièce de décharge / paiement';
+        $descPiece = $estOv
+            ? 'Accusé de réception de la banque / justificatif ordre de virement'
+            : 'Chèque déchargé / pièce d’identité / justificatif de paiement';
+
+        foreach ($this->collecterFichiersUpload($request, 'preuves_paiement', 'preuve_paiement') as $preuve) {
+            $this->attacherPieceCourrier(
+                $courrier,
+                $preuve,
+                $titrePiece,
+                $descPiece
+            );
+        }
 
         try {
-            $this->moteur->deposerPreuvePaiement(
+            $this->moteur->enregistrerDechargeAc(
+                $courrier->fresh(),
+                $request->user(),
+                [
+                    'date_decharge' => $request->validated('date_decharge'),
+                    'observation' => $request->validated('observation'),
+                ],
+                $request->validated('message'),
+            );
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        $libelleSucces = $estOv
+            ? 'Accusé de réception banque enregistré — circuit clôturé. Suivi des dépenses notifié pour contrôle des pièces.'
+            : 'Décharge / paiement enregistré — circuit clôturé. Suivi des dépenses notifié pour contrôle des pièces.';
+
+        return back()->with('success', $libelleSucces);
+    }
+
+    public function payerReliquat(PayerReliquatFactureRequest $request, Courrier $courrier): RedirectResponse
+    {
+        foreach ($this->collecterFichiersUpload($request, 'scans_cheque', 'scan_cheque') as $scan) {
+            $this->attacherScanCheque($courrier, $scan);
+        }
+
+        foreach ($this->collecterFichiersUpload($request, 'preuves_paiement', 'preuve_paiement') as $preuve) {
+            $this->attacherPieceCourrier(
+                $courrier,
+                $preuve,
+                'Pièce de décharge / paiement reliquat',
+                'Reliquat — chèque déchargé / justificatif de paiement'
+            );
+        }
+
+        try {
+            app(SuiviPaiementService::class)->creerPaiementReliquat(
+                $courrier->fresh(['suiviPaiements', 'typeCourrier']),
+                $request->user(),
+                [
+                    'montant' => $request->validated('montant'),
+                    'numero_piece' => $request->validated('numero_piece'),
+                    'banque' => $request->validated('banque'),
+                    'beneficiaire_libelle' => $request->beneficiaireChequeForce(),
+                    'programmation' => $request->validated('programmation'),
+                    'date_decharge' => $request->validated('date_decharge'),
+                    'observation' => $request->validated('observation'),
+                ],
+            );
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        $this->courrierNotifications->notifierRoles(
+            ['responsable_suivi_depenses'],
+            $courrier->fresh(),
+            $request->user(),
+            CourrierNotificationService::ETAPE_CIRCUIT,
+            'Paiement du reliquat enregistré — contrôler les pièces physiques et joindre les pièces manquantes si besoin (hors circuit).'
+        );
+
+        return back()->with('success', 'Paiement du reliquat enregistré et décharge clôturée. Suivi des dépenses notifié pour contrôle.');
+    }
+
+    public function confirmerControleDepense(ConfirmerControleDepenseRequest $request, Courrier $courrier): RedirectResponse
+    {
+        foreach ($this->collecterFichiersUpload($request, 'pieces_complementaires', 'piece_complementaire') as $piece) {
+            $this->attacherPieceCourrier(
+                $courrier,
+                $piece,
+                'Pièce complémentaire (contrôle)',
+                'Pièce jointe lors du contrôle suivi des dépenses'
+            );
+        }
+
+        try {
+            $this->moteur->confirmerControleDepense(
                 $courrier->fresh(),
                 $request->user(),
                 $request->validated('message'),
@@ -242,15 +358,11 @@ class CircuitCourrierController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Preuve de paiement enregistrée — dossier clôturé.');
+        return back()->with('success', 'Contrôle des pièces confirmé.');
     }
 
     public function soumettreReponse(SoumettreReponseCourrierRequest $request, Courrier $courrier): RedirectResponse
     {
-        // La confidentialité a déjà été appréciée par le DG/directeur à l'orientation du
-        // courrier : la particulière ne peut pas la modifier ni choisir l'agent destinataire.
-        $confidentielle = (bool) $courrier->est_confidentiel;
-
         $typesDisponibles = TypeDocument::query()
             ->whereIn('code', app(ParapheurDepartService::class)->codesTypesDocument())
             ->where('actif', true)
@@ -261,52 +373,130 @@ class CircuitCourrierController extends Controller
             return back()->with('error', 'Aucun type de document configuré pour le dépôt de la réponse.');
         }
 
-        $document = app(ParapheurDepartService::class)->deposerPiece(
-            $request->user(),
-            $request->file('document_reponse'),
-            $typeDocument->id
-        );
+        $directeur = $this->moteur->resoudreActeurDirecteur($courrier)
+            ?? $this->secretariatService->directeurPourSecretariat($request->user()->structurePourValidationHierarchique());
+
+        if (! $directeur) {
+            return back()->with('error', 'Aucun directeur / DG trouvé pour la signature.');
+        }
+
+        if ($courrier->reponseDepartEnAttenteSignature()) {
+            return back()->with('error', 'Un courrier de réponse est déjà en attente de signature.');
+        }
 
         try {
-            $this->moteur->soumettreReponsePourValidation($courrier, $request->user(), [
-                'document_reponse_id' => $document->id,
-                'reponse_confidentielle' => $confidentielle,
-                // Destinataire (structure ou agent) : choisi exclusivement par le DG à la validation.
-                'reponse_structure_destinataire_id' => null,
-                'destinataire_agent_id' => null,
-                'reponse_objet' => $request->input('objet'),
-            ]);
+            $reponse = DB::transaction(function () use ($request, $courrier, $typeDocument, $directeur) {
+                $document = app(ParapheurDepartService::class)->deposerPiece(
+                    $request->user(),
+                    $request->file('document_reponse'),
+                    $typeDocument->id
+                );
+
+                $sensDepart = SensCourrier::where('code', SensCourrier::DEPART)->firstOrFail();
+                $statut = StatutCourrier::where('sens_courrier_id', $sensDepart->id)
+                    ->where('code', 'transmis_directeur')
+                    ->firstOrFail();
+                $nums = $this->numeroService->prochainNumero((int) $sensDepart->id);
+
+                $objetDepart = $courrier->objetReponseDepartParDefaut();
+
+                $reponse = Courrier::create([
+                    'sens_courrier_id' => $sensDepart->id,
+                    'type_courrier_id' => TypeCourrier::where('code', 'reponse')->value('id'),
+                    'statut_courrier_id' => $statut->id,
+                    'priorite_courrier_id' => $courrier->priorite_courrier_id,
+                    'numero_registre' => $nums['numero_registre'],
+                    'numero_registre_annee' => $nums['numero_registre_annee'],
+                    'reference' => $this->numeroService->genererReferenceDepart(),
+                    'origine' => $courrier->estOrigineInterne() ? Courrier::ORIGINE_INTERNE : Courrier::ORIGINE_EXTERNE,
+                    'courrier_parent_id' => $courrier->id,
+                    'date_courrier' => now()->toDateString(),
+                    'objet' => $objetDepart,
+                    'createur_id' => $request->user()->id,
+                    'directeur_en_attente_id' => $directeur->id,
+                    'structure_id' => $request->user()->structure_id,
+                    'dossier_id' => $courrier->dossier_id,
+                ]);
+
+                $reponse->documents()->attach($document->id, ['est_principal' => true]);
+
+                $this->moteur->soumettreDepartPourSignature($courrier, $request->user(), [
+                    'document_id' => $document->id,
+                    'objet' => $objetDepart,
+                    'numero_reponse' => $reponse->numeroRegistreComplet(),
+                    'reponse_id' => $reponse->id,
+                ]);
+
+                return $reponse;
+            });
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Projet de réponse soumis au DG pour validation.');
+        return redirect()
+            ->route('courriers.show', $courrier)
+            ->with('success', 'Courrier de réponse n° '.$reponse->numeroRegistreComplet().' transmis au DG pour signature.');
     }
 
     public function validerReponse(ValiderReponseCourrierRequest $request, Courrier $courrier): RedirectResponse
     {
+        $depart = $courrier->reponseDepartEnAttenteSignature();
+        if (! $depart) {
+            return back()->with('error', 'Aucun courrier de réponse en attente de signature.');
+        }
+
         try {
-            $this->moteur->validerProjetVersParticuliere(
-                $courrier,
-                $request->user(),
-                $request->input('commentaire')
-            );
+            DB::transaction(function () use ($request, $courrier, $depart) {
+                $this->workflowService->transitionner($depart, 'signe', [
+                    'signataire_id' => $request->user()->id,
+                    'directeur_en_attente_id' => null,
+                ]);
+
+                $this->moteur->signerReponseDepart(
+                    $courrier,
+                    $depart->fresh(['statutCourrier']),
+                    $request->user(),
+                    $request->input('commentaire')
+                );
+
+                $this->courrierNotifications->notifierCreateur(
+                    $depart->fresh(),
+                    $request->user(),
+                    CourrierNotificationService::VALIDE_POUR_ENVOI
+                );
+            });
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Projet validé — la particulière peut maintenant créer le courrier départ en brouillon.');
+        return redirect()
+            ->route('courriers.show', $depart->fresh())
+            ->with('success', 'Réponse signée — la particulière peut maintenant l’expédier.');
     }
 
     public function rejeterReponse(RejeterReponseCourrierRequest $request, Courrier $courrier): RedirectResponse
     {
+        $depart = $courrier->reponseDepartEnAttenteSignature();
+        $motif = $request->validated('motif_rejet');
+
         try {
-            $this->moteur->rejeterReponse($courrier, $request->user(), $request->validated('motif_rejet'));
+            DB::transaction(function () use ($request, $courrier, $depart, $motif) {
+                if ($depart) {
+                    $this->workflowService->transitionner($depart, 'rejete_directeur', [
+                        'motif_rejet' => $motif,
+                        'rejete_par_id' => $request->user()->id,
+                        'date_rejet' => now(),
+                        'directeur_en_attente_id' => null,
+                    ]);
+                }
+
+                $this->moteur->rejeterReponse($courrier, $request->user(), $motif);
+            });
         } catch (\InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Projet de réponse rejeté — la particulière en est informée.');
+        return back()->with('success', 'Réponse rejetée — la particulière en est informée.');
     }
 
     public function relancer(Request $request, Courrier $courrier): RedirectResponse
@@ -440,6 +630,28 @@ class CircuitCourrierController extends Controller
     private function attacherScanCheque(Courrier $courrier, UploadedFile $file): void
     {
         $this->attacherPieceCourrier($courrier, $file, 'Scan chèque', 'Scan du chèque transmis au DG');
+    }
+
+    /**
+     * @return list<UploadedFile>
+     */
+    private function collecterFichiersUpload(Request $request, string $cleMultiple, string $cleUnique): array
+    {
+        $fichiers = [];
+
+        if ($request->hasFile($cleMultiple)) {
+            foreach ((array) $request->file($cleMultiple) as $fichier) {
+                if ($fichier) {
+                    $fichiers[] = $fichier;
+                }
+            }
+        }
+
+        if ($request->hasFile($cleUnique)) {
+            $fichiers[] = $request->file($cleUnique);
+        }
+
+        return $fichiers;
     }
 
     private function attacherPieceCourrier(Courrier $courrier, UploadedFile $file, string $titre, string $description): void

@@ -12,7 +12,6 @@
 @endsection
 
 @section('content')
-@include('partials.form-submit-loading')
 <div class="flex flex-row gap-8 w-full items-stretch">
     {{-- Bloc 1 : Formulaire (gauche) --}}
     <div class="flex-1 min-w-0 bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-100 dark:border-slate-700 p-8">

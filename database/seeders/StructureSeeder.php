@@ -64,8 +64,8 @@ class StructureSeeder extends Seeder
             ['SJUR', 'DTION ADM. & PERS.', 'service', 'DG'],
             ['CCG', 'CTLE DE GESTION', 'service', 'DG'],
 
-            // Antennes départementales
-            ['ANT', 'DIRECTION DEPARTEMENTALE DE POINTE NOIRE', 'antenne', 'DG'],
+            // Antennes / directions départementales (éligibles comme service demandeur)
+            ['ANT', 'DIRECTION DEPARTEMENTALE DE POINTE-NOIRE', 'antenne', 'DG'],
         ];
 
         foreach ($structures as $s) {

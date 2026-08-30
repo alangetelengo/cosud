@@ -28,12 +28,12 @@ class PlanClassementController extends Controller
     {
         $racines = $this->buildTree();
 
-        Log::channel('eged')->debug('Admin plan de classement', ['user_id' => auth()->id()]);
+        Log::channel('cosud')->debug('Admin plan de classement', ['user_id' => auth()->id()]);
 
         return view('parametres.plan-classement.index', compact('racines'));
     }
 
-    /** @return \Illuminate\Support\Collection<int, Dossier> */
+    /** @return Collection<int, Dossier> */
     private function buildTree(): Collection
     {
         $all = Dossier::query()->withCount(['children', 'documents'])->get();
@@ -189,7 +189,7 @@ class PlanClassementController extends Controller
     /**
      * Liste plate pour &lt;select&gt; avec indentation du chemin.
      *
-     * @return \Illuminate\Support\Collection<int, object{value:int, label:string}>
+     * @return Collection<int, object{value:int, label:string}>
      */
     private function listeParentsPourSelect(?int $exclureId = null): Collection
     {

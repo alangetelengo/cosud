@@ -17,12 +17,17 @@ class DocumentPolicy
         if (! $user->can('documents.view')) {
             return false;
         }
-        if (! $document->visiblePar($user)) {
+
+        $viaDettesFournisseurs = $user->can('moratoires.view')
+            && $document->estPieceJointeFactureFournisseur();
+
+        if (! $document->visiblePar($user) && ! $viaDettesFournisseurs) {
             return false;
         }
+
         // Inclut les accès ciblés (ventilation courrier, directeur en attente de signature)
         // qui doivent lever la restriction de confidentialité au même titre que visiblePar().
-        $accesMalgreConfidentiel = $document->accesConfidentielAutorise($user);
+        $accesMalgreConfidentiel = $document->accesConfidentielAutorise($user) || $viaDettesFournisseurs;
         $dossier = $document->dossier;
         if ($dossier && $dossier->confidentiel && ! $user->can('dossiers.view-confidentiel') && ! $user->aAccesTotal() && ! $accesMalgreConfidentiel) {
             return false;

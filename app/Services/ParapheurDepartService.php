@@ -22,7 +22,7 @@ class ParapheurDepartService
      */
     public function codesTypesDocument(): array
     {
-        return config('ged.parapheur_depart.types_document', []);
+        return config('cosud.parapheur_depart.types_document', []);
     }
 
     /**
@@ -30,7 +30,7 @@ class ParapheurDepartService
      */
     public function codesStatutsDocument(): array
     {
-        return config('ged.parapheur_depart.statuts_document', []);
+        return config('cosud.parapheur_depart.statuts_document', []);
     }
 
     /**
@@ -38,7 +38,7 @@ class ParapheurDepartService
      */
     public function codesStatutsCourrierDepartActifs(): array
     {
-        return config('ged.parapheur_depart.statuts_courrier_depart_actifs', []);
+        return config('cosud.parapheur_depart.statuts_courrier_depart_actifs', []);
     }
 
     public function queryEligiblePour(User $user): Builder
