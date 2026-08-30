@@ -136,6 +136,54 @@ class FournisseurPrestataireTest extends TestCase
         $this->assertSame([], Storage::disk('local')->allFiles('fournisseurs-prestataires/'.$fiche->id));
     }
 
+    public function test_mise_a_jour_sans_contrat_ni_fiscal_supprime_les_scans(): void
+    {
+        Storage::fake('local');
+
+        $user = User::factory()->create();
+        $user->assignRole('dg');
+
+        $this->actingAs($user)
+            ->post(route('fournisseurs-prestataires.store', absolute: false), [
+                'nom' => 'Fiche Avec Scans',
+                'type' => 'prestataire',
+                'type_contrat' => 'Maintenance',
+                'a_contrat' => '1',
+                'a_dossier_fiscal' => '1',
+                'scan_contrat' => [UploadedFile::fake()->create('contrat.pdf', 40, 'application/pdf')],
+                'scan_fiscal' => [UploadedFile::fake()->create('fiscal.pdf', 40, 'application/pdf')],
+            ])
+            ->assertRedirect();
+
+        $fiche = FournisseurPrestataire::query()
+            ->where('nom_normalise', FournisseurPrestataire::normaliserNom('Fiche Avec Scans'))
+            ->firstOrFail();
+
+        $cheminContrat = $fiche->piecesContrat()[0]['chemin'];
+        $cheminFiscal = $fiche->piecesFiscal()[0]['chemin'];
+        Storage::disk('local')->assertExists($cheminContrat);
+        Storage::disk('local')->assertExists($cheminFiscal);
+
+        $this->actingAs($user)
+            ->put(route('fournisseurs-prestataires.update', $fiche, absolute: false), [
+                'nom' => 'Fiche Avec Scans',
+                'type' => 'prestataire',
+                'type_contrat' => 'Maintenance',
+                'actif' => '1',
+            ])
+            ->assertRedirect();
+
+        $fiche->refresh();
+        $this->assertFalse($fiche->a_contrat);
+        $this->assertFalse($fiche->a_dossier_fiscal);
+        $this->assertFalse($fiche->aScanContrat());
+        $this->assertFalse($fiche->aScanFiscal());
+        $this->assertSame([], $fiche->scan_contrat_pieces);
+        $this->assertSame([], $fiche->scan_fiscal_pieces);
+        Storage::disk('local')->assertMissing($cheminContrat);
+        Storage::disk('local')->assertMissing($cheminFiscal);
+    }
+
     public function test_contrat_formalise_exige_un_scan(): void
     {
         $user = User::factory()->create();

@@ -173,4 +173,26 @@ class CourrierActeursDgSeederTest extends TestCase
         $this->assertTrue($particulierAc->hasPermissionTo('dossiers.view'));
         $this->assertTrue($particulierAc->hasPermissionTo('courriers.view'));
     }
+
+    public function test_reseed_ne_reimpose_pas_changement_mot_de_passe(): void
+    {
+        $this->seed([
+            RoleAndPermissionSeeder::class,
+            StructureSeeder::class,
+            ACSIFonctionsSeeder::class,
+            CourrierReferentielSeeder::class,
+            CircuitCourrierSeeder::class,
+            CourrierActeursDgSeeder::class,
+        ]);
+
+        $directeur = User::where('email', '003057w@acsi.cg')->firstOrFail();
+        $directeur->update(['must_change_password' => false]);
+        $ancienHash = $directeur->password;
+
+        $this->seed(CourrierActeursDgSeeder::class);
+
+        $directeur->refresh();
+        $this->assertFalse($directeur->must_change_password);
+        $this->assertSame($ancienHash, $directeur->password);
+    }
 }

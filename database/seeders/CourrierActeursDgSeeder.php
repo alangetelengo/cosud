@@ -211,15 +211,20 @@ class CourrierActeursDgSeeder extends Seeder
                 $name = $existing->name;
             }
 
+            $attributs = [
+                'name' => $name,
+                'structure_id' => $acteur['structure']->id,
+                'actif' => true,
+            ];
+
+            if (! $existing) {
+                $attributs['password'] = $password;
+                $attributs['must_change_password'] = true;
+            }
+
             $user = User::updateOrCreate(
                 ['email' => $acteur['email']],
-                [
-                    'name' => $name,
-                    'password' => $password,
-                    'must_change_password' => true,
-                    'structure_id' => $acteur['structure']->id,
-                    'actif' => true,
-                ]
+                $attributs
             );
 
             $user->syncRoles([$acteur['role']]);

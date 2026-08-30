@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class FournisseurPrestataireService
@@ -114,6 +115,9 @@ class FournisseurPrestataireService
                     $this->stockerPieces($fiche, 'contrat', $scansContrat)
                 );
             }
+        } else {
+            $this->supprimerPieces($piecesContrat);
+            $piecesContrat = [];
         }
 
         $piecesFiscal = $fiche->piecesFiscal();
@@ -125,6 +129,9 @@ class FournisseurPrestataireService
                     $this->stockerPieces($fiche, 'fiscal', $scansFiscal)
                 );
             }
+        } else {
+            $this->supprimerPieces($piecesFiscal);
+            $piecesFiscal = [];
         }
 
         $fiche->update([
@@ -196,6 +203,21 @@ class FournisseurPrestataireService
         }
 
         return $pieces;
+    }
+
+    /**
+     * @param  list<array{chemin: string, nom: string}>  $pieces
+     */
+    private function supprimerPieces(array $pieces): void
+    {
+        foreach ($pieces as $piece) {
+            $chemin = $piece['chemin'] ?? null;
+            if (! is_string($chemin) || $chemin === '') {
+                continue;
+            }
+
+            Storage::disk('local')->delete($chemin);
+        }
     }
 
     public function desactiver(FournisseurPrestataire $fiche, User $acteur): FournisseurPrestataire

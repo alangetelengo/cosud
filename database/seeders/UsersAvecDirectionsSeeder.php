@@ -182,16 +182,23 @@ class UsersAvecDirectionsSeeder extends Seeder
                 ?? env('SEED_EMAIL_PROFESSIONNEL')
                 ?: null;
 
+            $existing = User::query()->where('email', $u['email'])->first();
+
+            $attributs = [
+                'name' => $u['name'],
+                'telephone' => $u['telephone'] ?? null,
+                'email_professionnel' => $emailPro,
+                'structure_id' => $structure?->id,
+            ];
+
+            if (! $existing) {
+                $attributs['password'] = Hash::make('password');
+                $attributs['must_change_password'] = true;
+            }
+
             $user = User::updateOrCreate(
                 ['email' => $u['email']],
-                [
-                    'name' => $u['name'],
-                    'password' => Hash::make('password'),
-                    'must_change_password' => true,
-                    'telephone' => $u['telephone'] ?? null,
-                    'email_professionnel' => $emailPro,
-                    'structure_id' => $structure?->id,
-                ]
+                $attributs
             );
 
             $roles = [$u['role']];
