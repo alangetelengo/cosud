@@ -176,8 +176,12 @@ class CourrierWorkflowNotification extends Notification
                 'body' => 'Le Directeur Général vous relance pour le traitement d\'un courrier en attente.',
             ],
             CourrierNotificationService::ENTREE_CHEQUE_SUIVI_DEPENSE => [
-                'title' => 'Entrée chèque — suivi des dépenses',
-                'body' => 'L’Agent comptable a établi un chèque : inscrivez-le sur la fiche de suivi des paiements.',
+                'title' => $this->courrier->estModePaiementOv()
+                    ? 'Entrée OV — suivi des dépenses'
+                    : 'Entrée chèque — suivi des dépenses',
+                'body' => $this->courrier->estModePaiementOv()
+                    ? 'L’Agent comptable a établi un ordre de virement : inscrivez-le sur la fiche de suivi des paiements.'
+                    : 'L’Agent comptable a établi un chèque : inscrivez-le sur la fiche de suivi des paiements.',
             ],
             CourrierNotificationService::FACTURE_ENREGISTREE_DG => [
                 'title' => 'Facture prestataire à traiter',

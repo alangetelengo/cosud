@@ -13,6 +13,7 @@ use App\Models\SuiviPaiement;
 use App\Models\TypeCourrier;
 use App\Models\User;
 use App\Services\CircuitCourrierMoteurService;
+use App\Services\SuiviFacturesFournisseursService;
 use Database\Seeders\CategorieDepenseSeeder;
 use Database\Seeders\CircuitCourrierSeeder;
 use Database\Seeders\CourrierReferentielSeeder;
@@ -175,6 +176,7 @@ class SuiviFacturesFournisseursTest extends TestCase
             'numero_ligne' => 1,
             'numero_annee' => (int) now()->year,
             'date_suivi' => now()->toDateString(),
+            'date_decharge' => now()->toDateString(),
             'intitule' => $courrier->objet,
             'montant' => 1_000_000,
             'fournisseur_libelle' => $courrier->expediteur_libelle,
@@ -236,6 +238,78 @@ class SuiviFacturesFournisseursTest extends TestCase
             ->assertSee('1 500 000', false)
             ->assertSee('1 000 000', false)
             ->assertSee('Reliquat à payer', false);
+    }
+
+    public function test_suivi_paye_uniquement_apres_decharge(): void
+    {
+        $taty = User::factory()->create();
+        $taty->assignRole('responsable_dossiers_prestataires');
+
+        $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+
+        $moteur = app(CircuitCourrierMoteurService::class);
+        $courrier = $moteur->instruire(
+            $this->demarrerFacture($dg, 'Facture OV sans décharge'),
+            $dg,
+            'BPA OV.',
+            $ac->id,
+            null,
+            null,
+            Courrier::MODE_PAIEMENT_OV,
+        );
+        $courrier->forceFill(['montant_facture' => 7_499_618])->save();
+
+        $moteur->envoyerChequeAuDg($courrier->fresh(), $ac, 'OV établi.', 7_499_618, [
+            'numero_piece' => 'OV-1090',
+            'banque' => 'BCH',
+            'beneficiaire_libelle' => $courrier->expediteur_libelle,
+        ]);
+
+        $this->actingAs($taty)
+            ->get(route('suivi-factures-fournisseurs.index', absolute: false))
+            ->assertOk()
+            ->assertSee('Facture OV sans décharge', false)
+            ->assertSee('7 499 618', false)
+            ->assertSee('Signature DG', false)
+            ->assertSee('DG signe l’ordre de virement → renvoi AC', false)
+            ->assertDontSee('Chèque en préparation', false)
+            ->assertDontSee('DG signe le chèque → renvoi AC', false);
+
+        $montants = app(SuiviFacturesFournisseursService::class)
+            ->montantsSurFacture($courrier->fresh(['suiviPaiements']));
+
+        $this->assertSame(7_499_618.0, $montants['montant_facture']);
+        $this->assertSame(0.0, $montants['montant_paye']);
+        $this->assertSame(7_499_618.0, $montants['reliquat']);
+    }
+
+    public function test_suivi_libelle_statut_ov_en_preparation(): void
+    {
+        $taty = User::factory()->create();
+        $taty->assignRole('responsable_dossiers_prestataires');
+
+        $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+
+        $moteur = app(CircuitCourrierMoteurService::class);
+        $moteur->instruire(
+            $this->demarrerFacture($dg, 'Facture OV statut'),
+            $dg,
+            'BPA OV.',
+            $ac->id,
+            null,
+            null,
+            Courrier::MODE_PAIEMENT_OV,
+        );
+
+        $this->actingAs($taty)
+            ->get(route('suivi-factures-fournisseurs.index', absolute: false))
+            ->assertOk()
+            ->assertSee('OV en préparation', false)
+            ->assertDontSee('Chèque en préparation', false);
     }
 
     private function creerDg(): User

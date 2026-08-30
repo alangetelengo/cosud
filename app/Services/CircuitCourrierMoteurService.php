@@ -468,7 +468,7 @@ class CircuitCourrierMoteurService
                 $cible,
                 $acteur,
                 'etape_suivante',
-                'Confié à '.implode(', ', $courrier->libellesAgentsConfies()).' — passage à : '.$cible->nom
+                'Confié à '.implode(', ', $courrier->libellesAgentsConfies()).' — passage à : '.$courrier->nomEtapeCircuitPourAffichage($cible)
             );
 
             JournalAudit::log('courrier.circuit.instruire', 'courriers', [
@@ -504,11 +504,19 @@ class CircuitCourrierMoteurService
     {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->code !== 'ac_etablit_cheque') {
-            throw new InvalidArgumentException('Aucune étape « AC établit le chèque » en cours sur ce courrier.');
+            throw new InvalidArgumentException(
+                $courrier->estModePaiementOv()
+                    ? 'Aucune étape « AC établit l’ordre de virement » en cours sur ce courrier.'
+                    : 'Aucune étape « AC établit le chèque » en cours sur ce courrier.'
+            );
         }
 
         if (! $this->peutAgir($courrier, $acteur)) {
-            throw new InvalidArgumentException('Vous n’êtes pas autorisé à envoyer le chèque au DG.');
+            throw new InvalidArgumentException(
+                $courrier->estModePaiementOv()
+                    ? 'Vous n’êtes pas autorisé à envoyer l’ordre de virement au DG.'
+                    : 'Vous n’êtes pas autorisé à envoyer le chèque au DG.'
+            );
         }
 
         if ($courrier->montant_facture !== null) {
@@ -550,11 +558,19 @@ class CircuitCourrierMoteurService
     {
         $etape = $courrier->circuitEtapeActuelle;
         if (! $etape || $etape->code !== 'dg_signe_cheque') {
-            throw new InvalidArgumentException('Aucune étape « DG signe le chèque » en cours sur ce courrier.');
+            throw new InvalidArgumentException(
+                $courrier->estModePaiementOv()
+                    ? 'Aucune étape « DG signe l’ordre de virement » en cours sur ce courrier.'
+                    : 'Aucune étape « DG signe le chèque » en cours sur ce courrier.'
+            );
         }
 
         if (! $this->peutAgir($courrier, $acteur)) {
-            throw new InvalidArgumentException('Vous n’êtes pas autorisé à confirmer la signature du chèque.');
+            throw new InvalidArgumentException(
+                $courrier->estModePaiementOv()
+                    ? 'Vous n’êtes pas autorisé à confirmer la signature de l’ordre de virement.'
+                    : 'Vous n’êtes pas autorisé à confirmer la signature du chèque.'
+            );
         }
 
         $commentaire = $message ?: (
@@ -820,7 +836,7 @@ class CircuitCourrierMoteurService
             $courrier->date_rejet = now();
             $courrier->save();
 
-            $this->historiser($courrier, $cible, $acteur, 'etape_suivante', 'Retour à : '.$cible->nom);
+            $this->historiser($courrier, $cible, $acteur, 'etape_suivante', 'Retour à : '.$courrier->nomEtapeCircuitPourAffichage($cible));
 
             $this->notifications->notifierRoles(
                 ['particulier_dg'],
@@ -907,7 +923,7 @@ class CircuitCourrierMoteurService
             $etaitCreerDepart = $etape->mouvement === CircuitCourrierEtape::MOUVEMENT_CREER_DEPART;
 
             try {
-                $courrier = $this->avancer($courrier, $acteur, $commentaire ?: ('Courrier réponse créé — '.$etape->nom));
+                $courrier = $this->avancer($courrier, $acteur, $commentaire ?: ('Courrier réponse créé — '.$courrier->nomEtapeCircuitPourAffichage($etape)));
             } catch (InvalidArgumentException) {
                 break;
             }
@@ -933,7 +949,7 @@ class CircuitCourrierMoteurService
                 $etape,
                 $acteur,
                 'avancement',
-                $commentaire ?: ('Étape validée : '.$etape->nom)
+                $commentaire ?: ('Étape validée : '.$courrier->nomEtapeCircuitPourAffichage($etape))
             );
 
             // Les destinataires confiés sont désignés à la sortie de l’étape d’instruction :
@@ -958,7 +974,7 @@ class CircuitCourrierMoteurService
             $courrier->save();
 
             if ($suivante) {
-                $this->historiser($courrier, $suivante, $acteur, 'etape_suivante', 'Passage à : '.$suivante->nom);
+                $this->historiser($courrier, $suivante, $acteur, 'etape_suivante', 'Passage à : '.$courrier->nomEtapeCircuitPourAffichage($suivante));
             } else {
                 $this->historiser($courrier, $etape, $acteur, 'cloture_circuit', 'Circuit terminé (plus d’étape suivante)');
             }
@@ -1013,7 +1029,7 @@ class CircuitCourrierMoteurService
             $courrier = $this->avancerUneEtape(
                 $courrier->fresh(['circuitEtapeActuelle', 'agentConfie']),
                 $acteur,
-                'Validation automatique : '.$etape->nom
+                'Validation automatique : '.$courrier->nomEtapeCircuitPourAffichage($etape)
             );
             $etape = $courrier->circuitEtapeActuelle;
         }
@@ -1063,7 +1079,11 @@ class CircuitCourrierMoteurService
             return;
         }
 
-        $detail = 'Étape en cours : '.$etape->nom.($etape->instructions_aide ? ' — '.$etape->instructions_aide : '');
+        $detail = 'Étape en cours : '.$courrier->nomEtapeCircuitPourAffichage($etape);
+        $instructionsAide = $courrier->instructionsAideEtapePourAffichage($etape);
+        if ($instructionsAide) {
+            $detail .= ' — '.$instructionsAide;
+        }
         if ($courrier->instructions_dg) {
             $detail .= ' | Instructions : '.$courrier->instructions_dg;
         }
@@ -1224,9 +1244,9 @@ class CircuitCourrierMoteurService
             ->map(fn (CircuitCourrierHistorique $h) => [
                 'evenement' => $h->evenement,
                 'libelle' => $labels[$h->evenement] ?? ucfirst(str_replace('_', ' ', $h->evenement)),
-                'commentaire' => $h->commentaire,
+                'commentaire' => $courrier->commentaireHistoriqueCircuitPourAffichage($h->commentaire),
                 'user' => $h->user?->name,
-                'etape' => $h->etape?->nom,
+                'etape' => $h->etape ? $courrier->nomEtapeCircuitPourAffichage($h->etape) : null,
                 'date' => $h->created_at,
             ])
             ->all();

@@ -53,12 +53,13 @@
     <div class="p-3 space-y-3">
         @if($courrier->circuitEtapeActuelle)
         <div class="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2">
-            <p class="text-xs font-bold text-amber-900">{{ $courrier->circuitEtapeActuelle->nom }}</p>
+            <p class="text-xs font-bold text-amber-900">{{ $courrier->nomEtapeCircuitPourAffichage($courrier->circuitEtapeActuelle) }}</p>
             <p class="text-[11px] text-amber-800/80 mt-0.5">{{ $moteur->libelleActeurPour($courrier, $courrier->circuitEtapeActuelle) }}
                 @if($courrier->circuit_etape_depuis) · {{ $courrier->circuit_etape_depuis->diffForHumans() }} @endif
             </p>
-            @if($courrier->circuitEtapeActuelle->instructions_aide)
-            <p class="text-[11px] text-amber-900 mt-1.5 leading-snug">{{ $courrier->circuitEtapeActuelle->instructions_aide }}</p>
+            @php $instructionsAideEtape = $courrier->instructionsAideEtapePourAffichage($courrier->circuitEtapeActuelle); @endphp
+            @if($instructionsAideEtape)
+            <p class="text-[11px] text-amber-900 mt-1.5 leading-snug">{{ $instructionsAideEtape }}</p>
             @endif
             @if($courrier->instructions_dg)
             <p class="text-[11px] text-amber-950 mt-1.5 leading-snug"><strong>Instructions :</strong> {{ $courrier->instructions_dg }}</p>
@@ -84,7 +85,7 @@
                 <div
                     class="h-2 flex-1 min-w-[1.25rem] rounded-full
                     {{ $item['statut'] === 'en_cours' ? 'bg-amber-400' : ($item['statut'] === 'terminee' ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-600') }}"
-                    title="{{ $e->ordre }}. {{ $e->nom }}"
+                    title="{{ $e->ordre }}. {{ $courrier->nomEtapeCircuitPourAffichage($e) }}"
                 ></div>
             @endforeach
         </div>
@@ -326,7 +327,7 @@
             @csrf
             <input type="text" name="commentaire" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1.5 text-xs dark:bg-slate-900" placeholder="Commentaire (optionnel)">
             <button type="button"
-                    onclick="flashAlert('Valider l’étape « {{ $courrier->circuitEtapeActuelle->nom }} » ?', this.closest('form'), {icon:'✓', danger:false, confirmText:'Valider l’étape', title:'Circuit métier'})"
+                    onclick="flashAlert('Valider l’étape « {{ $courrier->nomEtapeCircuitPourAffichage($courrier->circuitEtapeActuelle) }} » ?', this.closest('form'), {icon:'✓', danger:false, confirmText:'Valider l’étape', title:'Circuit métier'})"
                     class="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-700">
                 Valider l’étape
             </button>

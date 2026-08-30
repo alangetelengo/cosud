@@ -37,7 +37,7 @@
         </div>
         <div class="flex-1 min-w-[12rem]">
             <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Recherche</label>
-            <input type="search" name="q" value="{{ $q }}" placeholder="N° chèque, banque, bénéficiaire…" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm dark:bg-slate-900">
+            <input type="search" name="q" value="{{ $q }}" placeholder="N° pièce, banque, bénéficiaire…" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm dark:bg-slate-900">
         </div>
         <button type="submit" class="px-4 py-2 rounded-lg bg-slate-800 dark:bg-emerald-600 text-white text-sm font-semibold hover:bg-slate-900 dark:hover:bg-emerald-700">Filtrer</button>
     </form>
@@ -47,7 +47,7 @@
             <div>
                 <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100">Bordereau de transmission</h2>
                 <p class="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                    Chèques transmis pour signature (y compris en attente de décharge) — regroupement
+                    Pièces de paiement transmises pour signature (chèque ou OV, y compris en attente de décharge) — regroupement
                     <span class="font-semibold text-slate-700 dark:text-slate-200">{{ strtolower($periodeLibelle) }}</span>.
                 </p>
             </div>
@@ -105,7 +105,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-4 py-10 text-center text-slate-500">Aucun chèque enregistré pour cette période.</td>
+                            <td colspan="7" class="px-4 py-10 text-center text-slate-500">Aucune pièce enregistrée pour cette période.</td>
                         </tr>
                     @endforelse
                 </tbody>

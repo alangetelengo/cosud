@@ -159,6 +159,74 @@ class Courrier extends Model
         };
     }
 
+    public function nomEtapeCircuitPourAffichage(?CircuitCourrierEtape $etape): string
+    {
+        if ($etape === null) {
+            return '—';
+        }
+
+        if (! $this->necessiteChoixModePaiementCircuit()) {
+            return $etape->nom;
+        }
+
+        return match ($etape->code) {
+            'ac_etablit_cheque' => $this->estModePaiementOv()
+                ? 'AC établit l’ordre de virement → envoi DG'
+                : $etape->nom,
+            'dg_signe_cheque' => $this->estModePaiementOv()
+                ? 'DG signe l’ordre de virement → renvoi AC'
+                : $etape->nom,
+            'preuve_paiement' => $this->estModePaiementOv()
+                ? 'AC — enregistrement accusé banque / paiement (clôture)'
+                : $etape->nom,
+            default => $etape->nom,
+        };
+    }
+
+    public function instructionsAideEtapePourAffichage(?CircuitCourrierEtape $etape): ?string
+    {
+        if ($etape === null) {
+            return null;
+        }
+
+        if (! $this->necessiteChoixModePaiementCircuit()) {
+            return $etape->instructions_aide;
+        }
+
+        return match ($etape->code) {
+            'instructions_dg' => $this->estModePaiementOv()
+                ? 'Le DG donne son Bon pour accord (ordre de virement). L’AC est notifié pour établir l’OV ; la responsable dossiers suit en parallèle.'
+                : $etape->instructions_aide,
+            'ac_etablit_cheque' => $this->estModePaiementOv()
+                ? 'L’AC établit l’ordre de virement et l’envoie au DG pour signature (sans scan dans COSUD).'
+                : $etape->instructions_aide,
+            'dg_signe_cheque' => $this->estModePaiementOv()
+                ? 'Le DG confirme que l’ordre de virement est signé (sans scan) et renvoie le dossier à l’AC pour l’accusé de réception banque.'
+                : $etape->instructions_aide,
+            'preuve_paiement' => $this->estModePaiementOv()
+                ? 'À réception de la banque : saisir la date, joindre l’accusé de réception. Cette action clôture le circuit. Mme Eleni contrôlera ensuite les pièces hors circuit.'
+                : $etape->instructions_aide,
+            default => $etape->instructions_aide,
+        };
+    }
+
+    public function commentaireHistoriqueCircuitPourAffichage(?string $commentaire): ?string
+    {
+        if ($commentaire === null || ! $this->estModePaiementOv()) {
+            return $commentaire;
+        }
+
+        $remplacements = [
+            'AC établit le chèque → envoi DG' => 'AC établit l’ordre de virement → envoi DG',
+            'DG signe le chèque → renvoi AC' => 'DG signe l’ordre de virement → renvoi AC',
+            'AC — enregistrement décharge / paiement (clôture)' => 'AC — enregistrement accusé banque / paiement (clôture)',
+            'Le DG confirme que le chèque est signé (sans scan) et renvoie le dossier à l’AC pour la décharge bénéficiaire.' => 'Le DG confirme que l’ordre de virement est signé (sans scan) et renvoie le dossier à l’AC pour l’accusé de réception banque.',
+            'L’AC établit le chèque et l’envoie au DG pour signature (sans scan dans COSUD).' => 'L’AC établit l’ordre de virement et l’envoie au DG pour signature (sans scan dans COSUD).',
+        ];
+
+        return str_replace(array_keys($remplacements), array_values($remplacements), $commentaire);
+    }
+
     public function circuit(): BelongsTo
     {
         return $this->belongsTo(CircuitCourrier::class, 'circuit_courrier_id');
@@ -613,6 +681,40 @@ class Courrier extends Model
             || $user->hasRole('responsable_dossiers_prestataires');
     }
 
+    public function estEngageDansCircuit(): bool
+    {
+        if ($this->circuit_courrier_id === null) {
+            return false;
+        }
+
+        if ($this->circuit_etape_actuelle_id !== null) {
+            return true;
+        }
+
+        return $this->circuitHistoriques()->exists();
+    }
+
+    public function estAnnulationBloqueeParCircuit(): bool
+    {
+        if ($this->circuit_courrier_id === null) {
+            return false;
+        }
+
+        $this->loadMissing('circuitEtapeActuelle');
+
+        if (filled($this->instructions_dg)) {
+            return true;
+        }
+
+        $code = $this->circuitEtapeActuelle?->code;
+
+        if ($code === null) {
+            return true;
+        }
+
+        return ! in_array($code, ['enregistrement', 'instructions_dg'], true);
+    }
+
     public function peutAnnulerEnregistrement(User $user): bool
     {
         if (in_array($this->statutCourrier?->code, ['cloture', 'archive', 'annule'], true)) {
@@ -620,6 +722,10 @@ class Courrier extends Model
         }
 
         if ($this->estArrivee()) {
+            if ($this->estAnnulationBloqueeParCircuit()) {
+                return false;
+            }
+
             if (! $this->peutTransitionnerVers('annule')) {
                 return false;
             }
@@ -652,6 +758,10 @@ class Courrier extends Model
 
     public function peutSupprimerEnregistrement(): bool
     {
+        if ($this->estEngageDansCircuit()) {
+            return false;
+        }
+
         if ($this->est_regularisation) {
             return false;
         }

@@ -319,9 +319,16 @@ class CircuitCourrierInstructionAgentTest extends TestCase
         Notification::assertSentTo(
             $suivi,
             CourrierWorkflowNotification::class,
-            function (CourrierWorkflowNotification $notification) use ($courrier): bool {
-                return $notification->type === CourrierNotificationService::ENTREE_CHEQUE_SUIVI_DEPENSE
-                    && $notification->courrier->id === $courrier->id;
+            function (CourrierWorkflowNotification $notification) use ($courrier, $suivi): bool {
+                if ($notification->type !== CourrierNotificationService::ENTREE_CHEQUE_SUIVI_DEPENSE
+                    || $notification->courrier->id !== $courrier->id) {
+                    return false;
+                }
+
+                $payload = $notification->toArray($suivi);
+
+                return ($payload['message_title'] ?? '') === 'Entrée chèque — suivi des dépenses'
+                    && str_contains((string) ($payload['message_body'] ?? ''), 'chèque');
             }
         );
     }

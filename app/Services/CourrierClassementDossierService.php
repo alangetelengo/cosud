@@ -20,15 +20,13 @@ class CourrierClassementDossierService
 {
     private const LIMITE_SELECTEUR = 400;
 
-    /** Rôles de la direction / circuit qui doivent pouvoir réutiliser le dossier classé. */
+    /** Rôles SEC-DIR / circuit DG qui réutilisent le dossier classé (hors AC / caissier DAC). */
     private const ROLES_PARTAGE_DIRECTION = [
         'secretaire_direction',
         'particulier_dg',
         'particulier_ac',
         'responsable_dossiers_prestataires',
         'responsable_suivi_depenses',
-        'agent_comptable',
-        'caissier',
     ];
 
     public const COMMENTAIRE_PARTAGE_AUTO = 'cosud:auto-classement-direction';
@@ -104,6 +102,146 @@ class CourrierClassementDossierService
             return strcasecmp((string) $d->nom, $libelle) === 0
                 || str_contains(mb_strtolower((string) $d->nom), mb_strtolower($libelle));
         });
+    }
+
+    /**
+     * Classe une facture dans le dossier du fournisseur (1 fiche référentiel = 1 dossier).
+     */
+    public function classerFactureFournisseur(Courrier $courrier, User $user): Dossier
+    {
+        if ($courrier->typeCourrier?->code !== 'facture') {
+            throw ValidationException::withMessages([
+                'mode' => 'Le classement automatique est réservé aux factures.',
+            ]);
+        }
+
+        $courrier->loadMissing('fournisseurPrestataire.dossier');
+
+        $fiche = $courrier->fournisseurPrestataire;
+        $ficheDossier = $fiche?->dossier;
+
+        if ($fiche?->dossier_id) {
+            if (! $ficheDossier || ! $ficheDossier->actif) {
+                throw ValidationException::withMessages([
+                    'nom_dossier' => 'Le dossier référentiel de cette fiche fournisseur est introuvable ou inactif.',
+                ]);
+            }
+
+            if (! $this->peutClasserDans($user, $ficheDossier)) {
+                throw ValidationException::withMessages([
+                    'nom_dossier' => 'Cette fiche est déjà liée au dossier « '.$ficheDossier->nom.' ». Demandez un partage avec droit d’écriture au propriétaire du dossier.',
+                ]);
+            }
+
+            return $this->classer($courrier, $user, [
+                'mode' => 'existant',
+                'dossier_id' => $ficheDossier->id,
+            ]);
+        }
+
+        if ($fiche instanceof FournisseurPrestataire) {
+            return $this->classerFactureAvecFicheSansDossier($courrier, $user, $fiche);
+        }
+
+        $suggere = $this->suggererDossier($user, $courrier);
+        if ($suggere) {
+            return $this->classer($courrier, $user, [
+                'mode' => 'existant',
+                'dossier_id' => $suggere->id,
+            ]);
+        }
+
+        $nom = trim((string) ($courrier->expediteur_libelle ?? ''));
+        if ($nom === '') {
+            throw ValidationException::withMessages([
+                'nom_dossier' => 'Indiquez le fournisseur ou rattachez une fiche référentiel avant le classement.',
+            ]);
+        }
+
+        return $this->classer($courrier, $user, [
+            'mode' => 'nouveau',
+            'nom_dossier' => $nom,
+        ]);
+    }
+
+    /**
+     * Dossier cible pour l’affichage UI (facture) — pas de correspondance partielle si fiche référentiel.
+     */
+    public function dossierCibleAffichageFacture(Courrier $courrier, User $user): ?Dossier
+    {
+        if ($courrier->typeCourrier?->code !== 'facture') {
+            return null;
+        }
+
+        $courrier->loadMissing('fournisseurPrestataire.dossier');
+
+        $ficheDossier = $courrier->fournisseurPrestataire?->dossier;
+        if ($ficheDossier?->actif) {
+            return $ficheDossier;
+        }
+
+        $fiche = $courrier->fournisseurPrestataire;
+        if ($fiche instanceof FournisseurPrestataire) {
+            $nom = trim($fiche->nom);
+
+            return $nom !== '' ? $this->trouverDossierEcritureParNomExact($user, $nom) : null;
+        }
+
+        return $this->suggererDossier($user, $courrier);
+    }
+
+    private function classerFactureAvecFicheSansDossier(Courrier $courrier, User $user, FournisseurPrestataire $fiche): Dossier
+    {
+        $nom = trim($fiche->nom);
+        if ($nom === '') {
+            throw ValidationException::withMessages([
+                'nom_dossier' => 'La fiche référentiel n’a pas de nom exploitable pour créer le dossier.',
+            ]);
+        }
+
+        $exact = $this->trouverDossierEcritureParNomExact($user, $nom);
+        if ($exact) {
+            return $this->classer($courrier, $user, [
+                'mode' => 'existant',
+                'dossier_id' => $exact->id,
+            ]);
+        }
+
+        return $this->classer($courrier, $user, [
+            'mode' => 'nouveau',
+            'nom_dossier' => $nom,
+        ]);
+    }
+
+    private function trouverDossierEcritureParNomExact(User $user, string $nom): ?Dossier
+    {
+        $nom = trim($nom);
+        if ($nom === '') {
+            return null;
+        }
+
+        return $this->requeteDossiersEcriturePotentielle($user)
+            ->whereRaw('LOWER(nom) = ?', [mb_strtolower($nom)])
+            ->orderBy('nom')
+            ->limit(30)
+            ->get()
+            ->first(fn (Dossier $d) => $this->peutClasserDans($user, $d));
+    }
+
+    public function estFactureClasseeCanoniquement(Courrier $courrier): bool
+    {
+        if ($courrier->typeCourrier?->code !== 'facture' || ! $courrier->dossier_id) {
+            return false;
+        }
+
+        $courrier->loadMissing('fournisseurPrestataire');
+
+        $ficheDossierId = $courrier->fournisseurPrestataire?->dossier_id;
+        if (! $ficheDossierId) {
+            return false;
+        }
+
+        return (int) $courrier->dossier_id === (int) $ficheDossierId;
     }
 
     /**
@@ -214,6 +352,49 @@ class CourrierClassementDossierService
             'acteur_id' => $acteur->id,
             'beneficiaires' => $userIds->all(),
         ]);
+    }
+
+    /**
+     * Retire les partages auto de classement pour l’AC et le caissier (hors périmètre SEC-DIR).
+     *
+     * @return list<array{id: int, dossier_id: int, user_id: int, user_email: string|null, dossier_nom: string|null}>
+     */
+    public function listerPartagesAutoAcCaissier(): array
+    {
+        return DossierPartage::query()
+            ->with(['user:id,email', 'dossier:id,nom'])
+            ->where('commentaire', self::COMMENTAIRE_PARTAGE_AUTO)
+            ->whereHas('user', function ($query): void {
+                $query->role(['agent_comptable', 'caissier']);
+            })
+            ->orderBy('dossier_id')
+            ->get()
+            ->map(fn (DossierPartage $partage): array => [
+                'id' => (int) $partage->id,
+                'dossier_id' => (int) $partage->dossier_id,
+                'user_id' => (int) $partage->user_id,
+                'user_email' => $partage->user?->email,
+                'dossier_nom' => $partage->dossier?->nom,
+            ])
+            ->all();
+    }
+
+    public function retirerPartagesAutoAcCaissier(): int
+    {
+        $ids = collect($this->listerPartagesAutoAcCaissier())->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+
+        $supprimes = DossierPartage::query()->whereIn('id', $ids)->delete();
+
+        Log::channel('cosud')->info('Retrait partages auto AC/caissier après classement courrier', [
+            'nb' => $supprimes,
+            'partage_ids' => $ids->all(),
+        ]);
+
+        return (int) $supprimes;
     }
 
     /**
@@ -339,6 +520,10 @@ class CourrierClassementDossierService
         $courrier->loadMissing('fournisseurPrestataire');
         $fiche = $courrier->fournisseurPrestataire;
         if (! $fiche instanceof FournisseurPrestataire) {
+            return;
+        }
+
+        if ($fiche->dossier_id && (int) $fiche->dossier_id !== (int) $dossier->id) {
             return;
         }
 

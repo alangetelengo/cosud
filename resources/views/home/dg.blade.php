@@ -114,7 +114,7 @@
                         n° {{ $c->numeroRegistreComplet() }} — {{ $c->objet }}
                     </a>
                     <p class="text-xs text-amber-900/70 dark:text-amber-200/70 mt-0.5">
-                        Étape : {{ $c->circuitEtapeActuelle?->nom ?? '—' }}
+                        Étape : {{ $c->nomEtapeCircuitPourAffichage($c->circuitEtapeActuelle) }}
                         · Responsable : {{ $c->circuitEtapeActuelle?->libelleActeur() ?? '—' }}
                         · Depuis {{ $c->circuit_etape_depuis?->diffForHumans() }}
                     </p>

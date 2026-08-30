@@ -2,18 +2,23 @@
 
 namespace Tests\Feature;
 
+use App\Models\CircuitCourrier;
 use App\Models\Courrier;
 use App\Models\CourrierVentilationDestinataire;
 use App\Models\Document;
+use App\Models\PrioriteCourrier;
 use App\Models\SensCourrier;
 use App\Models\StatutCourrier;
 use App\Models\Structure;
+use App\Models\TypeCourrier;
 use App\Models\TypeDocument;
 use App\Models\User;
 use App\Notifications\CourrierWorkflowNotification;
+use App\Services\CircuitCourrierMoteurService;
 use App\Services\CourrierFilService;
 use App\Services\CourrierNotificationService;
 use App\Support\ReturnUrl;
+use Database\Seeders\CircuitCourrierSeeder;
 use Database\Seeders\CourrierReferentielSeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Database\Seeders\StatutDocumentSeeder;
@@ -933,6 +938,58 @@ class CourrierModuleTest extends TestCase
         $this->assertDatabaseMissing('courriers', ['id' => $arrivee->id]);
     }
 
+    public function test_circuit_facture_apres_instructions_masque_annuler_et_supprimer(): void
+    {
+        $this->seed(CircuitCourrierSeeder::class);
+
+        $dg = User::factory()->create(['structure_id' => Structure::where('code', 'DG')->value('id')]);
+        $dg->assignRole('dg');
+        $particuliere = $this->creerParticuliereDg();
+        $ac = User::factory()->create(['structure_id' => Structure::where('code', 'DAF')->value('id')]);
+        $ac->assignRole('agent_comptable');
+
+        $courrier = $this->demarrerFactureCircuit($dg);
+        app(CircuitCourrierMoteurService::class)->instruire(
+            $courrier,
+            $dg,
+            'Bon pour accord.',
+            $ac->id,
+        );
+
+        $courrier->refresh();
+        $this->assertSame('ac_etablit_cheque', $courrier->circuitEtapeActuelle?->code);
+        $this->assertFalse($courrier->peutAnnulerEnregistrement($particuliere));
+        $this->assertFalse($courrier->peutSupprimerEnregistrementPar($particuliere));
+
+        $this->actingAs($particuliere)
+            ->get(route('courriers.show', $courrier, absolute: false))
+            ->assertOk()
+            ->assertDontSee('action-annuler-courrier', false)
+            ->assertDontSee('action-supprimer-courrier', false);
+
+        $this->actingAs($particuliere)
+            ->post(route('courriers.annuler', $courrier, absolute: false), [
+                'motif_annulation' => 'Trop tard',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($particuliere)
+            ->delete(route('courriers.destroy', $courrier, absolute: false))
+            ->assertForbidden();
+    }
+
+    public function test_circuit_facture_avant_instructions_dg_autorise_annulation(): void
+    {
+        $this->seed(CircuitCourrierSeeder::class);
+
+        $particuliere = $this->creerParticuliereDg();
+        $courrier = $this->demarrerFactureCircuit($particuliere);
+
+        $this->assertSame('instructions_dg', $courrier->circuitEtapeActuelle?->code);
+        $this->assertTrue($courrier->peutAnnulerEnregistrement($particuliere));
+        $this->assertFalse($courrier->peutSupprimerEnregistrementPar($particuliere));
+    }
+
     public function test_courrier_arrivee_cloture_ne_peut_pas_etre_supprime(): void
     {
         $particuliere = $this->creerParticuliereDg();
@@ -1245,5 +1302,31 @@ class CourrierModuleTest extends TestCase
         $user->assignRole('secretaire_direction');
 
         return $user;
+    }
+
+    private function demarrerFactureCircuit(User $acteur): Courrier
+    {
+        $type = TypeCourrier::where('code', 'facture')->firstOrFail();
+        $sens = SensCourrier::where('code', SensCourrier::ARRIVEE)->firstOrFail();
+        $statut = StatutCourrier::where('code', 'recu')->firstOrFail();
+        $circuit = CircuitCourrier::where('code', 'facture_prestataire')->firstOrFail();
+
+        $courrier = Courrier::create([
+            'sens_courrier_id' => $sens->id,
+            'type_courrier_id' => $type->id,
+            'statut_courrier_id' => $statut->id,
+            'priorite_courrier_id' => PrioriteCourrier::where('code', 'normale')->value('id'),
+            'numero_registre' => (int) Courrier::query()->max('numero_registre') + 1,
+            'numero_registre_annee' => (int) now()->format('Y'),
+            'objet' => 'Facture circuit annulation',
+            'expediteur_libelle' => 'FOURNISSEUR TEST',
+            'montant_facture' => 500_000,
+            'origine' => 'externe',
+            'createur_id' => $acteur->id,
+            'structure_id' => $acteur->structure_id,
+            'service_demandeur_structure_id' => Structure::where('code', 'DAF')->value('id'),
+        ]);
+
+        return app(CircuitCourrierMoteurService::class)->demarrer($courrier, $circuit, $acteur);
     }
 }

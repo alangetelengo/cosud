@@ -23,7 +23,7 @@ class CircuitCourrierSeeder extends Seeder
             ['code' => 'facture_prestataire'],
             [
                 'libelle' => 'Factures prestataires / fournisseurs',
-                'description' => 'Circuit A : BPA DG → AC établit chèque → DG signe (sans scan) → AC enregistre décharge (bordereau) → contrôle Eleni / clôture. Taty suit en parallèle.',
+                'description' => 'Circuit A : BPA DG (chèque ou OV) → AC établit la pièce → DG signe (sans scan) → AC enregistre décharge ou accusé banque → contrôle Eleni / clôture. Taty suit en parallèle.',
                 'sens_initial' => CircuitCourrier::SENS_ARRIVEE,
                 'actif' => true,
             ]
@@ -50,7 +50,7 @@ class CircuitCourrierSeeder extends Seeder
                 'action' => CircuitCourrierEtape::ACTION_INSTRUIRE,
                 'mouvement' => CircuitCourrierEtape::MOUVEMENT_AUCUN,
                 'notifie_roles' => ['particulier_dg', 'particulier_ac', 'agent_comptable', 'responsable_dossiers_prestataires'],
-                'instructions_aide' => 'Le DG donne son Bon pour accord. L’AC est notifié pour établir le chèque ; la responsable dossiers suit en parallèle.',
+                'instructions_aide' => 'Le DG donne son Bon pour accord et choisit le mode de paiement (chèque ou ordre de virement). L’AC est notifié ; la responsable dossiers suit en parallèle.',
             ],
             [
                 'ordre' => 3,

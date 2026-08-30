@@ -400,50 +400,87 @@
                     @include('courriers.partials.actions-annuler-supprimer')
                     @can('classerDossier', $courrier)
                     @php
-                        $estClassementFacture = ($courrier->typeCourrier?->code === 'facture');
+                        $estClassementFacture = $estClassementFacture ?? ($courrier->typeCourrier?->code === 'facture');
                         $libelleBlocClassement = $estClassementFacture ? 'Dossier fournisseur' : 'Dossier de classement';
+                        $nomFournisseurClassement = trim((string) ($courrier->fournisseurPrestataire?->nom ?? $courrier->expediteur_libelle ?? ''));
+                        $cibleClassementFacture = $dossierSuggere?->chemin_complet
+                            ?? ($nomFournisseurClassement !== '' ? $nomFournisseurClassement : null);
                     @endphp
                     <div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/20 p-3 space-y-2"
-                         x-data="{ mode: @js(old('mode', $courrier->dossier_id ? 'existant' : ($dossierSuggere ? 'existant' : 'nouveau'))) }">
+                         @unless($estClassementFacture) x-data="{ mode: @js(old('mode', $courrier->dossier_id ? 'existant' : ($dossierSuggere ? 'existant' : 'nouveau'))) }" @endunless>
                         <p class="text-xs font-semibold text-emerald-900 dark:text-emerald-200">{{ $libelleBlocClassement }}</p>
                         @if($courrier->dossier)
                             <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-                                Classé dans
+                                @if($estClassementFacture && ($factureClasseeCanoniquement ?? false))
+                                    Classée dans le dossier référentiel du fournisseur :
+                                @else
+                                    Classé dans
+                                @endif
                                 <a href="{{ route('dossiers.show', $courrier->dossier) }}" class="font-semibold text-emerald-700 dark:text-emerald-300 no-underline hover:underline">
                                     {{ $courrier->dossier->chemin_complet }}
                                 </a>
                             </p>
+                            @if($estClassementFacture && ($factureClasseeCanoniquement ?? false))
+                                <a href="{{ route('dossiers.show', $courrier->dossier) }}"
+                                   class="w-full inline-flex justify-center px-3 py-2 rounded-lg border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-xs font-semibold no-underline hover:bg-emerald-100/80 dark:hover:bg-emerald-900/30">
+                                    Ouvrir le dossier fournisseur
+                                </a>
+                            @endif
+                            @unless($estClassementFacture)
                             <button type="button"
                                     @click="form = form === 'classer-dossier' ? null : 'classer-dossier'"
                                     class="w-full px-3 py-2 rounded-lg border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-xs font-semibold">
                                 <span x-text="form === 'classer-dossier' ? 'Fermer' : 'Reclasser'"></span>
                             </button>
+                            @endunless
                         @else
-                            <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug" x-show="form !== 'classer-dossier'">
+                            <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug" @unless($estClassementFacture) x-show="form !== 'classer-dossier'" @endunless>
                                 @if($estClassementFacture)
-                                    Non classée — rattachez la facture au dossier du fournisseur (fiche référentiel = 1 dossier).
+                                    Non classée — la facture sera rattachée au dossier du fournisseur (1 fiche référentiel = 1 dossier).
                                 @else
-                                    Non classé — créez un dossier ou réutilisez un dossier existant (partagé avec la direction).
+                                    Le dossier créé ou choisi est partagé en lecture/écriture avec le secrétariat DG et le suivi des dépenses.
                                 @endif
                             </p>
+                            @unless($estClassementFacture)
                             <button type="button"
                                     x-show="form !== 'classer-dossier'"
                                     @click="form = 'classer-dossier'"
                                     class="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold">
                                 Classer dans un dossier
                             </button>
+                            @endunless
                         @endif
 
+                        @if($estClassementFacture && ! ($factureClasseeCanoniquement ?? false))
+                        <form method="post" action="{{ route('courriers.classer-dossier', $courrier) }}"
+                              data-loading-text="Classement..."
+                              class="space-y-2 {{ $courrier->dossier ? '' : 'pt-0' }}">
+                            @csrf
+                            <input type="hidden" name="mode" value="auto">
+                            @if($cibleClassementFacture)
+                                <p class="text-[11px] text-slate-500 leading-snug">
+                                    @if($dossierSuggere)
+                                        Dossier cible : <span class="font-semibold text-slate-700 dark:text-slate-200">{{ $cibleClassementFacture }}</span>
+                                    @else
+                                        Un dossier « <span class="font-semibold text-slate-700 dark:text-slate-200">{{ $cibleClassementFacture }}</span> » sera créé et lié à la fiche référentiel.
+                                    @endif
+                                </p>
+                            @endif
+                            <button type="button"
+                                    data-loading-text="Classement..."
+                                    onclick="flashAlert(@js($courrier->dossier ? 'Reclasser cette facture dans le dossier du fournisseur (fiche référentiel) ?' : 'Classer cette facture dans le dossier du fournisseur ? Les pièces jointes y seront rattachées.'), this.closest('form'), {icon:'📁', danger:false, confirmText:'Classer', title:'Classement facture'})"
+                                    class="w-full px-3 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm border border-emerald-700">
+                                {{ $courrier->dossier ? 'Reclasser dans le dossier fournisseur' : 'Classer dans le dossier fournisseur' }}
+                            </button>
+                            @error('nom_dossier')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                        </form>
+                        @else
                         <form x-show="form === 'classer-dossier'" x-cloak method="post" action="{{ route('courriers.classer-dossier', $courrier) }}"
                               data-loading-text="Classement..."
                               class="space-y-2 pt-2 border-t border-emerald-200 dark:border-emerald-800">
                             @csrf
                             <p class="text-[11px] text-slate-500 leading-snug">
-                                @if($estClassementFacture)
-                                    Classement hors circuit paiement : la facture et ses pièces sont rattachées au dossier COSUD du fournisseur (lié à la fiche référentiel).
-                                @else
-                                    Le dossier créé ou choisi est partagé en lecture/écriture avec la direction pour éviter les doublons.
-                                @endif
+                                Le dossier créé ou choisi est partagé en lecture/écriture avec le secrétariat DG et le suivi des dépenses.
                             </p>
                             <div class="flex flex-col gap-1.5">
                                 <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
@@ -496,11 +533,12 @@
 
                             <button type="button"
                                     data-loading-text="Classement..."
-                                    onclick="flashAlert('Classer ce courrier dans le dossier sélectionné ? Les pièces jointes y seront rattachées et le dossier partagé avec la direction.', this.closest('form'), {icon:'📁', danger:false, confirmText:'Classer', title:'Classement dossier'})"
+                                    onclick="flashAlert('Classer ce courrier dans le dossier sélectionné ? Les pièces jointes y seront rattachées et le dossier partagé avec le secrétariat DG.', this.closest('form'), {icon:'📁', danger:false, confirmText:'Classer', title:'Classement dossier'})"
                                     class="w-full px-3 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm border border-emerald-700">
                                 Confirmer le classement
                             </button>
                         </form>
+                        @endif
                     </div>
                     @endcan
                     @if($courrier->estArrivee())

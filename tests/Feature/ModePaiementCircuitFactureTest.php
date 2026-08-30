@@ -66,6 +66,8 @@ class ModePaiementCircuitFactureTest extends TestCase
         $dg = $this->creerDg();
         $ac = User::factory()->create(['structure_id' => Structure::where('code', 'DAF')->value('id')]);
         $ac->assignRole('agent_comptable');
+        $suivi = User::factory()->create();
+        $suivi->assignRole('responsable_suivi_depenses');
 
         $courrier = $this->demarrerFacture($dg, 'ACS Services');
 
@@ -97,7 +99,10 @@ class ModePaiementCircuitFactureTest extends TestCase
             ->assertOk()
             ->assertSee('Envoyer l’ordre de virement au DG', false)
             ->assertSee('Saisir les références de l’OV', false)
-            ->assertSee('N° / réf. OV', false);
+            ->assertSee('N° / réf. OV', false)
+            ->assertSee('AC établit l’ordre de virement → envoi DG', false)
+            ->assertSee('L’AC établit l’ordre de virement et l’envoie au DG pour signature', false)
+            ->assertDontSee('AC établit le chèque → envoi DG', false);
 
         $this->actingAs($ac)
             ->post(route('courriers.circuit.envoyer-cheque', $courrier, absolute: false), [
@@ -108,6 +113,22 @@ class ModePaiementCircuitFactureTest extends TestCase
                 'scans_cheque' => [UploadedFile::fake()->create('ov.pdf', 40, 'application/pdf')],
             ])
             ->assertRedirect();
+
+        Notification::assertSentTo(
+            $suivi,
+            CourrierWorkflowNotification::class,
+            function (CourrierWorkflowNotification $notification) use ($courrier, $suivi): bool {
+                if ($notification->type !== CourrierNotificationService::ENTREE_CHEQUE_SUIVI_DEPENSE) {
+                    return false;
+                }
+
+                $payload = $notification->toArray($suivi);
+
+                return $notification->courrier->id === $courrier->id
+                    && ($payload['message_title'] ?? '') === 'Entrée OV — suivi des dépenses'
+                    && str_contains((string) ($payload['message_body'] ?? ''), 'ordre de virement');
+            }
+        );
 
         $courrier->refresh();
         $this->assertSame('dg_signe_cheque', $courrier->circuitEtapeActuelle?->code);
@@ -151,7 +172,10 @@ class ModePaiementCircuitFactureTest extends TestCase
             ->get(route('courriers.show', $courrier->fresh(), absolute: false))
             ->assertOk()
             ->assertSee('Confirmer la signature de l’ordre de virement', false)
-            ->assertSee('OV signé — renvoyer à l’AC', false);
+            ->assertSee('OV signé — renvoyer à l’AC', false)
+            ->assertSee('DG signe l’ordre de virement → renvoi AC', false)
+            ->assertSee('Le DG confirme que l’ordre de virement est signé', false)
+            ->assertDontSee('DG signe le chèque → renvoi AC', false);
 
         $this->actingAs($dg)
             ->post(route('courriers.circuit.signer-cheque', $courrier, absolute: false), [

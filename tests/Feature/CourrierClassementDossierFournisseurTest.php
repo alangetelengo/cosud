@@ -6,6 +6,7 @@ use App\Models\CircuitCourrier;
 use App\Models\Courrier;
 use App\Models\Document;
 use App\Models\Dossier;
+use App\Models\DossierPartage;
 use App\Models\FournisseurPrestataire;
 use App\Models\PrioriteCourrier;
 use App\Models\SensCourrier;
@@ -59,8 +60,7 @@ class CourrierClassementDossierFournisseurTest extends TestCase
         $this->actingAs($taty)
             ->from(route('courriers.show', $courrier, absolute: false))
             ->post(route('courriers.classer-dossier', $courrier, absolute: false), [
-                'mode' => 'nouveau',
-                'nom_dossier' => 'AF.COM',
+                'mode' => 'auto',
             ])
             ->assertRedirect()
             ->assertSessionHas('success');
@@ -96,8 +96,7 @@ class CourrierClassementDossierFournisseurTest extends TestCase
 
         $this->actingAs($taty)
             ->post(route('courriers.classer-dossier', $courrier, absolute: false), [
-                'mode' => 'existant',
-                'dossier_id' => $dossier->id,
+                'mode' => 'auto',
             ])
             ->assertRedirect()
             ->assertSessionHas('success');
@@ -116,8 +115,7 @@ class CourrierClassementDossierFournisseurTest extends TestCase
 
         $this->actingAs($ac)
             ->post(route('courriers.classer-dossier', $courrier, absolute: false), [
-                'mode' => 'nouveau',
-                'nom_dossier' => 'Interdit',
+                'mode' => 'auto',
             ])
             ->assertForbidden();
     }
@@ -146,7 +144,7 @@ class CourrierClassementDossierFournisseurTest extends TestCase
         $this->assertSame('PNR MAD', $courrier->fresh()->dossier->nom);
     }
 
-    public function test_particulier_dg_secretaire_et_eleni_ne_peuvent_pas_classer_une_facture(): void
+    public function test_secretaire_et_particulier_dg_peuvent_classer_une_facture(): void
     {
         $dg = $this->creerDg();
         $ac = User::factory()->create();
@@ -154,19 +152,43 @@ class CourrierClassementDossierFournisseurTest extends TestCase
         $courrier = app(CircuitCourrierMoteurService::class)
             ->instruire($this->demarrerFacture($dg, 'Facture rôles classement'), $dg, 'BPA.', $ac->id);
 
-        foreach (['particulier_dg', 'secretaire_direction', 'responsable_suivi_depenses'] as $role) {
+        foreach (['particulier_dg', 'secretaire_direction'] as $role) {
             $user = User::factory()->create(['structure_id' => Structure::where('code', 'SEC-DIR')->value('id')]);
             $user->assignRole($role);
 
-            $this->assertFalse($user->can('classerDossier', $courrier), "Le rôle {$role} ne doit pas classer une facture.");
+            $this->assertTrue($user->can('classerDossier', $courrier), "Le rôle {$role} doit classer une facture.");
 
             $this->actingAs($user)
                 ->post(route('courriers.classer-dossier', $courrier, absolute: false), [
-                    'mode' => 'nouveau',
-                    'nom_dossier' => 'Interdit '.$role,
+                    'mode' => 'auto',
                 ])
-                ->assertForbidden();
+                ->assertRedirect()
+                ->assertSessionHas('success');
+
+            $this->assertNotNull($courrier->fresh()->dossier_id);
+
+            $courrier->update(['dossier_id' => null]);
         }
+    }
+
+    public function test_eleni_ne_peut_pas_classer_une_facture(): void
+    {
+        $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+        $courrier = app(CircuitCourrierMoteurService::class)
+            ->instruire($this->demarrerFacture($dg, 'Facture refus eleni'), $dg, 'BPA.', $ac->id);
+
+        $eleni = User::factory()->create(['structure_id' => Structure::where('code', 'SEC-DIR')->value('id')]);
+        $eleni->assignRole('responsable_suivi_depenses');
+
+        $this->assertFalse($eleni->can('classerDossier', $courrier));
+
+        $this->actingAs($eleni)
+            ->post(route('courriers.classer-dossier', $courrier, absolute: false), [
+                'mode' => 'auto',
+            ])
+            ->assertForbidden();
     }
 
     public function test_classement_divers_partage_le_dossier_avec_la_direction(): void
@@ -195,6 +217,75 @@ class CourrierClassementDossierFournisseurTest extends TestCase
         );
     }
 
+    public function test_classement_facture_ne_partage_pas_auto_avec_agent_comptable(): void
+    {
+        $taty = User::factory()->create(['structure_id' => Structure::where('code', 'SEC-DIR')->value('id')]);
+        $taty->assignRole('responsable_dossiers_prestataires');
+
+        $ac = User::factory()->create(['structure_id' => Structure::where('code', 'DAC')->value('id')]);
+        $ac->assignRole('agent_comptable');
+
+        $dg = $this->creerDg();
+        $acCircuit = User::factory()->create();
+        $acCircuit->assignRole('agent_comptable');
+        $courrier = app(CircuitCourrierMoteurService::class)
+            ->instruire($this->demarrerFacture($dg, 'Facture sans partage AC'), $dg, 'BPA.', $acCircuit->id);
+
+        $this->actingAs($taty)
+            ->post(route('courriers.classer-dossier', $courrier, absolute: false), [
+                'mode' => 'auto',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $dossier = $courrier->fresh()->dossier;
+        $this->assertNotNull($dossier);
+        $this->assertFalse($dossier->visiblePar($ac));
+    }
+
+    public function test_retire_les_partages_auto_ac_caissier(): void
+    {
+        $taty = User::factory()->create(['structure_id' => Structure::where('code', 'SEC-DIR')->value('id')]);
+        $taty->assignRole('responsable_dossiers_prestataires');
+
+        $ac = User::factory()->create(['structure_id' => Structure::where('code', 'DAC')->value('id')]);
+        $ac->assignRole('agent_comptable');
+
+        $caissier = User::factory()->create(['structure_id' => Structure::where('code', 'DAC')->value('id')]);
+        $caissier->assignRole('caissier');
+
+        $dossier = Dossier::create([
+            'nom' => 'Fournisseur test purge',
+            'actif' => true,
+            'ordre' => 0,
+            'structure_id' => $taty->structure_id,
+            'createur_id' => $taty->id,
+            'proprietaire_id' => $taty->id,
+            'confidentiel' => false,
+            'notify_sms' => false,
+        ]);
+
+        foreach ([$ac, $caissier] as $beneficiaire) {
+            DossierPartage::create([
+                'dossier_id' => $dossier->id,
+                'user_id' => $beneficiaire->id,
+                'partage_par_id' => $taty->id,
+                'droits_lecture' => true,
+                'droits_ecriture' => true,
+                'droits_suppression' => false,
+                'propager_aux_sous_dossiers' => false,
+                'date_expiration' => null,
+                'commentaire' => CourrierClassementDossierService::COMMENTAIRE_PARTAGE_AUTO,
+            ]);
+        }
+
+        $service = app(CourrierClassementDossierService::class);
+        $this->assertCount(2, $service->listerPartagesAutoAcCaissier());
+        $this->assertSame(2, $service->retirerPartagesAutoAcCaissier());
+        $this->assertSame([], $service->listerPartagesAutoAcCaissier());
+        $this->assertFalse($dossier->fresh()->visiblePar($ac));
+    }
+
     public function test_classement_facture_lie_le_dossier_a_la_fiche_referentiel(): void
     {
         $taty = User::factory()->create(['structure_id' => Structure::where('code', 'SEC-DIR')->value('id')]);
@@ -218,13 +309,47 @@ class CourrierClassementDossierFournisseurTest extends TestCase
 
         $this->actingAs($taty)
             ->post(route('courriers.classer-dossier', $courrier, absolute: false), [
-                'mode' => 'nouveau',
-                'nom_dossier' => 'AF.COM SARL',
+                'mode' => 'auto',
             ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
         $this->assertSame((int) $courrier->fresh()->dossier_id, (int) $fiche->fresh()->dossier_id);
+    }
+
+    public function test_est_facture_classee_canoniquement_quand_courrier_et_fiche_alignes(): void
+    {
+        $taty = User::factory()->create(['structure_id' => Structure::where('code', 'SEC-DIR')->value('id')]);
+        $taty->assignRole('responsable_dossiers_prestataires');
+
+        $dossier = Dossier::create([
+            'nom' => 'AF.COM',
+            'actif' => true,
+            'ordre' => 0,
+            'structure_id' => $taty->structure_id,
+            'createur_id' => $taty->id,
+            'proprietaire_id' => $taty->id,
+            'confidentiel' => false,
+            'notify_sms' => false,
+        ]);
+
+        $fiche = FournisseurPrestataire::factory()->create([
+            'nom' => 'AF.COM',
+            'dossier_id' => $dossier->id,
+            'createur_id' => $taty->id,
+        ]);
+
+        $courrier = $this->demarrerFacture($taty, 'Facture alignée');
+        $courrier->forceFill([
+            'fournisseur_prestataire_id' => $fiche->id,
+            'dossier_id' => $dossier->id,
+        ])->save();
+
+        $service = app(CourrierClassementDossierService::class);
+        $this->assertTrue($service->estFactureClasseeCanoniquement($courrier->fresh(['fournisseurPrestataire'])));
+
+        $courrier->update(['dossier_id' => null]);
+        $this->assertFalse($service->estFactureClasseeCanoniquement($courrier->fresh(['fournisseurPrestataire'])));
     }
 
     public function test_suggestion_priorise_le_dossier_de_la_fiche_fournisseur(): void
@@ -264,6 +389,54 @@ class CourrierClassementDossierFournisseurTest extends TestCase
 
         $this->assertNotNull($suggere);
         $this->assertSame((int) $dossierFiche->id, (int) $suggere->id);
+    }
+
+    public function test_classement_facture_avec_fiche_ignore_match_partiel_sur_nom(): void
+    {
+        $taty = User::factory()->create(['structure_id' => Structure::where('code', 'SEC-DIR')->value('id')]);
+        $taty->assignRole('responsable_dossiers_prestataires');
+
+        $racine = app(MesDossiersRacineService::class)->createDefaultRacinePourCommande($taty);
+        Dossier::create([
+            'parent_id' => $racine->id,
+            'nom' => 'DREAMS',
+            'actif' => true,
+            'ordre' => 0,
+            'structure_id' => $taty->structure_id,
+            'createur_id' => $taty->id,
+            'proprietaire_id' => $taty->id,
+            'confidentiel' => false,
+            'notify_sms' => false,
+        ]);
+
+        $fiche = FournisseurPrestataire::factory()->create([
+            'nom' => 'GROUPE DREAMS LINK TECHNOLOGIES',
+            'dossier_id' => null,
+            'createur_id' => $taty->id,
+        ]);
+
+        $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+        $courrier = app(CircuitCourrierMoteurService::class)
+            ->instruire($this->demarrerFacture($dg, 'Facture dreams'), $dg, 'BPA.', $ac->id);
+        $courrier->forceFill([
+            'fournisseur_prestataire_id' => $fiche->id,
+            'expediteur_libelle' => $fiche->nom,
+        ])->save();
+
+        $service = app(CourrierClassementDossierService::class);
+        $this->assertNull($service->dossierCibleAffichageFacture($courrier->fresh(['fournisseurPrestataire']), $taty));
+
+        $this->actingAs($taty)
+            ->post(route('courriers.classer-dossier', $courrier, absolute: false), [
+                'mode' => 'auto',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame('GROUPE DREAMS LINK TECHNOLOGIES', $courrier->fresh()->dossier->nom);
+        $this->assertSame((int) $courrier->fresh()->dossier_id, (int) $fiche->fresh()->dossier_id);
     }
 
     public function test_page_suivi_affiche_a_classer(): void
@@ -313,13 +486,57 @@ class CourrierClassementDossierFournisseurTest extends TestCase
         $this->actingAs($taty)
             ->from(route('courriers.show', $courrier, absolute: false))
             ->post(route('courriers.classer-dossier', $courrier, absolute: false), [
-                'mode' => 'nouveau',
-                'nom_dossier' => 'AF.COM',
+                'mode' => 'auto',
             ])
             ->assertRedirect()
             ->assertSessionHasErrors('nom_dossier');
 
         $this->assertNull($courrier->fresh()->dossier_id);
+    }
+
+    public function test_classement_facture_refuse_si_dossier_fiche_sans_droit_ecriture(): void
+    {
+        $taty = User::factory()->create(['structure_id' => Structure::where('code', 'SEC-DIR')->value('id')]);
+        $taty->assignRole('responsable_dossiers_prestataires');
+        $autre = User::factory()->create(['structure_id' => $taty->structure_id]);
+
+        $dossierAutre = Dossier::create([
+            'nom' => 'FOURNISSEUR VERROUILLE',
+            'actif' => true,
+            'ordre' => 0,
+            'structure_id' => $taty->structure_id,
+            'createur_id' => $autre->id,
+            'proprietaire_id' => $autre->id,
+            'confidentiel' => false,
+            'notify_sms' => false,
+        ]);
+
+        $fiche = FournisseurPrestataire::factory()->create([
+            'nom' => 'FOURNISSEUR VERROUILLE',
+            'dossier_id' => $dossierAutre->id,
+            'createur_id' => $autre->id,
+        ]);
+
+        $dg = $this->creerDg();
+        $ac = User::factory()->create();
+        $ac->assignRole('agent_comptable');
+        $courrier = app(CircuitCourrierMoteurService::class)
+            ->instruire($this->demarrerFacture($dg, 'Facture dossier verrouille'), $dg, 'BPA.', $ac->id);
+        $courrier->forceFill([
+            'fournisseur_prestataire_id' => $fiche->id,
+            'expediteur_libelle' => $fiche->nom,
+        ])->save();
+
+        $this->actingAs($taty)
+            ->from(route('courriers.show', $courrier, absolute: false))
+            ->post(route('courriers.classer-dossier', $courrier, absolute: false), [
+                'mode' => 'auto',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('nom_dossier');
+
+        $this->assertNull($courrier->fresh()->dossier_id);
+        $this->assertSame((int) $dossierAutre->id, (int) $fiche->fresh()->dossier_id);
     }
 
     public function test_suggestion_trouve_dossier_proprietaire_par_nom_exact(): void

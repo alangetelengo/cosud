@@ -192,8 +192,8 @@ class CourrierPolicy
 
     /**
      * Classement d’un courrier dans un dossier COSUD.
-     * — Facture : responsable dossiers prestataires (ou admin) — 1 fiche référentiel = 1 dossier.
-     * — Divers / non-factures : secrétariat / particulière DG / responsable prestataires / admin.
+     * — Facture : secrétariat DG / particulière DG / responsable prestataires (1 fiche = 1 dossier, classement auto).
+     * — Divers / non-factures : mêmes rôles, choix dossier existant ou nouveau.
      */
     public function classerDossier(User $user, Courrier $courrier): bool
     {
@@ -203,12 +203,6 @@ class CourrierPolicy
 
         if ($user->hasRole('admin')) {
             return true;
-        }
-
-        $code = $courrier->typeCourrier?->code;
-
-        if ($code === 'facture') {
-            return $user->hasRole('responsable_dossiers_prestataires');
         }
 
         return $user->hasRole('secretaire_direction')

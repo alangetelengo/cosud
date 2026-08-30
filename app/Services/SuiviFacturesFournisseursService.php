@@ -31,19 +31,38 @@ class SuiviFacturesFournisseursService
     public const STATUT_RELIQUAT = 'reliquat';
 
     /**
+     * Libellés génériques pour les filtres (chèque et OV).
+     *
      * @return array<string, string>
      */
     public function libellesStatuts(): array
     {
         return [
             self::STATUT_ATTENTE_AC => 'En attente AC',
-            self::STATUT_CHEQUE => 'Chèque en préparation',
+            self::STATUT_CHEQUE => 'Chèque / OV en préparation',
             self::STATUT_SIGNATURE_DG => 'Signature DG',
-            self::STATUT_DECHARGE => 'En attente décharge',
+            self::STATUT_DECHARGE => 'En attente décharge / accusé banque',
             self::STATUT_CONTROLE => 'Contrôle suivi dépenses',
             self::STATUT_RELIQUAT => 'Reliquat à payer',
             self::STATUT_CLOTURE => 'Payé / clôturé',
         ];
+    }
+
+    public function libelleStatutPour(Courrier $courrier, string $code): string
+    {
+        if ($courrier->estModePaiementOv()) {
+            return match ($code) {
+                self::STATUT_CHEQUE => 'OV en préparation',
+                self::STATUT_DECHARGE => 'En attente accusé banque',
+                default => $this->libellesStatuts()[$code] ?? $code,
+            };
+        }
+
+        return match ($code) {
+            self::STATUT_CHEQUE => 'Chèque en préparation',
+            self::STATUT_DECHARGE => 'En attente décharge',
+            default => $this->libellesStatuts()[$code] ?? $code,
+        };
     }
 
     public function statutPour(Courrier $courrier): string
@@ -78,7 +97,10 @@ class SuiviFacturesFournisseursService
     }
 
     /**
-     * Montants facture / chèque / reliquat pour une facture du suivi Taty.
+     * Montants facture / payé déchargé / reliquat pour une facture du suivi Taty.
+     *
+     * Aligné sur FournisseurDetteService : seuls les SuiviPaiement avec date_decharge
+     * (décharge chèque ou accusé banque OV) comptent comme payés.
      *
      * @return array{
      *     montant_facture: float,
@@ -96,7 +118,9 @@ class SuiviFacturesFournisseursService
         $montantFacture = $courrier->montant_facture !== null
             ? (float) $courrier->montant_facture
             : null;
-        $montantPaye = (float) $suivis->sum(fn (SuiviPaiement $suivi): float => (float) ($suivi->montant ?? 0));
+        $montantPaye = (float) $suivis
+            ->filter(fn (SuiviPaiement $suivi): bool => $suivi->date_decharge !== null)
+            ->sum(fn (SuiviPaiement $suivi): float => (float) ($suivi->montant ?? 0));
 
         if ($montantFacture === null) {
             $montantFacture = $montantPaye;
@@ -191,7 +215,7 @@ class SuiviFacturesFournisseursService
                 return [
                     'courrier' => $courrier,
                     'statut' => $statut,
-                    'libelle_statut' => $this->libelleStatut($statut),
+                    'libelle_statut' => $this->libelleStatutPour($courrier, $statut),
                     'montant_facture' => $montants['montant_facture'],
                     'montant_paye' => $montants['montant_paye'],
                     'reliquat' => $montants['reliquat'],
@@ -295,7 +319,9 @@ class SuiviFacturesFournisseursService
                     $suivi?->numero_piece ?? '',
                     $suivi?->banque ?? '',
                     $ligne['libelle_statut'],
-                    $courrier->circuitEtapeActuelle?->nom ?? 'Terminé',
+                    $courrier->circuitEtapeActuelle
+                        ? $courrier->nomEtapeCircuitPourAffichage($courrier->circuitEtapeActuelle)
+                        : 'Terminé',
                     $courrier->instructions_dg ?? '',
                     $courrier->serviceDemandeurStructure?->nom ?? '',
                 ], ';');

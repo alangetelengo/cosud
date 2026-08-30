@@ -306,12 +306,21 @@ class CourrierController extends Controller
 
         $dossiersClassement = collect();
         $dossierSuggere = null;
+        $estClassementFacture = $courrier->typeCourrier?->code === 'facture';
+        $factureClasseeCanoniquement = false;
         if (auth()->user()?->can('classerDossier', $courrier)) {
-            $dossiersClassement = $this->classementDossierService->dossiersCiblesPour(
-                auth()->user(),
-                $courrier->expediteur_libelle
-            );
-            $dossierSuggere = $this->classementDossierService->suggererDossier(auth()->user(), $courrier);
+            if ($estClassementFacture) {
+                $factureClasseeCanoniquement = $this->classementDossierService
+                    ->estFactureClasseeCanoniquement($courrier);
+                $dossierSuggere = $this->classementDossierService
+                    ->dossierCibleAffichageFacture($courrier, auth()->user());
+            } else {
+                $dossierSuggere = $this->classementDossierService->suggererDossier(auth()->user(), $courrier);
+                $dossiersClassement = $this->classementDossierService->dossiersCiblesPour(
+                    auth()->user(),
+                    $courrier->expediteur_libelle
+                );
+            }
         }
 
         $retourUrl = ReturnUrl::resolve(
@@ -323,7 +332,7 @@ class CourrierController extends Controller
             'courrier', 'structures', 'directions', 'secretariats', 'utilisateursVentilation', 'agentsOrientation',
             'directeurValidation', 'directionEmettrice',
             'filRacine', 'filCourriers', 'filHistorique',
-            'dossiersClassement', 'dossierSuggere', 'retourUrl',
+            'dossiersClassement', 'dossierSuggere', 'estClassementFacture', 'factureClasseeCanoniquement', 'retourUrl',
         ));
     }
 
@@ -904,6 +913,18 @@ class CourrierController extends Controller
 
     public function classerDossier(ClasserCourrierDossierRequest $request, Courrier $courrier)
     {
+        if ($courrier->typeCourrier?->code === 'facture') {
+            $dossier = $this->classementDossierService->classerFactureFournisseur(
+                $courrier,
+                $request->user()
+            );
+
+            return back()->with(
+                'success',
+                'Facture classée dans le dossier fournisseur « '.$dossier->chemin_complet.' ».'
+            );
+        }
+
         $dossier = $this->classementDossierService->classer(
             $courrier,
             $request->user(),
@@ -912,7 +933,7 @@ class CourrierController extends Controller
 
         return back()->with(
             'success',
-            'Courrier classé dans le dossier « '.$dossier->chemin_complet.' » (partagé avec la direction).'
+            'Courrier classé dans le dossier « '.$dossier->chemin_complet.' » (partagé secrétariat DG).'
         );
     }
 

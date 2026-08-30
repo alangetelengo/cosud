@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Courrier;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -19,6 +20,15 @@ class ClasserCourrierDossierRequest extends FormRequest
      */
     public function rules(): array
     {
+        /** @var Courrier $courrier */
+        $courrier = $this->route('courrier');
+
+        if ($courrier->typeCourrier?->code === 'facture') {
+            return [
+                'mode' => ['required', Rule::in(['auto'])],
+            ];
+        }
+
         $mode = $this->input('mode', 'existant');
 
         return [

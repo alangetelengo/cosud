@@ -269,7 +269,9 @@ class CourrierNotificationService
     public function notifierEntreeChequeSuiviDepenses(Courrier $courrier, User $acteur, float $montant): void
     {
         $montantFormate = number_format($montant, 0, ',', ' ');
-        $detail = 'Chèque établi par l’AC — montant : '.$montantFormate.' FCFA — à inscrire au suivi des dépenses.';
+        $detail = $courrier->estModePaiementOv()
+            ? 'Ordre de virement établi par l’AC — montant : '.$montantFormate.' FCFA — à inscrire au suivi des dépenses.'
+            : 'Chèque établi par l’AC — montant : '.$montantFormate.' FCFA — à inscrire au suivi des dépenses.';
 
         $this->notifierRoles(
             ['responsable_suivi_depenses'],
